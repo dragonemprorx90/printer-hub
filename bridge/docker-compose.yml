@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     network_mode: host       # so it can reach the printer on your LAN
     environment:
-      RELAY_URL: https://printer-hub-relay.YOUR-SUBDOMAIN.workers.dev
+      RELAY_URL: https://printer-hub-relay.printer-hub-relay.workers.dev
       PRINTER_HOST: 192.168.68.53
     volumes:
       - ./data:/data         # keeps the pairing across restarts
