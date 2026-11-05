@@ -1,11 +1,9 @@
-# On the UGREEN NAS: Docker → Project → Create, point it at this folder.
-# The pairing code and QR appear in the container log on first start.
+# Printer Hub home bridge. On a UGREEN NAS: Docker → Project → Create,
+# paste this, change PRINTER_HOST if needed, and deploy.
+# The pairing code and alert topic appear in the container log on first start.
 services:
   printer-hub-bridge:
-    build:
-      context: .
-      args:
-        ARCH: x64            # arm64 for ARM NAS models / Raspberry Pi
+    image: ghcr.io/dragonemprorx90/printer-hub-bridge:latest
     restart: unless-stopped
     network_mode: host       # so it can reach the printer on your LAN
     environment:
