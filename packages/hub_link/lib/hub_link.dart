@@ -24,14 +24,25 @@ class PairInfo {
   final String room; // random id
   final List<int> secret; // 32 random bytes, never sent to the relay
 
-  const PairInfo(this.relay, this.room, this.secret);
+  /// ntfy topic URL the bridge pushes alerts to (null = alerts off).
+  final String? alerts;
+
+  const PairInfo(this.relay, this.room, this.secret, {this.alerts});
 
   static const _tag = 'PHB1:';
 
-  factory PairInfo.create(String relay, [Random? rng]) {
+  factory PairInfo.create(String relay, {Random? rng, String? alerts}) {
     final r = rng ?? Random.secure();
     List<int> bytes(int n) => List.generate(n, (_) => r.nextInt(256));
-    return PairInfo(normalizeRelay(relay), b64(bytes(16)), bytes(32));
+    return PairInfo(normalizeRelay(relay), b64(bytes(16)), bytes(32), alerts: alerts);
+  }
+
+  /// A fresh private ntfy topic URL on [server]. The topic name is random,
+  /// so only people holding the pairing code know where alerts go.
+  static String newAlertTopic(String server, [Random? rng]) {
+    final r = rng ?? Random.secure();
+    final id = b64(List.generate(15, (_) => r.nextInt(256)));
+    return '${server.trim().replaceAll(RegExp(r'/+$'), '')}/printerhub-$id';
   }
 
   /// https:// → wss://, trailing slash removed.
@@ -44,7 +55,8 @@ class PairInfo {
   }
 
   String encode() => _tag +
-      b64(utf8.encode(jsonEncode({'r': relay, 'o': room, 's': b64(secret)})));
+      b64(utf8.encode(jsonEncode(
+          {'r': relay, 'o': room, 's': b64(secret), 'n': ?alerts})));
 
   static PairInfo decode(String code) {
     final c = code.trim();
@@ -61,7 +73,9 @@ class PairInfo {
     if (secret.length != 32 || '${j['o']}'.isEmpty) {
       throw const FormatException('Damaged remote code');
     }
-    return PairInfo('${j['r']}', '${j['o']}', secret);
+    final n = j['n'];
+    return PairInfo('${j['r']}', '${j['o']}', secret,
+        alerts: n is String && n.startsWith('http') ? n : null);
   }
 
   Uri socketUri(String role, String token) => Uri.parse('$relay/v1/room/$room')

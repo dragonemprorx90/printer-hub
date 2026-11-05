@@ -10,6 +10,11 @@ void main() {
     expect(back.room, pair.room);
     expect(back.secret, pair.secret);
     expect(pair.secret, hasLength(32));
+    expect(back.alerts, isNull);
+    final topic = PairInfo.newAlertTopic('https://ntfy.sh/');
+    expect(topic, matches(RegExp(r'^https://ntfy\.sh/printerhub-[A-Za-z0-9_-]{20}$')));
+    final withAlerts = PairInfo.create('wss://r', alerts: topic);
+    expect(PairInfo.decode(withAlerts.encode()).alerts, topic);
     expect(() => PairInfo.decode('PH1:nope'), throwsFormatException);
     expect(() => PairInfo.decode('PHB1:!!!'), throwsFormatException);
   });
