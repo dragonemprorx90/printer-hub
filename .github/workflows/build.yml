@@ -45,10 +45,14 @@ jobs:
           cp -R build/ios/iphoneos/Runner.app dist/Payload/
           (cd dist && zip -qry "PrinterHub-$VERSION.ipa" Payload && rm -rf Payload)
 
-      - name: Mac app
+      - name: Mac app (DMG)
         run: |
           flutter build macos --release
-          ditto -c -k --keepParent "build/macos/Build/Products/Release/Printer Hub.app" "dist/PrinterHub-$VERSION-macos.zip"
+          mkdir -p dmg
+          cp -R "build/macos/Build/Products/Release/Printer Hub.app" dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "Printer Hub" -srcfolder dmg -ov -format UDZO \
+            "dist/PrinterHub-$VERSION.dmg"
 
       - name: Home bridge
         run: |

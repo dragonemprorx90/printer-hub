@@ -22,7 +22,7 @@ Download from the [latest release](../../releases/latest):
 | File | For |
 |---|---|
 | `PrinterHub-x.y.z.ipa` | iPhone / iPad. Unsigned: install with **SideStore** or AltStore, which sign it with your own Apple ID. |
-| `PrinterHub-x.y.z-macos.zip` | Mac (Apple Silicon). First launch: right-click → Open. |
+| `PrinterHub-x.y.z.dmg` | Mac (Apple Silicon). Open it, drag Printer Hub to Applications. First launch: right-click → Open. |
 
 The app checks this repo's releases for updates (Settings → Updates).
 
