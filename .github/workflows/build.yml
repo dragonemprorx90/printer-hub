@@ -100,6 +100,7 @@ jobs:
         run: |
           cd bridge
           dart pub get
+          mkdir -p build
           for arch in amd64 arm64; do
             dart_arch=$([ "$arch" = amd64 ] && echo x64 || echo arm64)
             dart compile exe --target-os linux --target-arch "$dart_arch" bin/bridge.dart \
