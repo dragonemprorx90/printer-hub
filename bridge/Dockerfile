@@ -9,6 +9,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 ARG ARCH=x64
 COPY build/printer-hub-bridge-linux-${ARCH} /usr/local/bin/printer-hub-bridge
+# Files uploaded through a NAS web UI often lose their executable bit.
+RUN chmod 755 /usr/local/bin/printer-hub-bridge
 ENV BRIDGE_DATA=/data
 VOLUME /data
 ENTRYPOINT ["/usr/local/bin/printer-hub-bridge"]
