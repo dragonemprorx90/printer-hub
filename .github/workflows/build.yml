@@ -1,0 +1,75 @@
+# Builds everything on a GitHub-hosted Mac and, for a tag like v1.1.0,
+# publishes a release that the app's "Check for updates" finds:
+#   - iPhone IPA (unsigned: install with SideStore/AltStore, which sign it
+#     with your Apple ID)
+#   - Mac app
+#   - home bridge for Linux x64 / arm64 (NAS, Raspberry Pi) and macOS
+#   - relay source for Cloudflare Workers
+name: Build apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+
+      - name: Version
+        run: |
+          echo "VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')" >> "$GITHUB_ENV"
+
+      - name: Tests
+        run: |
+          flutter pub get
+          flutter test
+          (cd packages/hub_link && dart pub get && dart test)
+          (cd bridge && dart pub get && dart analyze --fatal-infos)
+
+      - name: iPhone IPA (unsigned)
+        run: |
+          flutter build ios --release --no-codesign
+          mkdir -p dist/Payload
+          cp -R build/ios/iphoneos/Runner.app dist/Payload/
+          (cd dist && zip -qry "PrinterHub-$VERSION.ipa" Payload && rm -rf Payload)
+
+      - name: Mac app
+        run: |
+          flutter build macos --release
+          ditto -c -k --keepParent "build/macos/Build/Products/Release/Printer Hub.app" "dist/PrinterHub-$VERSION-macos.zip"
+
+      - name: Home bridge
+        run: |
+          cd bridge
+          for arch in x64 arm64; do
+            dart compile exe --target-os linux --target-arch "$arch" bin/bridge.dart \
+              -o "../dist/printer-hub-bridge-$VERSION-linux-$arch"
+          done
+          dart compile exe bin/bridge.dart -o "../dist/printer-hub-bridge-$VERSION-macos-arm64"
+
+      - name: Relay source
+        run: tar -czf "dist/printer-hub-relay-$VERSION.tar.gz" --exclude node_modules --exclude .wrangler relay
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: printer-hub-${{ env.VERSION }}
+          path: dist/*
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -1,0 +1,17 @@
+name: printer_hub_bridge
+description: Home bridge that lets Printer Hub reach your printer from anywhere.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  hub_link:
+    path: ../packages/hub_link
+  http: ^1.6.0
+  qr: ^3.0.2
+  web_socket_channel: ^3.0.3
+
+dev_dependencies:
+  test: ^1.25.0

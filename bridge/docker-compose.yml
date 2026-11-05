@@ -1,0 +1,15 @@
+# On the UGREEN NAS: Docker → Project → Create, point it at this folder.
+# The pairing code and QR appear in the container log on first start.
+services:
+  printer-hub-bridge:
+    build:
+      context: .
+      args:
+        ARCH: x64            # arm64 for ARM NAS models / Raspberry Pi
+    restart: unless-stopped
+    network_mode: host       # so it can reach the printer on your LAN
+    environment:
+      RELAY_URL: https://printer-hub-relay.YOUR-SUBDOMAIN.workers.dev
+      PRINTER_HOST: 192.168.68.53
+    volumes:
+      - ./data:/data         # keeps the pairing across restarts

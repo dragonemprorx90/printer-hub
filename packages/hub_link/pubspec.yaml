@@ -1,0 +1,13 @@
+name: hub_link
+description: Pairing codes and end-to-end encryption shared by Printer Hub and its home bridge.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  cryptography: ^2.7.0
+
+dev_dependencies:
+  test: ^1.25.0
