@@ -76,4 +76,13 @@ void main() {
     expect(parseCfsColor('-1'), isNull);
     expect(parseCfsColor('zz'), isNull);
   });
+
+  test('U1 cavity LED reads as the light', () {
+    final s = PrinterStatus();
+    expect(s.led, isNull);
+    s.applyDelta({'led cavity_led': {'color_data': [[0.0, 0.0, 0.0, 0.0]]}});
+    expect(s.led, isFalse);
+    s.applyDelta({'led cavity_led': {'color_data': [[0.0, 0.0, 0.0, 1.0]]}});
+    expect(s.led, isTrue);
+  });
 }

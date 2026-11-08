@@ -267,9 +267,15 @@ class PrinterStatus {
     return out;
   }
 
+  /// Klipper `[led]` the U1 uses for its cavity light (white channel).
+  static const cavityLed = 'led cavity_led';
+
   bool? get led {
     final v = _f('output_pin LED', 'value');
-    return v == null ? null : (v as num) > 0;
+    if (v != null) return (v as num) > 0;
+    final c = _f(cavityLed, 'color_data') as List?;
+    if (c == null || c.isEmpty) return null;
+    return (c.first as List).any((x) => (x as num) > 0);
   }
 
   /// Creality Filament System boxes that are connected.
@@ -379,6 +385,7 @@ class MoonrakerClient {
     'bed_mesh',
     'exclude_object',
     'output_pin LED',
+    PrinterStatus.cavityLed,
     PrinterStatus.chamberHeater,
     PrinterStatus.chamberSensor,
   };
@@ -679,7 +686,9 @@ class MoonrakerClient {
       gcode('SET_HEATER_TEMPERATURE HEATER=chamber_heater TARGET=$t');
   Future<void> setSpeed(int pct) => gcode('M220 S$pct');
   Future<void> setFlow(int pct) => gcode('M221 S$pct');
-  Future<void> setLed(bool on) => gcode('SET_PIN PIN=LED VALUE=${on ? 1 : 0}');
+  Future<void> setLed(bool on) => gcode(status.raw.containsKey(PrinterStatus.cavityLed)
+      ? 'SET_LED LED=cavity_led WHITE=${on ? 1 : 0}'
+      : 'SET_PIN PIN=LED VALUE=${on ? 1 : 0}');
 
   /// Creality wires its fans as `output_pin fanN` behind an `M106 P<n>` macro;
   /// stock Klipper has a single [fan].
