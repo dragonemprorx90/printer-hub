@@ -178,5 +178,18 @@ void main() {
     expect(notesSince('1.5.1', '1.5.1'), isEmpty);
     expect(kWhatsNew.first.$1, kAppVersion, reason: 'add notes for the new version');
   });
+
+  test('history finds its bridge snapshots', () {
+    final job = PrintJob('sub/My Part (v2).gcode', 'completed',
+        DateTime.fromMillisecondsSinceEpoch(1794164500000), 60, 1, true);
+    expect(
+        snapshotsFor(job, [
+          'My_Part_v2___1794164593__end.jpg',
+          'My_Part_v2___1794164593__first.jpg',
+          'My_Part_v2___1794199999__first.jpg', // another run
+          'Other__1794164593__first.jpg',
+        ]),
+        ['My_Part_v2___1794164593__first.jpg', 'My_Part_v2___1794164593__end.jpg']);
+  });
 }
 

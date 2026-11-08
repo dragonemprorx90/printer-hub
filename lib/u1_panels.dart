@@ -266,6 +266,66 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
 
   void _reload() => setState(() => _data = _load());
 
+  Future<void> _add() async {
+    final vendor = TextEditingController(text: 'Generic');
+    final grams = TextEditingController(text: '1000');
+    var material = 'PLA';
+    var color = _colors.first;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text('Add spool'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              TextField(controller: vendor, decoration: const InputDecoration(labelText: 'Brand')),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final m in _materials)
+                  ChoiceChip(label: Text(m), selected: m == material, onSelected: (_) => set(() => material = m)),
+              ]),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final c in _colors)
+                  InkWell(
+                    onTap: () => set(() => color = c),
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF000000 | c),
+                        border: Border.all(color: c == color ? C.accent : C.border, width: c == color ? 3 : 1),
+                      ),
+                    ),
+                  ),
+              ]),
+              const SizedBox(height: 12),
+              TextField(
+                controller: grams,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Filament weight', suffixText: 'g'),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final name = vendor.text.trim().isEmpty ? 'Generic' : vendor.text.trim();
+    await run(
+        context,
+        () => widget.client.addSpool(
+            vendor: name, material: material, color: color, grams: double.tryParse(grams.text) ?? 1000),
+        done: 'Spool added');
+    _reload();
+  }
+
   Future<void> _pick(Spool sp, int? active) async {
     final c = widget.client;
     final lanes = [
@@ -311,7 +371,10 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
           return Panel(
             title: 'Spools',
             icon: Icons.album_outlined,
-            trailing: IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: _reload),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(tooltip: 'Add spool', icon: const Icon(Icons.add_rounded), onPressed: _add),
+              IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: _reload),
+            ]),
             child: spools.isEmpty
                 ? Text('No spools yet. Add them in Spoolman.', style: TextStyle(color: C.muted))
                 : Column(children: [
@@ -424,6 +487,164 @@ class FilamentCheck extends StatelessWidget {
                 ),
               ),
           ]);
+        },
+      );
+}
+
+/// Printer host health: CPU, memory, storage, versions and any warnings.
+class HealthPanel extends StatefulWidget {
+  final MoonrakerClient client;
+  const HealthPanel({super.key, required this.client});
+  @override
+  State<HealthPanel> createState() => _HealthPanelState();
+}
+
+class _HealthPanelState extends State<HealthPanel> {
+  late var _data = widget.client.health();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<(List<(String, String)>, List<String>)>(
+        future: _data,
+        builder: (context, snap) {
+          final d = snap.data;
+          if (d == null || d.$1.isEmpty) return const SizedBox.shrink();
+          final (rows, problems) = d;
+          return Panel(
+            title: 'Printer health',
+            icon: Icons.monitor_heart_outlined,
+            trailing: IconButton(
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: () => setState(() => _data = widget.client.health()),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (final p in problems)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.warning_amber_rounded, size: 18, color: C.warn),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(p)),
+                  ]),
+                ),
+              if (problems.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text('No problems found', style: TextStyle(color: C.muted)),
+                ),
+              Wrap(spacing: 28, runSpacing: 12, children: [
+                for (final (k, v) in rows) StatTile(label: k, value: v),
+              ]),
+            ]),
+          );
+        },
+      );
+}
+
+const _triggers = {
+  'complete': 'Print finishes',
+  'error': 'Print fails',
+  'cancelled': 'Print is cancelled',
+  'time': 'Every day at…',
+};
+
+/// "When X, do Y" rules, run by the home bridge even with the app closed.
+class RulesPanel extends StatefulWidget {
+  final MoonrakerClient client;
+  const RulesPanel({super.key, required this.client});
+  @override
+  State<RulesPanel> createState() => _RulesPanelState();
+}
+
+class _RulesPanelState extends State<RulesPanel> {
+  late Future<List<Map<String, dynamic>>> _rules = widget.client.rules();
+
+  List<(String, String)> _actions(PrinterStatus s) => [
+        if (s.raw.containsKey(PrinterStatus.cavityLed)) ('Light off', 'SET_LED LED=cavity_led WHITE=0'),
+        if (s.raw.containsKey('output_pin LED')) ('Light off', 'SET_PIN PIN=LED VALUE=0'),
+        ('All heaters off', 'TURN_OFF_HEATERS'),
+        if (s.chamberHeatable) ('Chamber heater off', 'M141 S0'),
+        if (s.raw.containsKey(PrinterStatus.dragonFilter)) ('Heater filter off', 'SET_PIN PIN=dragonbreath_filter VALUE=0'),
+        ('Motors off', 'M84'),
+      ];
+
+  Future<void> _add() async {
+    final c = widget.client;
+    final on = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('When…')),
+          for (final e in _triggers.entries)
+            ListTile(title: Text(e.value), onTap: () => Navigator.pop(ctx, e.key)),
+        ]),
+      ),
+    );
+    if (on == null || !mounted) return;
+    String? at;
+    if (on == 'time') {
+      final t = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 22, minute: 0));
+      if (t == null || !mounted) return;
+      at = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    }
+    final acts = _actions(c.status);
+    final pick = await showModalBottomSheet<(String, String)>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('…do this')),
+          for (final a in acts) ListTile(title: Text(a.$1), onTap: () => Navigator.pop(ctx, a)),
+          ListTile(title: const Text('Custom G-code…'), onTap: () => Navigator.pop(ctx, ('', ''))),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    var (label, gcode) = pick;
+    if (gcode.isEmpty) {
+      final g = await askText(context, 'G-code to run', hint: 'e.g. M84', action: 'Add');
+      if (g == null || g.isEmpty || !mounted) return;
+      (label, gcode) = (g, g);
+    }
+    final list = [...await _rules, {'on': on, 'at': ?at, 'do': gcode, 'label': label}];
+    if (!mounted) return;
+    await run(context, () => c.setRules(list), done: 'Rule added');
+    setState(() => _rules = c.rules());
+  }
+
+  Future<void> _remove(List<Map<String, dynamic>> all, int i) async {
+    final list = [...all]..removeAt(i);
+    await run(context, () => widget.client.setRules(list));
+    setState(() => _rules = widget.client.rules());
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
+        future: _rules,
+        builder: (context, snap) {
+          final rules = snap.data ?? const [];
+          return Panel(
+            title: 'Rules',
+            icon: Icons.rule_rounded,
+            trailing: IconButton(tooltip: 'Add rule', icon: const Icon(Icons.add_rounded), onPressed: _add),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (rules.isEmpty)
+                Text('Run something automatically, like "print finishes → light off". '
+                    'Your home bridge runs rules, even with the app closed.',
+                    style: TextStyle(color: C.muted)),
+              for (final (i, r) in rules.indexed)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.bolt_rounded),
+                  title: Text('${r['on'] == 'time' ? 'Every day at ${r['at']}' : _triggers[r['on']] ?? r['on']}'
+                      ' → ${r['label'] ?? r['do']}'),
+                  trailing: IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    onPressed: () => _remove(rules, i),
+                  ),
+                ),
+            ]),
+          );
         },
       );
 }

@@ -49,5 +49,10 @@ void main() {
     expect(parseQuietHours('nope'), isNull);
     expect(inQuietHours(null, 3), isFalse);
   });
+
+  test('snapshot names carry the file and start time', () {
+    expect(snapshotName('My Part (v2).gcode', DateTime.fromMillisecondsSinceEpoch(1794164593000), 'first'),
+        'My_Part_v2___1794164593__first.jpg');
+  });
 }
 

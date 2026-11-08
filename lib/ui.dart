@@ -605,6 +605,13 @@ Future<bool> confirm(BuildContext context, String title,
   return ok ?? false;
 }
 
+/// A second check when controlling a printer from away, where you can't see
+/// what you're stopping. Always true at home.
+Future<bool> confirmAway(BuildContext context, bool away, String what) async =>
+    !away ||
+    await confirm(context, 'You are away from the printer',
+        message: 'Really $what? Nobody may be there to check it.', action: 'Yes, $what', danger: true);
+
 /// Number prompt with one-tap presets (0 shows as "Off").
 Future<int?> askNumber(BuildContext context, String title,
     {List<int> presets = const [], String unit = '°C'}) {

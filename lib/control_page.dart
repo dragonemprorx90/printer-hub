@@ -419,6 +419,8 @@ class _ControlTabState extends State<ControlTab> {
                       message: 'Reloads the config. Any print will stop.',
                       action: 'Restart',
                       danger: true) &&
+                  mounted &&
+                  await confirmAway(context, c.viaRelay, 'restart Klipper') &&
                   mounted) {
                 run(context, c.restartKlipper);
               }
@@ -433,6 +435,8 @@ class _ControlTabState extends State<ControlTab> {
                           'Restarts Klipper and its MCUs. Any print will stop.',
                       action: 'Restart',
                       danger: true) &&
+                  mounted &&
+                  await confirmAway(context, c.viaRelay, 'restart the firmware') &&
                   mounted) {
                 run(context, c.firmwareRestart);
               }

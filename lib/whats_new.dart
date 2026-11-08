@@ -6,6 +6,13 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.6.0', [
+    'Rules: "when a print finishes, turn the light off", or every day at a set time. Your home bridge runs them, even with the app closed.',
+    'Pictures of each print: tap a print in History to see its first layer and the end (taken by your home bridge).',
+    'Add spools to Spoolman from the app.',
+    'Printer health: CPU, memory, storage, versions and warnings (Tools).',
+    'Cancelling or restarting from away asks twice.',
+  ]),
   ('1.5.1', [
     'This screen: see what changed after each update.',
   ]),

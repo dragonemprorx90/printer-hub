@@ -93,6 +93,29 @@ int? parseCfsColor(dynamic v) {
   return n == null ? null : 0xFF000000 | n;
 }
 
+/// Bridge snapshots ("stem__epoch__kind.jpg") for a history job: same file,
+/// started within 3 minutes of the job.
+List<String> snapshotsFor(PrintJob job, List<String> files) {
+  final stem = job.filename
+      .split('/')
+      .last
+      .replaceAll(RegExp(r'\.gcode$', caseSensitive: false), '')
+      .replaceAll(RegExp(r'[^\w.-]+'), '_');
+  final t = job.start.millisecondsSinceEpoch ~/ 1000;
+  return [
+    for (final f in files)
+      if (RegExp(r'^(.*)__(\d+)__(\w+)\.jpg$').firstMatch(f) case final m?
+          when m[1] == stem && (int.parse(m[2]!) - t).abs() < 180)
+        f,
+  ]..sort((a, b) => a.endsWith('__first.jpg') ? -1 : b.endsWith('__first.jpg') ? 1 : 0);
+}
+
+/// 93784 s -> "1 d 2 h".
+String fmtUptime(num secs) {
+  final d = secs ~/ 86400, h = (secs % 86400) ~/ 3600, m = (secs % 3600) ~/ 60;
+  return d > 0 ? '$d d $h h' : h > 0 ? '$h h $m min' : '$m min';
+}
+
 double? _num(dynamic v) =>
     v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
 
@@ -926,6 +949,102 @@ class MoonrakerClient {
     return j;
   }
 
+  // --- Rules (run by the home bridge, stored in Moonraker's database) -------
+
+  Future<List<Map<String, dynamic>>> rules() async {
+    final r = await _http.get(_uri(['server', 'database', 'item'], {'namespace': 'printer_hub', 'key': 'rules'}),
+        headers: authHeaders);
+    if (r.statusCode != 200) return [];
+    return [
+      for (final x in (jsonDecode(r.body)['result']?['value'] as List?) ?? const [])
+        Map<String, dynamic>.from(x as Map),
+    ];
+  }
+
+  Future<void> setRules(List<Map<String, dynamic>> rules) async => _check(await _http.post(
+      _uri(['server', 'database', 'item']),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: jsonEncode({'namespace': 'printer_hub', 'key': 'rules', 'value': rules})));
+
+  // --- Print snapshots (saved by the home bridge) ---------------------------
+
+  static const _snapDir = '.printer-hub/snapshots';
+
+  Future<List<String>> snapshotFiles() async {
+    final r = await _http.get(_uri(['server', 'files', 'directory'], {'path': 'gcodes/$_snapDir'}),
+        headers: authHeaders);
+    if (r.statusCode != 200) return const [];
+    return [for (final f in (jsonDecode(r.body)['result']?['files'] as List?) ?? const []) '${f['filename']}'];
+  }
+
+  Future<Uint8List> snapshotBytes(String name) async {
+    final r = await _http.get(_uri(['server', 'files', 'gcodes', ..._snapDir.split('/'), name]),
+        headers: authHeaders);
+    if (r.statusCode != 200) throw MoonrakerError('Picture not found');
+    return r.bodyBytes;
+  }
+
+  // --- Health ---------------------------------------------------------------
+
+  /// Host stats for the health panel: label -> value, plus problems found.
+  Future<(List<(String, String)>, List<String>)> health() async {
+    Future<dynamic> get(List<String> p, [Map<String, String>? q]) async {
+      try {
+        final r = await _http.get(_uri(p, q), headers: authHeaders);
+        return r.statusCode == 200 ? jsonDecode(r.body)['result'] : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final (proc, info, dir, pinfo) = await (
+      get(['machine', 'proc_stats']),
+      get(['server', 'info']),
+      get(['server', 'files', 'directory'], {'path': 'gcodes'}),
+      get(['printer', 'info']),
+    ).wait;
+    final rows = <(String, String)>[];
+    final problems = <String>[];
+    String gb(num b) => '${(b / 1e9).toStringAsFixed(1)} GB';
+    if (proc != null) {
+      final t = proc['cpu_temp'] as num?;
+      if (t != null) rows.add(('CPU temperature', '${t.toStringAsFixed(0)}°C'));
+      if (t != null && t > 80) problems.add('CPU is hot (${t.round()}°C)');
+      final cpu = proc['system_cpu_usage']?['cpu'] as num?;
+      if (cpu != null) rows.add(('CPU use', '${cpu.round()}%'));
+      final mem = proc['system_memory'] as Map?;
+      if (mem != null && mem['total'] is num && mem['available'] is num) {
+        final used = 1 - (mem['available'] as num) / (mem['total'] as num);
+        rows.add(('Memory use', '${(used * 100).round()}%'));
+        if (used > 0.9) problems.add('Memory almost full');
+      }
+      final up = proc['system_uptime'] as num?;
+      if (up != null) rows.add(('Up for', fmtUptime(up)));
+      if (proc['throttled_state']?['bits'] is num && proc['throttled_state']['bits'] != 0) {
+        problems.add('Under-voltage or throttling: ${(proc['throttled_state']['flags'] as List?)?.join(', ')}');
+      }
+    }
+    final disk = dir?['disk_usage'] as Map?;
+    if (disk != null && disk['free'] is num && disk['total'] is num) {
+      rows.add(('Storage free', '${gb(disk['free'])} of ${gb(disk['total'])}'));
+      if ((disk['free'] as num) < 1e9) problems.add('Less than 1 GB of storage left');
+    }
+    if (pinfo != null) {
+      rows.add(('Klipper', '${pinfo['software_version'] ?? '?'}'));
+      if (pinfo['state'] != 'ready') problems.add('Klipper: ${pinfo['state_message'] ?? pinfo['state']}');
+    }
+    if (info != null) {
+      rows.add(('Moonraker', '${info['moonraker_version'] ?? '?'}'));
+      for (final w in (info['warnings'] as List?) ?? const []) {
+        problems.add('$w');
+      }
+      for (final f in (info['failed_components'] as List?) ?? const []) {
+        problems.add('Moonraker component failed: $f');
+      }
+    }
+    return (rows, problems);
+  }
+
   // --- Spoolman (through Moonraker's proxy, so it works from away too) ------
 
   Future<bool> hasSpoolman() async {
@@ -937,7 +1056,8 @@ class MoonrakerClient {
     }
   }
 
-  Future<dynamic> _spoolman(String method, String path, [Map<String, dynamic>? body]) async {
+  Future<dynamic> _spoolman(String method, String path,
+      [Map<String, dynamic>? body, Map<String, String>? query]) async {
     final r = await _http.post(_uri(['server', 'spoolman', 'proxy']),
         headers: {...authHeaders, 'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -945,6 +1065,7 @@ class MoonrakerClient {
           'path': path,
           'use_v2_response': true,
           'body': ?body,
+          if (query != null) 'query': Uri(queryParameters: query).query,
         }));
     final dynamic j = jsonDecode(r.body);
     final err = j['result']?['error'] ?? j['error'];
@@ -958,6 +1079,31 @@ class MoonrakerClient {
         for (final s in (await _spoolman('GET', '/v1/spool')) as List)
           if (s['archived'] != true) Spool.fromJson(s as Map<String, dynamic>),
       ];
+
+  static const _density = {'PLA': 1.24, 'PETG': 1.27, 'ABS': 1.04, 'ASA': 1.07, 'TPU': 1.21, 'PA': 1.14, 'PC': 1.2, 'PVA': 1.23};
+
+  /// Adds a spool, reusing the vendor and filament when Spoolman has them.
+  Future<void> addSpool({required String vendor, required String material, required int color, double grams = 1000}) async {
+    final hex = (color & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+    final vendors = (await _spoolman('GET', '/v1/vendor', null, {'name': vendor})) as List;
+    final vendorId = vendors.isNotEmpty
+        ? vendors.first['id']
+        : (await _spoolman('POST', '/v1/vendor', {'name': vendor}))['id'];
+    final fils = (await _spoolman('GET', '/v1/filament', null,
+        {'vendor.id': '$vendorId', 'material': material, 'color_hex': hex})) as List;
+    final filId = fils.isNotEmpty
+        ? fils.first['id']
+        : (await _spoolman('POST', '/v1/filament', {
+            'name': '$material #$hex',
+            'vendor_id': vendorId,
+            'material': material,
+            'color_hex': hex,
+            'density': _density[material.toUpperCase()] ?? 1.24,
+            'diameter': 1.75,
+            'weight': grams,
+          }))['id'];
+    await _spoolman('POST', '/v1/spool', {'filament_id': filId, 'remaining_weight': grams});
+  }
 
   Future<int?> activeSpool() async {
     final r = await _http.get(_uri(['server', 'spoolman', 'spool_id']), headers: authHeaders);

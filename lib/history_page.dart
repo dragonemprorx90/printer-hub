@@ -296,6 +296,43 @@ class _JobTile extends StatelessWidget {
   final MoonrakerClient client;
   const _JobTile({required this.job, required this.client});
 
+  /// Pictures the home bridge took at the first layer and the end.
+  Future<void> _pictures(BuildContext context) async {
+    final files = snapshotsFor(job, await client.snapshotFiles().catchError((_) => <String>[]));
+    if (!context.mounted) return;
+    if (files.isEmpty) {
+      return toast(context, 'No pictures for this print (the home bridge takes them when it has a camera)');
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(job.filename.split('/').last, overflow: TextOverflow.ellipsis),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              for (final f in files)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(children: [
+                    FutureBuilder<Uint8List>(
+                      future: client.snapshotBytes(f),
+                      builder: (_, s) => s.hasData
+                          ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(s.data!))
+                          : const SizedBox(height: 160, child: Center(child: CircularProgressIndicator())),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(f.endsWith('__first.jpg') ? 'First layer' : 'End', style: TextStyle(color: C.muted)),
+                  ]),
+                ),
+            ]),
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final (icon, color) = switch (job.status) {
@@ -307,6 +344,7 @@ class _JobTile extends StatelessWidget {
     final name = job.filename.split('/').last;
     return Tile(
       child: ListTile(
+        onTap: () => _pictures(context),
         leading: Icon(icon, color: color, size: 28),
         title: Text(name,
             overflow: TextOverflow.ellipsis,

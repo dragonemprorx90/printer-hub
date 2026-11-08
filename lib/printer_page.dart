@@ -864,6 +864,8 @@ class _Actions extends StatelessWidget {
                         message: 'This cannot be undone.',
                         action: 'Cancel print',
                         danger: true) &&
+                    context.mounted &&
+                    await confirmAway(context, client.viaRelay, 'cancel the print') &&
                     context.mounted) {
                   run(context, client.cancel);
                 }

@@ -208,6 +208,9 @@ class Alerts {
   final _humidityAlerted = <String, DateTime>{};
   var _sent = <String>{}; // once-per-print alerts already sent
   bool _hasFilter = false;
+  DateTime? _started;
+  List<Map> _rules = const [];
+  final _ranToday = <String>{};
   Timer? _filterOff;
 
   final (int, int)? quiet; // start and end hour; only urgent alerts then
@@ -223,16 +226,16 @@ class Alerts {
   /// ntfy's JSON publish endpoint takes UTF-8 titles (headers can't). With
   /// [picture] and a camera, the current frame is attached instead.
   Future<void> send(String title, String message,
-      {List<String> tags = const [], int priority = 3, bool picture = false}) async {
+      {List<String> tags = const [], int priority = 3, bool picture = false, List<int>? jpeg}) async {
     if (priority < 5 && inQuietHours(quiet, DateTime.now().hour)) {
       log('Quiet hours: held back "$title"');
       return;
     }
     final server = topic.replace(path: '', query: null);
     final name = topic.pathSegments.last;
-    if (picture && camera != null) {
+    if (jpeg != null || (picture && camera != null)) {
       try {
-        final jpeg = await camera!.frame();
+        jpeg ??= await camera!.frame();
         final r = await _client
             .put(topic,
                 headers: {
@@ -269,6 +272,7 @@ class Alerts {
   }
 
   Future<void> run() async {
+    unawaited(_rulesLoop());
     var backoff = 2;
     while (true) {
       final started = DateTime.now();
@@ -350,13 +354,14 @@ class Alerts {
     final last = _state;
     _state = state;
     if (last != null && state != null && state != last) {
+      unawaited(_runRules((r) => r['on'] == state));
       switch (state) {
         case 'complete':
           await send('$_title: print finished', file,
-              tags: ['white_check_mark'], priority: 4, picture: true);
+              tags: ['white_check_mark'], priority: 4, jpeg: await _keep('end'));
         case 'error':
           await send('$_title: print failed', note.isEmpty ? file : note,
-              tags: ['warning'], priority: 5, picture: true);
+              tags: ['warning'], priority: 5, jpeg: await _keep('end'));
         case 'cancelled':
           await send('$_title: print cancelled', file, tags: ['x']);
         case 'paused' when last == 'printing':
@@ -365,6 +370,7 @@ class Alerts {
               tags: ['pause_button'], priority: 4, picture: true);
         case 'printing' when last == 'standby' || last == 'complete' || last == 'cancelled' || last == 'error':
           _sent = {};
+          _started = DateTime.now();
           await send('$_title: print started', file, tags: ['printer'], priority: 2);
           if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
       }
@@ -381,7 +387,7 @@ class Alerts {
       final layer = (_stats['info'] as Map?)?['current_layer'];
       if (layer is num && layer >= 2 && _sent.add('first_layer')) {
         await send('$_title: first layer done', 'Have a look before it carries on.',
-            tags: ['mag'], priority: 2, picture: true);
+            tags: ['mag'], priority: 2, jpeg: await _keep('first'));
       }
       final dur = (_stats['print_duration'] as num?)?.toDouble() ?? 0;
       if (_progress > 0.5 && dur > 0) {
@@ -415,6 +421,61 @@ class Alerts {
 }
 
 extension on Alerts {
+  /// Rules come from Moonraker's database (the app edits them). Reloaded each
+  /// minute, when daily ones are due too.
+  Future<void> _rulesLoop() async {
+    while (true) {
+      try {
+        final r = await _client.get(Uri.parse(
+            'http://$host:$port/server/database/item?namespace=printer_hub&key=rules'));
+        _rules = r.statusCode == 200
+            ? List<Map>.from((jsonDecode(r.body)['result']?['value'] as List?) ?? const [])
+            : const [];
+      } catch (_) {}
+      final now = DateTime.now();
+      final hhmm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final day = '${now.year}-${now.month}-${now.day}';
+      await _runRules((r) => r['on'] == 'time' && r['at'] == hhmm && _ranToday.add('$day ${r['at']} ${r['do']}'));
+      await Future.delayed(Duration(seconds: 60 - DateTime.now().second));
+    }
+  }
+
+  Future<void> _runRules(bool Function(Map) match) async {
+    for (final r in _rules.where(match)) {
+      final g = '${r['do'] ?? ''}'.trim();
+      if (g.isEmpty) continue;
+      try {
+        await _client.post(Uri.parse('http://$host:$port/printer/gcode/script'),
+            headers: {'Content-Type': 'application/json'}, body: jsonEncode({'script': g}));
+        log('Rule ran: ${r['on']}${r['at'] == null ? '' : ' ${r['at']}'} -> $g');
+      } catch (e) {
+        log('Rule failed ($g): $e');
+      }
+    }
+  }
+
+  /// Grabs a camera frame and keeps it on the printer (hidden folder in
+  /// gcodes) so the app's history can show it, at home and from away.
+  /// ponytail: never pruned; ~60 KB x 2 per print. Add cleanup if it adds up.
+  Future<List<int>?> _keep(String kind) async {
+    if (camera == null) return null;
+    try {
+      final jpeg = await camera!.frame();
+      final file = '${_stats['filename'] ?? ''}'.split('/').last;
+      final name = snapshotName(file, _started ?? DateTime.now(), kind);
+      final req = http.MultipartRequest('POST', Uri.parse('http://$host:$port/server/files/upload'))
+        ..fields['root'] = 'gcodes'
+        ..fields['path'] = '.printer-hub/snapshots'
+        ..files.add(http.MultipartFile.fromBytes('file', jpeg, filename: name));
+      final r = await _client.send(req).timeout(const Duration(seconds: 30));
+      if (r.statusCode >= 300) log('Snapshot not saved (HTTP ${r.statusCode})');
+      return jpeg;
+    } catch (e) {
+      log('No snapshot ($e)');
+      return null;
+    }
+  }
+
   bool get _filterOn => _sent.contains('filter_on');
 
   Future<void> _setFilter(bool on) async {
@@ -441,6 +502,13 @@ extension on Alerts {
       }
     } catch (_) {}
   }
+}
+
+/// "cube.gcode" started at t, kind "first" -> "cube__1794164593__first.jpg".
+/// The app matches it to the history job by name and start time.
+String snapshotName(String gcode, DateTime started, String kind) {
+  final stem = gcode.replaceAll(RegExp(r'\.gcode$', caseSensitive: false), '').replaceAll(RegExp(r'[^\w.-]+'), '_');
+  return '${stem}__${started.millisecondsSinceEpoch ~/ 1000}__$kind.jpg';
 }
 
 /// "23-7" -> (23, 7). Null when unset or malformed.
