@@ -77,3 +77,15 @@ every artifact; push a `v*` tag to publish one.
 | `packages/hub_link/` | Pairing codes and encryption shared by app and bridge |
 | `relay/` | Cloudflare Worker relay |
 | `bridge/` | Home bridge (Dart) and Docker files |
+
+## Orca Slicer
+
+On the Mac, Printer Hub can receive prints straight from Orca Slicer (Settings → Orca Slicer):
+
+1. In Orca, open the printer's connection settings: host type **Octo/Klipper**, hostname `127.0.0.1:7126`
+   (or `127.0.0.1:7126/<printer-name>`, e.g. `127.0.0.1:7126/k2-plus`, to skip the printer question).
+2. Slice and press **Print** or **Send**. Printer Hub uploads the file, at home or from away through
+   the home bridge, and opens print setup (the U1's head mapping and print preferences).
+
+Orca Slicer 2.5+ plugin: `orca-plugin/printer_hub.py` (also attached to each release, and saved from
+Settings → Orca Slicer). Install it from Orca's Plugins dialog for a live printer panel beside the 3D view.

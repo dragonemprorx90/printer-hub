@@ -1,11 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'main.dart' show orcaLink;
 import 'moonraker.dart';
+import 'orca_link.dart';
 import 'scan.dart';
 import 'settings.dart';
 import 'ui.dart';
@@ -107,6 +110,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   /// Printers (with their remote codes), presets, favourites and so on.
+  Future<void> _savePlugin() async {
+    try {
+      final bytes = (await rootBundle.load('orca-plugin/printer_hub.py')).buffer.asUint8List();
+      final saved = await FilePicker.saveFile(fileName: 'printer_hub.py', bytes: bytes);
+      if (saved != null && mounted) toast(context, 'Saved. In Orca: Plugins ▸ Install ▸ choose printer_hub.py');
+    } catch (e) {
+      if (mounted) toast(context, 'Could not save: $e', error: true);
+    }
+  }
+
   Future<void> _backup() async {
     if (!await confirm(context, 'Back up settings?',
             message: 'The file includes your remote access codes. Keep it private.', action: 'Save file') ||
@@ -362,6 +375,45 @@ class _SettingsPageState extends State<SettingsPage> {
               ]),
             ),
             gap,
+            if (Platform.isMacOS) ...[
+              Panel(
+                title: 'Orca Slicer',
+                icon: Icons.layers_rounded,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Receive prints from Orca Slicer'),
+                    subtitle: Text(orcaLink?.running == true
+                        ? 'Listening on 127.0.0.1:$kOrcaPort'
+                        : 'Turn on, then reopen the app'),
+                    value: settings.flag('orcaLink'),
+                    onChanged: (v) async {
+                      settings.setFlag('orcaLink', v);
+                      if (!v) await orcaLink?.stop();
+                      setState(() {});
+                    },
+                  ),
+                  Text(
+                    '1. In Orca: printer ▸ Connection (the Wi-Fi icon next to the printer) ▸ '
+                    'host type "Octo/Klipper", hostname 127.0.0.1:$kOrcaPort. To skip the printer question, '
+                    'add its name: 127.0.0.1:$kOrcaPort/${widget.printers.isEmpty ? 'printer-name' : printerSlug(widget.printers.first.name)}\n'
+                    '2. Slice and press Print or Send. Printer Hub uploads it (at home or from away) and opens print setup.\n'
+                    '3. Optional, Orca 2.5+: save the plugin below and install it in Orca\'s Plugins dialog for a live printer panel.',
+                    style: TextStyle(color: C.muted, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: _savePlugin,
+                      icon: const Icon(Icons.extension_outlined),
+                      label: const Text('Save the Orca plugin'),
+                    ),
+                  ),
+                ]),
+              ),
+              gap,
+            ],
             Panel(
               title: 'About',
               icon: Icons.info_outline_rounded,

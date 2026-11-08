@@ -918,6 +918,16 @@ class MoonrakerClient {
     if (material != null) await gcode('SET_MATERIAL LANE=$lane MATERIAL=$material');
   }
 
+  /// File metadata, waiting a few seconds for Moonraker to parse a new upload.
+  Future<Map<String, dynamic>> metadataWhenReady(String path) async {
+    var meta = <String, dynamic>{};
+    for (var i = 0; i < 5 && meta['filament_type'] == null && meta['estimated_time'] == null; i++) {
+      if (i > 0) await Future.delayed(const Duration(seconds: 1));
+      meta = await metadata(path).catchError((_) => <String, dynamic>{});
+    }
+    return meta;
+  }
+
   /// Snapmaker U1 print setup, the way its own app starts a print: which
   /// head prints each tool, the print preferences, then the file.
   bool get isSnapmaker => hasScreen;

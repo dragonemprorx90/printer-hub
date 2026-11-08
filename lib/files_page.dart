@@ -216,12 +216,7 @@ class _FilesTabState extends State<FilesTab> {
             message: 'Start printing it now?', action: 'Print') &&
         mounted) {
       if (c.isSnapmaker) {
-        // Moonraker reads a new file's metadata a moment after the upload.
-        var meta = <String, dynamic>{};
-        for (var i = 0; i < 5 && meta['filament_type'] == null; i++) {
-          if (i > 0) await Future.delayed(const Duration(seconds: 1));
-          meta = await c.metadata(dest).catchError((_) => <String, dynamic>{});
-        }
+        final meta = await c.metadataWhenReady(dest);
         if (mounted) await snapmakerPrintSetup(context, c, dest, meta);
       } else {
         run(context, () => c.startPrint(dest), done: 'Print started');

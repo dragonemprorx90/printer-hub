@@ -17,6 +17,11 @@ class MainFlutterWindow: NSWindow {
       name: "printerhub/statusbar",
       binaryMessenger: flutterViewController.engine.binaryMessenger)
     channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "activate" {
+        self?.showApp()
+        result(nil)
+        return
+      }
       guard call.method == "setTitle" else {
         result(FlutterMethodNotImplemented)
         return

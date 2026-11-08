@@ -1,17 +1,20 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hub_link/hub_link.dart';
 
 import 'discovery.dart';
 import 'gcode.dart';
 import 'moonraker.dart';
 import 'notify.dart';
+import 'orca_link.dart';
 import 'printer_page.dart';
 import 'settings.dart';
 import 'scan.dart';
 import 'settings_page.dart';
+import 'u1_panels.dart';
 import 'ui.dart';
 import 'update.dart';
 import 'wall_page.dart';
@@ -102,6 +105,9 @@ class PrinterListPage extends StatefulWidget {
   State<PrinterListPage> createState() => _PrinterListPageState();
 }
 
+/// Running OrcaSlicer link (macOS), if on.
+OrcaLink? orcaLink;
+
 class _PrinterListPageState extends State<PrinterListPage> {
   late List<Printer> _printers = [
     for (final s in settings.strings('printers')) Printer.fromJson(jsonDecode(s)),
@@ -117,6 +123,61 @@ class _PrinterListPageState extends State<PrinterListPage> {
       await showWhatsNewIfUpdated(context, freshInstall: _printers.isEmpty);
       if (mounted) autoCheckForUpdate(context);
     });
+    if (Platform.isMacOS && settings.flag('orcaLink')) {
+      orcaLink = OrcaLink(onUpload: _fromOrca, printers: () => _printers);
+      orcaLink!.start().catchError((Object e) => debugPrint('Orca link: $e'));
+    }
+  }
+
+  /// A file OrcaSlicer sent: pick the printer, upload, then print setup.
+  Future<void> _fromOrca(OrcaUpload u) async {
+    const MethodChannel('printerhub/statusbar').invokeMethod('activate').catchError((_) {});
+    if (_printers.isEmpty || !mounted) return;
+    var name = u.name;
+    var bytes = u.bytes;
+    if (name.toLowerCase().endsWith('.3mf')) {
+      final plates = platesIn3mf(bytes);
+      if (plates.isEmpty) return toast(context, 'No sliced plate in $name', error: true);
+      final n = (plates.keys.toList()..sort()).first;
+      name = '${name.replaceAll(RegExp(r'(\.gcode)?\.3mf$', caseSensitive: false), '')}_plate$n.gcode';
+      bytes = plates[n]!;
+    }
+    var target = _printers.where((p) => printerSlug(p.name) == u.printer).firstOrNull;
+    target ??= _printers.length == 1
+        ? _printers.first
+        : await showDialog<Printer>(
+            context: context,
+            builder: (ctx) => SimpleDialog(
+              title: Text('From Orca Slicer: $name'),
+              children: [
+                for (final p in _printers)
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.pop(ctx, p),
+                    child: ListTile(
+                      leading: Icon(Icons.print_rounded,
+                          color: Color(settings.printerColor(p.key) ?? C.accent.toARGB32())),
+                      title: Text(p.name),
+                      subtitle: Text(clientFor(p).status.online ? clientFor(p).status.state : 'offline'),
+                    ),
+                  ),
+              ],
+            ),
+          );
+    if (target == null || !mounted) return;
+    final c = clientFor(target);
+    final to = target;
+    var sent = false;
+    await run(context, () async {
+      await c.upload(name, bytes);
+      sent = true;
+    }, done: u.print ? null : '$name sent to ${to.name}');
+    if (!sent || !u.print || !mounted) return;
+    if (c.isSnapmaker) {
+      final meta = await c.metadataWhenReady(name);
+      if (mounted) await snapmakerPrintSetup(context, c, name, meta);
+    } else if (await confirm(context, 'Print $name on ${to.name}?', action: 'Print') && mounted) {
+      await run(context, () => c.startPrint(name), done: 'Printing on ${to.name}');
+    }
   }
 
   void _save() => settings.setStrings(
