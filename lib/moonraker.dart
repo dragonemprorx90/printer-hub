@@ -103,6 +103,28 @@ class FanInfo {
   FanInfo(this.object, this.label, this.value);
 }
 
+/// A Spoolman spool.
+class Spool {
+  final int id;
+  final String name, material;
+  final int? color; // ARGB
+  final double? remaining; // grams
+  Spool(this.id, this.name, this.material, this.color, this.remaining);
+
+  factory Spool.fromJson(Map<String, dynamic> j) {
+    final f = (j['filament'] as Map?) ?? const {};
+    final vendor = (f['vendor'] as Map?)?['name'];
+    final hex = '${f['color_hex'] ?? ''}';
+    return Spool(
+      (j['id'] as num).toInt(),
+      [vendor, f['name']].whereType<String>().join(' ').trim(),
+      '${f['material'] ?? ''}',
+      hex.length >= 6 ? parseCfsColor(hex.substring(0, 6)) : null,
+      (j['remaining_weight'] as num?)?.toDouble(),
+    );
+  }
+}
+
 /// An object in the current print (Klipper exclude_object).
 class PrintObject {
   final String name;
@@ -718,6 +740,18 @@ class MoonrakerClient {
   Future<void> startPrint(String filename) =>
       _call('printer.print.start', {'filename': filename});
 
+  /// Heats the chamber, waits for it (M191) and then starts the print. Klipper
+  /// runs it in order, so the app can close meanwhile.
+  void startPrintAfterChamber(String filename, int temp) {
+    final name = filename.replaceAll('"', '');
+    // ponytail: not awaited; M191 can take longer than any request timeout.
+    gcode('M141 S$temp\nM191 S$temp\nSDCARD_PRINT_FILE FILENAME="$name"').catchError((_) {});
+  }
+
+  bool get canPauseAtLayer => macros.contains('SET_PAUSE_AT_LAYER');
+  Future<void> pauseAtLayer(int? layer) => gcode(
+      layer == null ? 'SET_PAUSE_AT_LAYER ENABLE=0' : 'SET_PAUSE_AT_LAYER ENABLE=1 LAYER=$layer');
+
   Future<void> home([String axes = '']) => gcode('G28 $axes'.trim());
   Future<void> jog(String axis, double mm) {
     final feed = axis == 'Z' ? 600 : 6000;
@@ -885,6 +919,52 @@ class MoonrakerClient {
     }
     return j;
   }
+
+  // --- Spoolman (through Moonraker's proxy, so it works from away too) ------
+
+  Future<bool> hasSpoolman() async {
+    try {
+      final r = await _http.get(_uri(['server', 'spoolman', 'status']), headers: authHeaders);
+      return r.statusCode == 200 && jsonDecode(r.body)['result']?['spoolman_connected'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<dynamic> _spoolman(String method, String path, [Map<String, dynamic>? body]) async {
+    final r = await _http.post(_uri(['server', 'spoolman', 'proxy']),
+        headers: {...authHeaders, 'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'request_method': method,
+          'path': path,
+          'use_v2_response': true,
+          'body': ?body,
+        }));
+    final dynamic j = jsonDecode(r.body);
+    final err = j['result']?['error'] ?? j['error'];
+    if (r.statusCode >= 300 || err != null) {
+      throw MoonrakerError('Spoolman: ${err?['message'] ?? 'HTTP ${r.statusCode}'}');
+    }
+    return j['result']['response'];
+  }
+
+  Future<List<Spool>> spools() async => [
+        for (final s in (await _spoolman('GET', '/v1/spool')) as List)
+          if (s['archived'] != true) Spool.fromJson(s as Map<String, dynamic>),
+      ];
+
+  Future<int?> activeSpool() async {
+    final r = await _http.get(_uri(['server', 'spoolman', 'spool_id']), headers: authHeaders);
+    return r.statusCode == 200 ? (jsonDecode(r.body)['result']?['spool_id'] as num?)?.toInt() : null;
+  }
+
+  Future<void> setActiveSpool(int? id) async => _check(await _http.post(
+      _uri(['server', 'spoolman', 'spool_id']),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: jsonEncode({'spool_id': id})));
+
+  /// U1 extended firmware: link a spool to a lane (0 unlinks).
+  Future<void> setLaneSpool(String lane, int id) => gcode('SET_SPOOL_ID LANE=$lane SPOOL_ID=$id');
 
   // --- Timelapse videos -----------------------------------------------------
 

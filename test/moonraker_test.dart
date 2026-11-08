@@ -134,5 +134,15 @@ void main() {
       ('T1', 'E1', 0xFFF8F81C, 'PETG'),
     ]);
   });
+
+  test('Spoolman spool from JSON', () {
+    final sp = Spool.fromJson({
+      'id': 3,
+      'remaining_weight': 812.4,
+      'filament': {'name': 'Basic PLA', 'material': 'PLA', 'color_hex': 'FF0000', 'vendor': {'name': 'Sunlu'}},
+    });
+    expect((sp.id, sp.name, sp.material, sp.color, sp.remaining),
+        (3, 'Sunlu Basic PLA', 'PLA', 0xFFFF0000, 812.4));
+  });
 }
 

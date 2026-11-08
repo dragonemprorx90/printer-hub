@@ -94,12 +94,16 @@ Future<void> main(List<String> argv) async {
   _printPairing(pair);
   if (args['show-code'] == 'true') return;
 
+  final cameraUrl = args['camera'] ?? env['CAMERA_URL'];
+  final camera = cameraUrl == null || cameraUrl.isEmpty ? null : CameraFeed(Uri.parse(cameraUrl));
   final topic = pair.alerts;
   final alerts = topic == null || alertsOff
       ? null
       : Alerts(Uri.parse(topic), printer, port,
           name: args['name'] ?? env['PRINTER_NAME'],
-          humidityLimit: double.tryParse(env['HUMIDITY_LIMIT'] ?? '') ?? 45);
+          humidityLimit: double.tryParse(env['HUMIDITY_LIMIT'] ?? '') ?? 45,
+          camera: camera,
+          autoFilter: env['AUTO_FILTER'] != 'off');
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -117,8 +121,6 @@ Future<void> main(List<String> argv) async {
     log('Alerts are off for this pairing. Run with --reset to get a code with alerts.');
   }
 
-  final cameraUrl = args['camera'] ?? env['CAMERA_URL'];
-  final camera = cameraUrl == null || cameraUrl.isEmpty ? null : CameraFeed(Uri.parse(cameraUrl));
   log('Bridging printer $printer:$port through ${pair.relay}');
   if (camera != null) log('Camera from away: $cameraUrl');
   await Bridge(pair, await LinkCrypto.forPair(pair), printer, port, camera: camera).run();
@@ -193,22 +195,54 @@ class Alerts {
   final int port;
   final String? name;
   final double humidityLimit;
+  final CameraFeed? camera;
+  final bool autoFilter;
   final _client = http.Client();
 
   final _stats = <String, dynamic>{};
   final _box = <String, dynamic>{};
+  final _dragon = <String, dynamic>{};
+  double _progress = 0;
   String? _state;
   final _humidityAlerted = <String, DateTime>{};
+  var _sent = <String>{}; // once-per-print alerts already sent
+  bool _hasFilter = false;
+  Timer? _filterOff;
 
-  Alerts(this.topic, this.host, this.port, {this.name, this.humidityLimit = 45});
+  Alerts(this.topic, this.host, this.port,
+      {this.name, this.humidityLimit = 45, this.camera, this.autoFilter = true});
 
   String get _title => name ?? host;
 
-  /// ntfy's JSON publish endpoint takes UTF-8 titles (headers can't).
+  /// RFC 2047 so ntfy headers can carry UTF-8 (printer names, emoji).
+  static String _h(String v) => '=?UTF-8?B?${base64.encode(utf8.encode(v))}?=';
+
+  /// ntfy's JSON publish endpoint takes UTF-8 titles (headers can't). With
+  /// [picture] and a camera, the current frame is attached instead.
   Future<void> send(String title, String message,
-      {List<String> tags = const [], int priority = 3}) async {
+      {List<String> tags = const [], int priority = 3, bool picture = false}) async {
     final server = topic.replace(path: '', query: null);
     final name = topic.pathSegments.last;
+    if (picture && camera != null) {
+      try {
+        final jpeg = await camera!.frame();
+        final r = await _client
+            .put(topic,
+                headers: {
+                  'Filename': 'printer.jpg',
+                  'Title': _h(title),
+                  'Message': _h(message),
+                  'Tags': tags.join(','),
+                  'Priority': '$priority',
+                },
+                body: jpeg)
+            .timeout(const Duration(seconds: 30));
+        if (r.statusCode < 300) return;
+        log('Alert picture not delivered (HTTP ${r.statusCode}); sending text only');
+      } catch (e) {
+        log('No picture for the alert ($e); sending text only');
+      }
+    }
     try {
       final r = await _client
           .post(server,
@@ -251,7 +285,13 @@ class Alerts {
           'id': ++id,
           'method': 'printer.objects.subscribe',
           'params': {
-            'objects': {'print_stats': ['state', 'filename', 'message'], 'box': null},
+            'objects': {
+              'print_stats': ['state', 'filename', 'message', 'print_duration', 'info'],
+              'virtual_sdcard': ['progress'],
+              'box': null,
+              'dragonbreath': ['connected', 'fault', 'fault_reason'],
+              'output_pin dragonbreath_filter': null,
+            },
           },
         }));
     subscribe();
@@ -291,6 +331,11 @@ class Alerts {
     if (ps is Map) _stats.addAll(Map<String, dynamic>.from(ps));
     final box = status['box'];
     if (box is Map) _box.addAll(Map<String, dynamic>.from(box));
+    final db = status['dragonbreath'];
+    if (db is Map) _dragon.addAll(Map<String, dynamic>.from(db));
+    if (status['output_pin dragonbreath_filter'] != null) _hasFilter = true;
+    final p = status['virtual_sdcard']?['progress'];
+    if (p is num) _progress = p.toDouble();
 
     final state = _stats['state'] as String?;
     final file = '${_stats['filename'] ?? ''}'.split('/').last;
@@ -300,19 +345,51 @@ class Alerts {
     if (last != null && state != null && state != last) {
       switch (state) {
         case 'complete':
-          await send('$_title: print finished', file, tags: ['white_check_mark'], priority: 4);
+          await send('$_title: print finished', file,
+              tags: ['white_check_mark'], priority: 4, picture: true);
         case 'error':
           await send('$_title: print failed', note.isEmpty ? file : note,
-              tags: ['warning'], priority: 5);
+              tags: ['warning'], priority: 5, picture: true);
         case 'cancelled':
           await send('$_title: print cancelled', file, tags: ['x']);
         case 'paused' when last == 'printing':
           await send('$_title: print paused',
               note.isEmpty ? 'Check the printer (filament run-out?)' : note,
-              tags: ['pause_button'], priority: 4);
-        case 'printing' when last == 'standby' || last == 'complete' || last == 'cancelled':
+              tags: ['pause_button'], priority: 4, picture: true);
+        case 'printing' when last == 'standby' || last == 'complete' || last == 'cancelled' || last == 'error':
+          _sent = {};
           await send('$_title: print started', file, tags: ['printer'], priority: 2);
+          if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
       }
+      if (state != 'printing' && state != 'paused' && _filterOn) {
+        // Keep filtering a while so fumes clear, then stop.
+        _filterOff?.cancel();
+        _filterOff = Timer(const Duration(minutes: 10), () {
+          if (_state != 'printing') _setFilter(false);
+        });
+      }
+    }
+
+    if (state == 'printing') {
+      final layer = (_stats['info'] as Map?)?['current_layer'];
+      if (layer is num && layer >= 2 && _sent.add('first_layer')) {
+        await send('$_title: first layer done', 'Have a look before it carries on.',
+            tags: ['mag'], priority: 2, picture: true);
+      }
+      final dur = (_stats['print_duration'] as num?)?.toDouble() ?? 0;
+      if (_progress > 0.5 && dur > 0) {
+        final left = dur * (1 - _progress) / _progress;
+        if (left < 600 && _sent.add('almost_done')) {
+          await send('$_title: about ${(left / 60).ceil()} min left', file, tags: ['hourglass'], priority: 3);
+        }
+      }
+    }
+
+    if (_dragon['fault'] == true && _sent.add('heater_fault')) {
+      await send('$_title: chamber heater fault', '${_dragon['fault_reason'] ?? 'Check the DragonBreath.'}',
+          tags: ['fire'], priority: 5);
+    } else if (_dragon['fault'] == false) {
+      _sent.remove('heater_fault');
     }
 
     for (var i = 1; i <= 4; i++) {
@@ -329,6 +406,38 @@ class Alerts {
     }
   }
 }
+
+extension on Alerts {
+  bool get _filterOn => _sent.contains('filter_on');
+
+  Future<void> _setFilter(bool on) async {
+    try {
+      await _client.post(Uri.parse('http://$host:$port/printer/gcode/script'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'script': 'SET_PIN PIN=dragonbreath_filter VALUE=${on ? 1 : 0}'}));
+      on ? _sent.add('filter_on') : _sent.remove('filter_on');
+      log('Heater filter ${on ? 'on' : 'off'}');
+    } catch (e) {
+      log('Heater filter not switched: $e');
+    }
+  }
+
+  /// Runs the DragonBreath filter for fume-heavy materials.
+  Future<void> _filterFor(String file) async {
+    try {
+      final r = await _client.get(Uri.parse('http://$host:$port/server/files/metadata')
+          .replace(queryParameters: {'filename': file}));
+      final type = '${jsonDecode(r.body)['result']?['filament_type'] ?? ''}'.toUpperCase();
+      if (fumeMaterial(type)) {
+        _filterOff?.cancel();
+        await _setFilter(true);
+      }
+    } catch (_) {}
+  }
+}
+
+/// ABS, ASA, PC and nylon give off fumes worth filtering.
+bool fumeMaterial(String type) => RegExp(r'\b(ABS|ASA|PC|PA\d*|NYLON)\b').hasMatch(type.toUpperCase());
 
 void _printPairing(PairInfo pair) {
   final code = pair.encode();

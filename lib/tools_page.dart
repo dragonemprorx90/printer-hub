@@ -154,6 +154,7 @@ class _ToolsTabState extends State<ToolsTab> {
           _maintenancePanel(),
           _powerPanel(),
           TimelapsePanel(client: c),
+          SpoolmanPanel(client: c),
           _remotePanel(),
           _consolePanel(),
         ];

@@ -823,6 +823,19 @@ class _Actions extends StatelessWidget {
       icon: Icons.bolt_rounded,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(spacing: 10, runSpacing: 10, children: [
+          if (busy && client.canPauseAtLayer)
+            OutlinedButton.icon(
+              onPressed: () async {
+                final now = s.currentLayer ?? 0;
+                final l = await askNumber(context, 'Pause at layer',
+                    presets: [0, now + 1, now + 5, now + 10], unit: '');
+                if (l == null || !context.mounted) return;
+                await run(context, () => client.pauseAtLayer(l == 0 ? null : l),
+                    done: l == 0 ? 'Layer pause off' : 'Pauses at layer $l');
+              },
+              icon: const Icon(Icons.layers_clear_outlined),
+              label: const Text('Pause at layer'),
+            ),
           if (printing)
             FilledButton.icon(
               onPressed: () => run(context, client.pause),

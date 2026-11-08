@@ -201,3 +201,93 @@ class _TimelapsePanelState extends State<TimelapsePanel> {
         },
       );
 }
+
+/// Spoolman spools: set the active spool, or link one to a U1 lane.
+class SpoolmanPanel extends StatefulWidget {
+  final MoonrakerClient client;
+  const SpoolmanPanel({super.key, required this.client});
+  @override
+  State<SpoolmanPanel> createState() => _SpoolmanPanelState();
+}
+
+class _SpoolmanPanelState extends State<SpoolmanPanel> {
+  late Future<(List<Spool>, int?)?> _data = _load();
+
+  Future<(List<Spool>, int?)?> _load() async {
+    final c = widget.client;
+    if (!await c.hasSpoolman()) return null;
+    return (await c.spools(), await c.activeSpool());
+  }
+
+  void _reload() => setState(() => _data = _load());
+
+  Future<void> _pick(Spool sp, int? active) async {
+    final c = widget.client;
+    final lanes = [
+      for (final b in c.status.cfs)
+        for (final s in b.slots)
+          if (s.lane != null) s,
+    ];
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(title: Text(sp.name.isEmpty ? 'Spool ${sp.id}' : sp.name), subtitle: Text(sp.material)),
+          ListTile(
+            leading: Icon(sp.id == active ? Icons.radio_button_checked : Icons.radio_button_off),
+            title: Text(sp.id == active ? 'Stop using this spool' : 'Use as the active spool'),
+            onTap: () => Navigator.pop(ctx, 'active'),
+          ),
+          for (final l in lanes)
+            ListTile(
+              leading: const Icon(Icons.input_rounded),
+              title: Text('Load in lane ${l.label}'),
+              onTap: () => Navigator.pop(ctx, l.lane),
+            ),
+        ]),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice == 'active') {
+      await run(context, () => c.setActiveSpool(sp.id == active ? null : sp.id), done: 'Active spool updated');
+    } else {
+      await run(context, () => c.setLaneSpool(choice, sp.id), done: 'Spool linked to lane');
+    }
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<(List<Spool>, int?)?>(
+        future: _data,
+        builder: (context, snap) {
+          final d = snap.data;
+          if (d == null) return const SizedBox.shrink();
+          final (spools, active) = d;
+          return Panel(
+            title: 'Spools',
+            icon: Icons.album_outlined,
+            trailing: IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: _reload),
+            child: spools.isEmpty
+                ? Text('No spools yet. Add them in Spoolman.', style: TextStyle(color: C.muted))
+                : Column(children: [
+                    for (final sp in spools)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          radius: 14,
+                          backgroundColor: sp.color == null ? C.border : Color(sp.color!),
+                        ),
+                        title: Text(sp.name.isEmpty ? 'Spool ${sp.id}' : sp.name,
+                            style: TextStyle(fontWeight: sp.id == active ? FontWeight.w800 : null)),
+                        subtitle: Text([
+                          sp.material,
+                          if (sp.remaining != null) '${sp.remaining!.round()} g left',
+                          if (sp.id == active) 'active',
+                        ].where((x) => x.isNotEmpty).join(' · ')),
+                        onTap: () => _pick(sp, active),
+                      ),
+                  ]),
+          );
+        },
+      );
+}

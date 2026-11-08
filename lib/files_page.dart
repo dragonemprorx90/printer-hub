@@ -540,6 +540,16 @@ class _FileSheetState extends State<_FileSheet> {
   GcodeFile get f => widget.file;
   bool get _busy => c.status.state == 'printing' || c.status.state == 'paused';
 
+  Future<void> _preheat() async {
+    if (_busy) return toast(context, 'A print is already running');
+    final t = await askNumber(context, 'Heat the chamber to',
+        presets: settings.presets('chamber').where((p) => p > 0).toList());
+    if (t == null || t <= 0 || !mounted) return;
+    c.startPrintAfterChamber(f.path, t);
+    toast(context, 'Heating the chamber to $t°C. The print starts when it gets there.');
+    Navigator.of(context).pop();
+  }
+
   Future<void> _print() async {
     if (_busy) return toast(context, 'A print is already running');
     if (!await confirm(context, 'Print ${f.name}?', action: 'Print') || !mounted) {
@@ -716,6 +726,12 @@ class _FileSheetState extends State<_FileSheet> {
                 avatar: const Icon(Icons.schedule_rounded, size: 16),
                 label: const Text('Start later'),
                 onPressed: _later),
+            if (c.status.chamberHeatable)
+              ActionChip(
+                avatar: const Icon(Icons.local_fire_department_outlined, size: 16),
+                label: const Text('Heat chamber first'),
+                onPressed: _preheat,
+              ),
             ActionChip(
               avatar: const Icon(Icons.layers_rounded, size: 16),
               label: const Text('Layer preview'),
