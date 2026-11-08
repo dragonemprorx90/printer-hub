@@ -343,7 +343,13 @@ class _JobTile extends StatelessWidget {
                           : const SizedBox(height: 160, child: Center(child: CircularProgressIndicator())),
                     ),
                     const SizedBox(height: 4),
-                    Text(f.endsWith('__first.jpg') ? 'First layer' : 'End', style: TextStyle(color: C.muted)),
+                    Text(
+                        f.endsWith('__first.jpg')
+                            ? 'First layer'
+                            : f.endsWith('__end.jpg')
+                                ? 'End'
+                                : 'During the print',
+                        style: TextStyle(color: C.muted)),
                   ]),
                 ),
             ]),

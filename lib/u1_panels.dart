@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'moonraker.dart';
+import 'scan.dart';
 import 'ui.dart';
 
 /// DragonBreath chamber heater on a U1: status, filament drying, fault clear.
@@ -289,6 +291,14 @@ class _TimelapsePanelState extends State<TimelapsePanel> {
       );
 }
 
+String spoolQr(int id) => 'web+spoolman:s-$id';
+
+/// Spool ID from a Spoolman label ("web+spoolman:s-12" or a /spool/show/12 URL).
+int? spoolFromQr(String code) {
+  final m = RegExp(r'(?:web\+spoolman:s-|/spool/show/)(\d+)').firstMatch(code.trim());
+  return m == null ? null : int.parse(m[1]!);
+}
+
 /// Spoolman spools: set the active spool, or link one to a U1 lane.
 class SpoolmanPanel extends StatefulWidget {
   final MoonrakerClient client;
@@ -307,6 +317,34 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
   }
 
   void _reload() => setState(() => _data = _load());
+
+  /// Spoolman's own QR format, so its labels and this app read the same codes.
+  Future<void> _label(Spool sp) => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(sp.name.isEmpty ? 'Spool ${sp.id}' : sp.name),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: 220,
+              height: 220,
+              child: QrImageView(data: spoolQr(sp.id), backgroundColor: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text('${sp.material} · #${sp.id}. Screenshot or print it and stick it on the spool.',
+                textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
+          ]),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        ),
+      );
+
+  Future<void> _scan(List<Spool> spools, int? active) async {
+    final code = await scanQr(context, 'Scan a spool label');
+    if (code == null || !mounted) return;
+    final id = spoolFromQr(code);
+    final sp = spools.where((s) => s.id == id).firstOrNull;
+    if (sp == null) return toast(context, 'Not a spool label from this Spoolman', error: true);
+    await _pick(sp, active);
+  }
 
   /// From a lane: its material and colour are already set, so only the
   /// weight is asked, and the new spool is linked to that lane.
@@ -423,6 +461,11 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(title: Text(sp.name.isEmpty ? 'Spool ${sp.id}' : sp.name), subtitle: Text(sp.material)),
           ListTile(
+            leading: const Icon(Icons.qr_code_rounded),
+            title: const Text('Show QR label'),
+            onTap: () => Navigator.pop(ctx, 'qr'),
+          ),
+          ListTile(
             leading: Icon(sp.id == active ? Icons.radio_button_checked : Icons.radio_button_off),
             title: Text(sp.id == active ? 'Stop using this spool' : 'Use as the active spool'),
             onTap: () => Navigator.pop(ctx, 'active'),
@@ -437,6 +480,7 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
       ),
     );
     if (choice == null || !mounted) return;
+    if (choice == 'qr') return _label(sp);
     if (choice == 'active') {
       await run(context, () => c.setActiveSpool(sp.id == active ? null : sp.id), done: 'Active spool updated');
     } else {
@@ -456,6 +500,11 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
             title: 'Spools',
             icon: Icons.album_outlined,
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (canScan)
+                IconButton(
+                    tooltip: 'Scan spool label',
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    onPressed: () => _scan(spools, active)),
               IconButton(tooltip: 'Add spool', icon: const Icon(Icons.add_rounded), onPressed: _add),
               IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: _reload),
             ]),
@@ -667,6 +716,7 @@ class _HealthPanelState extends State<HealthPanel> {
 const _triggers = {
   'first_layer': 'First layer is done',
   'progress': 'Print reaches…',
+  'interval': 'Every few minutes while printing',
   'paused': 'Print pauses',
   'heater_fault': 'Chamber heater faults',
   'complete': 'Print finishes',
@@ -688,6 +738,8 @@ class _RulesPanelState extends State<RulesPanel> {
 
   List<(String, String)> _actions(PrinterStatus s) => [
         ('Send me a picture', '@picture'),
+        ('Save a picture to History', '@keep'),
+        if (s.dragon != null) ('Dry filament…', '@dry'),
         if (s.raw.containsKey(PrinterStatus.cavityLed)) ('Light off', 'SET_LED LED=cavity_led WHITE=0'),
         if (s.raw.containsKey('output_pin LED')) ('Light off', 'SET_PIN PIN=LED VALUE=0'),
         ('All heaters off', 'TURN_OFF_HEATERS'),
@@ -714,6 +766,10 @@ class _RulesPanelState extends State<RulesPanel> {
       final t = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 22, minute: 0));
       if (t == null || !mounted) return;
       at = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    } else if (on == 'interval') {
+      final m = await askNumber(context, 'Every how many minutes?', presets: const [5, 10, 15, 30], unit: ' min');
+      if (m == null || m <= 0 || !mounted) return;
+      at = '$m';
     } else if (on == 'progress') {
       final p = await askNumber(context, 'At what progress?', presets: const [25, 50, 75, 90], unit: '%');
       if (p == null || p <= 0 || p > 100 || !mounted) return;
@@ -732,6 +788,14 @@ class _RulesPanelState extends State<RulesPanel> {
     );
     if (pick == null || !mounted) return;
     var (label, gcode) = pick;
+    if (gcode == '@dry') {
+      final t = await askNumber(context, 'Drying temperature', presets: const [40, 45, 50, 55, 60, 65]);
+      if (t == null || !mounted) return;
+      final h = await askNumber(context, 'Drying time', presets: const [2, 4, 6, 8, 12], unit: ' h');
+      if (h == null || !mounted) return;
+      final tc = t.clamp(30, 70), hc = h.clamp(1, 12);
+      (label, gcode) = ('Dry filament $tc°C for $hc h', '@dry $tc $hc');
+    }
     if (gcode.isEmpty) {
       final g = await askText(context, 'G-code to run', hint: 'e.g. M84', action: 'Add');
       if (g == null || g.isEmpty || !mounted) return;
@@ -770,6 +834,7 @@ class _RulesPanelState extends State<RulesPanel> {
                   title: Text('${switch (r['on']) {
                         'time' => 'Every day at ${r['at']}',
                         'progress' => 'At ${r['at']}%',
+                        'interval' => 'Every ${r['at']} min while printing',
                         final o => _triggers[o] ?? o,
                       }}'
                       ' → ${r['label'] ?? r['do']}'),

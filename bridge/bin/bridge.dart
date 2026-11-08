@@ -444,7 +444,37 @@ extension on Alerts {
       final hhmm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       final day = '${now.year}-${now.month}-${now.day}';
       await _runRules((r) => r['on'] == 'time' && r['at'] == hhmm && _ranToday.add('$day ${r['at']} ${r['do']}'));
+      final mins = _started == null ? 0 : now.difference(_started!).inMinutes;
+      if (_state == 'printing' && mins > 0) {
+        await _runRules((r) => r['on'] == 'interval' && (int.tryParse('${r['at']}') ?? 0) > 0 &&
+            mins % int.parse('${r['at']}') == 0);
+      }
       await Future.delayed(Duration(seconds: 60 - DateTime.now().second));
+    }
+  }
+
+  /// The DragonBreath named in the printer's config, spoken to directly.
+  Future<void> _heaterCommand(String name, Map<String, dynamic> fields) async {
+    try {
+      final cfg = jsonDecode((await _client.get(
+              Uri.parse('http://$host:$port/printer/objects/query?configfile=settings')))
+          .body)['result']?['status']?['configfile']?['settings']?['dragonbreath'];
+      if (cfg == null) return log('Rule: no DragonBreath on this printer');
+      final h = {'Content-Type': 'application/json', 'X-DragonBreath-Auth': '${cfg['token'] ?? 'web'}'};
+      final base = 'http://${cfg['host']}/api/v2';
+      final rev = jsonDecode((await _client.get(Uri.parse('$base/state'), headers: h)).body)['state_revision'];
+      final r = await _client.post(Uri.parse('$base/command'),
+          headers: h,
+          body: jsonEncode({
+            'api_version': 2,
+            'request_id': 'bridge-${DateTime.now().microsecondsSinceEpoch}',
+            'expected_revision': rev,
+            'actor': {'kind': 'web', 'id': 'printer-hub-bridge'},
+            'command': {'name': name, ...fields},
+          }));
+      log('Rule: heater $name -> ${jsonDecode(r.body)['ok'] == true ? 'ok' : r.body}');
+    } catch (e) {
+      log('Rule: heater $name failed: $e');
     }
   }
 
@@ -452,6 +482,18 @@ extension on Alerts {
     for (final r in _rules.where(match)) {
       final g = '${r['do'] ?? ''}'.trim();
       if (g.isEmpty) continue;
+      if (g == '@keep') {
+        await _keep('t${DateTime.now().millisecondsSinceEpoch ~/ 60000}');
+        continue;
+      }
+      if (g.startsWith('@dry')) {
+        final p = g.split(' ');
+        await _heaterCommand('drying_start', {
+          'target_c': int.tryParse(p.elementAtOrNull(1) ?? '') ?? 55,
+          'hours': int.tryParse(p.elementAtOrNull(2) ?? '') ?? 6,
+        });
+        continue;
+      }
       if (g == '@picture') {
         final file = '${_stats['filename'] ?? ''}'.split('/').last;
         final pct = _state == 'printing' ? ' (${(_progress * 100).round()}%)' : '';

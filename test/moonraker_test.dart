@@ -227,5 +227,17 @@ void main() {
     expect(settings.flag('wallSort', false), isTrue);
     expect(settings.strings('printers'), ['{}']);
   });
+
+  test('history orders pictures: first, timed, end', () {
+    final job = PrintJob('a.gcode', 'completed', DateTime.fromMillisecondsSinceEpoch(1000000), 60, 1, true);
+    expect(snapshotsFor(job, ['a__1000__end.jpg', 'a__1000__t20.jpg', 'a__1000__first.jpg', 'a__1000__t10.jpg']),
+        ['a__1000__first.jpg', 'a__1000__t10.jpg', 'a__1000__t20.jpg', 'a__1000__end.jpg']);
+  });
+
+  test('spool QR labels round-trip', () {
+    expect(spoolFromQr(spoolQr(12)), 12);
+    expect(spoolFromQr('http://192.168.68.64:7912/spool/show/7'), 7);
+    expect(spoolFromQr('PHB1:xyz'), isNull);
+  });
 }
 

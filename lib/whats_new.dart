@@ -6,6 +6,11 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.8.0', [
+    'Dryer schedule: a rule like "every day at 02:00 → dry filament 55°C for 6 h".',
+    'Pictures during a print: a rule "every 10 min while printing → save a picture"; History shows them in order.',
+    'Spool QR labels (Spoolman format), and scan a label to load that spool into a lane.',
+  ]),
   ('1.7.0', [
     'Print sheet shows grams needed per lane against grams left on its spool, and warns when it will run out.',
     'Lane editor: "Choose spool" after loading a new roll.',

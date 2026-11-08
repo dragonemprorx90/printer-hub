@@ -108,7 +108,13 @@ List<String> snapshotsFor(PrintJob job, List<String> files) {
       if (RegExp(r'^(.*)__(\d+)__(\w+)\.jpg$').firstMatch(f) case final m?
           when m[1] == stem && (int.parse(m[2]!) - t).abs() < 180)
         f,
-  ]..sort((a, b) => a.endsWith('__first.jpg') ? -1 : b.endsWith('__first.jpg') ? 1 : 0);
+  ]..sort((a, b) => _snapOrder(a).compareTo(_snapOrder(b)));
+}
+
+/// first, then timed pictures in order, then end.
+num _snapOrder(String f) {
+  final kind = f.split('__').last.replaceAll('.jpg', '');
+  return kind == 'first' ? -1 : kind == 'end' ? double.infinity : int.tryParse(kind.substring(1)) ?? 0;
 }
 
 /// Spool IDs Moonraker's Spoolman integration put in a history job.
