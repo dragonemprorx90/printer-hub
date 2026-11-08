@@ -83,7 +83,8 @@ class _PrinterPageState extends State<PrinterPage> {
                   ),
                 if (_client.viaRelay && s.data!.online)
                   Tooltip(
-                    message: 'Connected from away, through your home bridge',
+                    message: 'Connected from away, through your home bridge'
+                        '${_client.relayDelay == null ? '' : ' · ${_client.relayDelay!.inMilliseconds} ms'}',
                     child: Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Icon(Icons.public_rounded, color: C.accent, size: 20),
@@ -204,6 +205,7 @@ class _OverviewTabState extends State<OverviewTab> {
             onFullscreen: _fullscreen,
             onSnapshot: _snapshot,
             onLight: (on) => run(context, () => c.setLed(on)),
+            onAdjust: () => _cam.currentState?.adjust(context),
           ),
         ),
       ),
@@ -265,11 +267,13 @@ class _CameraOverlay extends StatelessWidget {
   final PrinterStatus s;
   final VoidCallback onFullscreen, onSnapshot;
   final ValueChanged<bool> onLight;
+  final VoidCallback onAdjust;
   const _CameraOverlay({
     required this.s,
     required this.onFullscreen,
     required this.onSnapshot,
     required this.onLight,
+    required this.onAdjust,
   });
 
   @override
@@ -290,6 +294,10 @@ class _CameraOverlay extends StatelessWidget {
               active: s.led!,
               onPressed: () => onLight(!s.led!),
             ),
+          OverlayButton(
+              icon: Icons.screen_rotation_alt_rounded,
+              tooltip: 'Rotate or mirror',
+              onPressed: onAdjust),
           OverlayButton(
               icon: Icons.photo_camera_rounded,
               tooltip: 'Save snapshot',

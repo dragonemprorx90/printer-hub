@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:hub_link/hub_link.dart';
 
 import 'moonraker.dart';
+import 'settings.dart';
 import 'ui.dart';
 
 enum _Mode { probing, mjpeg, webrtc, none, error, stopped }
@@ -408,13 +409,49 @@ class PrinterCameraState extends State<PrinterCamera> {
         retry: true,
       ),
     };
+    final turns = settings.number(_turnsKey, 0).toInt(), flip = settings.flag(_flipKey, false);
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: ColoredBox(color: Colors.black, child: child),
+        child: ColoredBox(
+          color: Colors.black,
+          child: RotatedBox(
+            quarterTurns: turns,
+            child: Transform.flip(flipX: flip, child: child),
+          ),
+        ),
       ),
     );
+  }
+
+  String get _turnsKey => 'cam.turns.${widget.client.host}';
+  String get _flipKey => 'cam.flip.${widget.client.host}';
+
+  /// Rotate / flip the picture (mounted upside down or mirrored cameras).
+  Future<void> adjust(BuildContext context) async {
+    final pick = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (final (k, icon, label) in [
+            ('rotate', Icons.rotate_right_rounded, 'Rotate 90°'),
+            ('flip', Icons.flip_rounded, 'Mirror'),
+            ('reset', Icons.restart_alt_rounded, 'Reset'),
+          ])
+            ListTile(leading: Icon(icon), title: Text(label), onTap: () => Navigator.pop(ctx, k)),
+        ]),
+      ),
+    );
+    if (pick == null) return;
+    setState(() {
+      if (pick == 'rotate') settings.setNumber(_turnsKey, ((settings.number(_turnsKey, 0) + 1) % 4));
+      if (pick == 'flip') settings.setFlag(_flipKey, !settings.flag(_flipKey, false));
+      if (pick == 'reset') {
+        settings.setNumber(_turnsKey, 0);
+        settings.setFlag(_flipKey, false);
+      }
+    });
   }
 }
 

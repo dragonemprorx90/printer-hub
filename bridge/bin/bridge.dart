@@ -103,7 +103,8 @@ Future<void> main(List<String> argv) async {
           name: args['name'] ?? env['PRINTER_NAME'],
           humidityLimit: double.tryParse(env['HUMIDITY_LIMIT'] ?? '') ?? 45,
           camera: camera,
-          autoFilter: env['AUTO_FILTER'] != 'off');
+          autoFilter: env['AUTO_FILTER'] != 'off',
+          quiet: parseQuietHours(env['QUIET_HOURS']));
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -209,8 +210,10 @@ class Alerts {
   bool _hasFilter = false;
   Timer? _filterOff;
 
+  final (int, int)? quiet; // start and end hour; only urgent alerts then
+
   Alerts(this.topic, this.host, this.port,
-      {this.name, this.humidityLimit = 45, this.camera, this.autoFilter = true});
+      {this.name, this.humidityLimit = 45, this.camera, this.autoFilter = true, this.quiet});
 
   String get _title => name ?? host;
 
@@ -221,6 +224,10 @@ class Alerts {
   /// [picture] and a camera, the current frame is attached instead.
   Future<void> send(String title, String message,
       {List<String> tags = const [], int priority = 3, bool picture = false}) async {
+    if (priority < 5 && inQuietHours(quiet, DateTime.now().hour)) {
+      log('Quiet hours: held back "$title"');
+      return;
+    }
     final server = topic.replace(path: '', query: null);
     final name = topic.pathSegments.last;
     if (picture && camera != null) {
@@ -434,6 +441,20 @@ extension on Alerts {
       }
     } catch (_) {}
   }
+}
+
+/// "23-7" -> (23, 7). Null when unset or malformed.
+(int, int)? parseQuietHours(String? v) {
+  final m = RegExp(r'^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$').firstMatch(v ?? '');
+  if (m == null) return null;
+  final a = int.parse(m[1]!), b = int.parse(m[2]!);
+  return a < 24 && b < 24 ? (a, b) : null;
+}
+
+bool inQuietHours((int, int)? q, int hour) {
+  if (q == null || q.$1 == q.$2) return false;
+  final (a, b) = q;
+  return a < b ? hour >= a && hour < b : hour >= a || hour < b;
 }
 
 /// ABS, ASA, PC and nylon give off fumes worth filtering.

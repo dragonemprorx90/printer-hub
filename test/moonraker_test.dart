@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:printer_hub/moonraker.dart';
 import 'package:printer_hub/screen_page.dart';
+import 'package:printer_hub/u1_panels.dart';
+import 'package:printer_hub/wall_page.dart';
 
 void main() {
   test('applyDelta parses a Moonraker status payload and merges partials', () {
@@ -143,6 +145,28 @@ void main() {
     });
     expect((sp.id, sp.name, sp.material, sp.color, sp.remaining),
         (3, 'Sunlu Basic PLA', 'PLA', 0xFFFF0000, 812.4));
+  });
+
+  test('filament check matches tools to lanes', () {
+    final lanes = [
+      CfsSlot('T0', 0xFF000000, 'PLA', null, 'E0'),
+      CfsSlot('T1', null, 'PLA', null, 'E1'),
+    ];
+    final needs = toolNeeds({'filament_type': 'PLA;PETG;ABS', 'filament_colour': '#FF8000;#000000;#FFFFFF'}, lanes);
+    expect(needs.map((n) => (n.tool, n.type, n.lane?.lane, needMismatch(n))), [
+      (0, 'PLA', 'E0', false),
+      (1, 'PETG', 'E1', true), // empty lane
+      (2, 'ABS', null, true), // no lane feeds T2
+    ]);
+    expect(toolNeeds({}, lanes), isEmpty);
+  });
+
+  test('wall sorts problems first', () {
+    PrinterStatus st(String state, {bool online = true}) => PrinterStatus()
+      ..online = online
+      ..applyDelta({'print_stats': {'state': state}});
+    expect([st('paused'), st('printing'), st('standby'), st('standby', online: false)].map(wallRank),
+        [0, 1, 2, 0]);
   });
 }
 

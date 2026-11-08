@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -43,6 +45,7 @@ class HeaterPanel extends StatelessWidget {
           Text(_status(d),
               style: TextStyle(
                   color: d['fault'] == true ? C.danger : C.muted, fontWeight: FontWeight.w600)),
+          if (drying) _DryCountdown(client: client),
           const SizedBox(height: 12),
           Wrap(spacing: 10, runSpacing: 10, children: [
             if (drying)
@@ -69,6 +72,48 @@ class HeaterPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Drying time left, read from the heater every 30 s.
+class _DryCountdown extends StatefulWidget {
+  final MoonrakerClient client;
+  const _DryCountdown({required this.client});
+  @override
+  State<_DryCountdown> createState() => _DryCountdownState();
+}
+
+class _DryCountdownState extends State<_DryCountdown> {
+  int? _left;
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick();
+    _t = Timer.periodic(const Duration(seconds: 30), (_) => _tick());
+  }
+
+  Future<void> _tick() async {
+    try {
+      final st = await widget.client.heaterState();
+      final left = (st['drying']?['remaining_seconds'] as num?)?.toInt();
+      if (mounted) setState(() => _left = left);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _left == null
+      ? const SizedBox.shrink()
+      : Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text('${fmtDuration(_left)} left', style: TextStyle(color: C.muted)),
+        );
 }
 
 const _materials = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PA', 'PC', 'PVA'];
@@ -288,6 +333,97 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
                       ),
                   ]),
           );
+        },
+      );
+}
+
+/// What each tool in a gcode file needs, and the lane that feeds it now.
+typedef ToolNeed = ({int tool, String type, int? color, CfsSlot? lane});
+
+List<ToolNeed> toolNeeds(Map<String, dynamic> meta, List<CfsSlot> lanes) {
+  final types = '${meta['filament_type'] ?? ''}'.split(';');
+  final colors = '${meta['filament_colour'] ?? ''}'.split(';');
+  if (types.join().trim().isEmpty) return const [];
+  return [
+    for (var i = 0; i < types.length; i++)
+      (
+        tool: i,
+        type: types[i].trim(),
+        color: i < colors.length ? parseCfsColor(colors[i].replaceAll('#', '')) : null,
+        lane: lanes.where((l) => l.label == 'T$i').firstOrNull,
+      ),
+  ];
+}
+
+bool needMismatch(ToolNeed n) =>
+    n.lane == null || n.lane!.empty || n.lane!.material.toUpperCase() != n.type.toUpperCase();
+
+/// In the print sheet: which lane feeds each tool, with a warning and remap.
+class FilamentCheck extends StatelessWidget {
+  final Map<String, dynamic> meta;
+  final MoonrakerClient client;
+  const FilamentCheck({super.key, required this.meta, required this.client});
+
+  Future<void> _remap(BuildContext context, ToolNeed n, List<CfsSlot> lanes) async {
+    final lane = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(title: Text('Feed T${n.tool} (${n.type}) from')),
+          for (final l in lanes)
+            ListTile(
+              leading: CircleAvatar(
+                  radius: 12, backgroundColor: l.color == null ? C.border : Color(l.color!)),
+              title: Text('Lane ${l.lane} · ${l.empty ? 'empty' : l.material}'),
+              subtitle: Text('now feeds ${l.label}'),
+              onTap: () => Navigator.pop(ctx, l.lane),
+            ),
+        ]),
+      ),
+    );
+    if (lane == null || !context.mounted) return;
+    await run(context, () => client.setLaneMap(lane, n.tool), done: 'T${n.tool} now uses lane $lane');
+  }
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<PrinterStatus>(
+        stream: client.stream,
+        initialData: client.status,
+        builder: (context, snap) {
+          final lanes = [
+            for (final b in snap.data!.cfs)
+              for (final s in b.slots)
+                if (s.lane != null) s,
+          ];
+          if (lanes.isEmpty) return const SizedBox.shrink();
+          final needs = toolNeeds(meta, lanes);
+          if (needs.isEmpty) return const SizedBox.shrink();
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Filament', style: TextStyle(color: C.muted, fontSize: 12)),
+            for (final n in needs)
+              InkWell(
+                onTap: () => _remap(context, n, lanes),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    CircleAvatar(
+                        radius: 8, backgroundColor: n.color == null ? C.border : Color(n.color!)),
+                    const SizedBox(width: 6),
+                    Text('T${n.tool} ${n.type}'),
+                    const Icon(Icons.arrow_right_alt_rounded, size: 18),
+                    CircleAvatar(
+                        radius: 8,
+                        backgroundColor: n.lane?.color == null ? C.border : Color(n.lane!.color!)),
+                    const SizedBox(width: 6),
+                    Text(n.lane == null ? 'no lane' : '${n.lane!.lane} ${n.lane!.empty ? 'empty' : n.lane!.material}'),
+                    if (needMismatch(n)) ...[
+                      const SizedBox(width: 6),
+                      const Icon(Icons.warning_amber_rounded, size: 16, color: C.warn),
+                    ],
+                  ]),
+                ),
+              ),
+          ]);
         },
       );
 }

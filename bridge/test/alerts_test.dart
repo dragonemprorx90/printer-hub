@@ -40,4 +40,14 @@ void main() {
     expect(utf8.decode(base64.decode(title.substring(10, title.length - 2))), 'U1: print finished ✅');
     await s.close(force: true);
   });
+
+  test('quiet hours wrap past midnight', () {
+    final q = parseQuietHours('23-7');
+    expect(q, (23, 7));
+    expect([22, 23, 0, 6, 7].map((h) => inQuietHours(q, h)), [false, true, true, true, false]);
+    expect(inQuietHours(parseQuietHours('1-5'), 3), isTrue);
+    expect(parseQuietHours('nope'), isNull);
+    expect(inQuietHours(null, 3), isFalse);
+  });
 }
+

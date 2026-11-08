@@ -199,6 +199,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('notifyError', 'Print failed or cancelled'),
                   ('notifyPause', 'Print paused (e.g. filament run-out)'),
                   ('notifyHumidity', 'CFS humidity too high'),
+                  ('feedback', 'Vibrate and sound while the app is open'),
                 ])
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,

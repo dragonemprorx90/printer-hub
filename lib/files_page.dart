@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'gcode.dart';
 import 'moonraker.dart';
 import 'settings.dart';
+import 'u1_panels.dart';
 import 'ui.dart';
 
 enum _Sort { newest, name, size }
@@ -698,6 +699,7 @@ class _FileSheetState extends State<_FileSheet> {
                     label: 'Layer height',
                     value: m['layer_height'] != null ? '${m['layer_height']} mm' : '—'),
                 StatTile(label: 'Slicer', value: '${m['slicer'] ?? '—'}'),
+                FilamentCheck(meta: m, client: c),
               ]);
             },
           ),

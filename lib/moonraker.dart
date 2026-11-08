@@ -457,6 +457,9 @@ class MoonrakerClient {
   /// Set when the printer was paired with a home bridge.
   final PairInfo? relay;
   RelayLink? _link;
+
+  /// Round trip to the relay when connected from away.
+  Duration? get relayDelay => _link?.rtt;
   void Function(String)? _sendRaw;
   http.Client _http = http.Client();
   Timer? _homeCheck;
@@ -869,6 +872,9 @@ class MoonrakerClient {
     }
     if (material != null) await gcode('SET_MATERIAL LANE=$lane MATERIAL=$material');
   }
+
+  /// AFC lane (U1): feed tool [tool] from [lane].
+  Future<void> setLaneMap(String lane, int tool) => gcode('SET_MAP LANE=$lane MAP=T$tool');
 
   Future<void> resetHeaterFault() => gcode('DRAGONBREATH_RESET');
 

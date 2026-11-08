@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -15,19 +17,46 @@ class WallPage extends StatefulWidget {
   State<WallPage> createState() => _WallPageState();
 }
 
+/// Problems first (offline, error, paused), then printing, then idle.
+int wallRank(PrinterStatus s) => !s.online || s.state == 'error' || s.state == 'paused'
+    ? 0
+    : s.state == 'printing'
+        ? 1
+        : 2;
+
 class _WallPageState extends State<WallPage> {
   bool get _awake => settings.flag('wallAwake');
+  bool get _sorted => settings.flag('wallSort', false);
+  Timer? _resort;
 
   @override
   void initState() {
     super.initState();
     if (_awake) WakelockPlus.enable();
+    // ponytail: re-sort every 10 s rather than listening to every printer.
+    _resort = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_sorted && mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _resort?.cancel();
     WakelockPlus.disable();
     super.dispose();
+  }
+
+  List<Printer> get _order {
+    final list = [...widget.printers];
+    if (_sorted) {
+      // List.sort isn't stable; keep the saved order within a rank.
+      final idx = {for (final (i, p) in list.indexed) p: i};
+      list.sort((a, b) {
+        final r = wallRank(clientFor(a).status).compareTo(wallRank(clientFor(b).status));
+        return r != 0 ? r : idx[a]!.compareTo(idx[b]!);
+      });
+    }
+    return list;
   }
 
   void _toggleAwake() {
@@ -42,6 +71,13 @@ class _WallPageState extends State<WallPage> {
       appBar: AppBar(
         title: const Text('Wall'),
         actions: [
+          IconButton(
+            tooltip: _sorted ? 'Sorted: problems first' : 'Saved order',
+            isSelected: _sorted,
+            icon: const Icon(Icons.sort_rounded),
+            selectedIcon: Icon(Icons.sort_rounded, color: C.accent),
+            onPressed: () => setState(() => settings.setFlag('wallSort', !_sorted)),
+          ),
           IconButton(
             tooltip: _awake ? 'Screen stays on' : 'Screen may sleep',
             isSelected: _awake,
@@ -61,7 +97,7 @@ class _WallPageState extends State<WallPage> {
           crossAxisSpacing: 16,
           childAspectRatio: 16 / 12.5,
           children: [
-            for (final p in widget.printers) _WallTile(printer: p),
+            for (final p in _order) _WallTile(key: ValueKey(p.key), printer: p),
           ],
         );
       }),
@@ -71,7 +107,7 @@ class _WallPageState extends State<WallPage> {
 
 class _WallTile extends StatelessWidget {
   final Printer printer;
-  const _WallTile({required this.printer});
+  const _WallTile({super.key, required this.printer});
 
   @override
   Widget build(BuildContext context) {

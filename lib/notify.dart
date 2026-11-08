@@ -66,6 +66,11 @@ void watchPrinter(Printer p, MoonrakerClient c) {
     if (!s.online) return;
     final state = s.state, file = s.filename ?? '';
     if (last != null && state != last) {
+      if ((state == 'complete' || state == 'error' || state == 'paused') &&
+          settings.flag('feedback')) {
+        HapticFeedback.heavyImpact();
+        SystemSound.play(SystemSoundType.alert);
+      }
       if (state == 'complete' && settings.flag('notifyDone')) {
         notify('${p.name}: print finished', file);
       } else if (state == 'error' && settings.flag('notifyError')) {

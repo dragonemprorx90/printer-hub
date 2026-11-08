@@ -25,6 +25,10 @@ class RelayLink {
   int _nextId = 0;
   Future<void> _recv = Future.value(), _send = Future.value();
   Timer? _ping;
+  DateTime? _pingAt;
+
+  /// Last round trip to the relay, measured by the keepalive ping.
+  Duration? rtt;
 
   RelayLink._(this.pair, this._crypto, this._ch);
 
@@ -55,9 +59,16 @@ class RelayLink {
   }
 
   void _listen(Completer<bool> online) {
-    _ping = Timer.periodic(const Duration(seconds: 30), (_) => _ch.sink.add('ping'));
+    void ping() {
+      _pingAt = DateTime.now();
+      _ch.sink.add('ping');
+    }
+
+    ping();
+    _ping = Timer.periodic(const Duration(seconds: 30), (_) => ping());
     _ch.stream.listen(
       (raw) {
+        if (raw == 'pong' && _pingAt != null) rtt = DateTime.now().difference(_pingAt!);
         if (raw is! String || raw == 'pong') return;
         if (raw.startsWith('{')) {
           // Relay control message: {"bridge": true|false}.
