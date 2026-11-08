@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:printer_hub/moonraker.dart';
+import 'package:printer_hub/screen_page.dart';
 
 void main() {
   test('applyDelta parses a Moonraker status payload and merges partials', () {
@@ -54,7 +57,7 @@ void main() {
         'output_pin fan0': {'value': 0.5},
         'output_pin fan2': {'value': 0.0},
         'output_pin LED': {'value': 1.0},
-        PrinterStatus.chamberHeater: {'temperature': 27.0, 'target': 0.0},
+        PrinterStatus.chamberHeaters.first: {'temperature': 27.0, 'target': 0.0},
       });
 
     expect(s.cfs, hasLength(1)); // disconnected T3 is skipped
@@ -85,4 +88,38 @@ void main() {
     s.applyDelta({'led cavity_led': {'color_data': [[0.0, 0.0, 0.0, 1.0]]}});
     expect(s.led, isTrue);
   });
+
+  test('U1 DragonBreath heater, cavity sensor, fans and filter', () {
+    final s = PrinterStatus();
+    s.applyDelta({
+      'heater_generic dragonbreath': {'temperature': 31.0, 'target': 50.0},
+      'temperature_sensor cavity': {'temperature': 28.0},
+      'fan_generic exhaust_fan': {'speed': 0.5},
+      'output_pin dragonbreath_filter': {'value': 1.0},
+    });
+    expect(s.chamberHeatable, isTrue);
+    expect(s.chamberHeater, 'heater_generic dragonbreath');
+    expect(s.chamber, 31.0);
+    expect(s.chamberTarget, 50.0);
+    expect(s.fans.map((f) => (f.label, f.value)),
+        [('Exhaust', 0.5), ('Heater filter', 1.0)]);
+  });
+
+  test('U1 cavity sensor alone is a chamber reading', () {
+    final s = PrinterStatus()
+      ..applyDelta({'temperature_sensor cavity': {'temperature': 28.0}});
+    expect(s.hasChamber, isTrue);
+    expect(s.chamberHeatable, isFalse);
+    expect(s.chamber, 28.0);
+  });
+
+  test('pngSize reads the IHDR size', () {
+    final b = Uint8List(24)
+      ..setAll(0, [0x89, 0x50, 0x4E, 0x47])
+      ..buffer.asByteData().setUint32(16, 480)
+      ..buffer.asByteData().setUint32(20, 320);
+    expect(pngSize(b), (480, 320));
+    expect(pngSize(Uint8List(10)), isNull);
+  });
 }
+

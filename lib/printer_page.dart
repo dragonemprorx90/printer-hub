@@ -10,6 +10,7 @@ import 'control_page.dart';
 import 'files_page.dart';
 import 'history_page.dart';
 import 'moonraker.dart';
+import 'screen_page.dart';
 import 'settings.dart';
 import 'tools_page.dart';
 import 'ui.dart';
@@ -70,6 +71,15 @@ class _PrinterPageState extends State<PrinterPage> {
               stream: _client.stream,
               initialData: _client.status,
               builder: (_, s) => Row(mainAxisSize: MainAxisSize.min, children: [
+                if (_client.hasScreen)
+                  IconButton(
+                    tooltip: 'Printer screen',
+                    icon: const Icon(Icons.touch_app_rounded),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => ScreenPage(client: _client)),
+                    ),
+                  ),
                 if (_client.viaRelay && s.data!.online)
                   Tooltip(
                     message: 'Connected from away, through your home bridge',
@@ -631,8 +641,8 @@ class _TempHistoryState extends State<_TempHistory> {
   PrinterStatus get s => widget.client.status;
 
   String get _chamberKey => s.chamberHeatable
-      ? PrinterStatus.chamberHeater
-      : PrinterStatus.chamberSensor;
+      ? s.chamberHeater
+      : s.chamberSensor;
 
   @override
   void initState() {

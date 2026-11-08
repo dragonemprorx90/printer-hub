@@ -96,7 +96,7 @@ double? _num(dynamic v) =>
     v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
 
 class FanInfo {
-  final String object; // "fan" or "output_pin fanN"
+  final String object; // "fan", "output_pin fanN", "fan_generic X" or the filter pin
   final String label;
   final double value; // 0..1
   FanInfo(this.object, this.label, this.value);
@@ -141,10 +141,22 @@ class PrinterStatus {
   final raw = <String, Map<String, dynamic>>{};
   bool online = false;
 
-  static const chamberHeater = 'heater_generic chamber_heater';
-  static const chamberSensor = 'temperature_sensor chamber_temp';
+  /// K2 chamber heater, or a DragonBreath heater added to Klipper (U1).
+  static const chamberHeaters = ['heater_generic chamber_heater', 'heater_generic dragonbreath'];
+  static const chamberSensors = ['temperature_sensor chamber_temp', 'temperature_sensor cavity'];
+  String _first(List<String> keys) =>
+      keys.firstWhere(raw.containsKey, orElse: () => keys.first);
+  String get chamberHeater => _first(chamberHeaters);
+  String get chamberSensor => _first(chamberSensors);
+  static const dragonFilter = 'output_pin dragonbreath_filter';
   static const _fanLabels = {
     'fan0': 'Part cooling',
+    'cavity_fan': 'Cavity',
+    'exhaust_fan': 'Exhaust',
+    'circulation_fan': 'Circulation',
+    'e1_fan': 'Part cooling T1',
+    'e2_fan': 'Part cooling T2',
+    'e3_fan': 'Part cooling T3',
     'fan1': 'Auxiliary',
     'fan2': 'Chamber exhaust',
   };
@@ -263,6 +275,15 @@ class PrinterStatus {
     for (final k in pins) {
       final pin = k.substring('output_pin '.length);
       out.add(FanInfo(k, _fanLabels[pin] ?? pin, _d(k, 'value')));
+    }
+    final generic = raw.keys.where((k) => k.startsWith('fan_generic ')).toList()
+      ..sort();
+    for (final k in generic) {
+      final name = k.substring('fan_generic '.length);
+      out.add(FanInfo(k, _fanLabels[name] ?? name, _d(k, 'speed')));
+    }
+    if (raw.containsKey(dragonFilter)) {
+      out.add(FanInfo(dragonFilter, 'Heater filter', _d(dragonFilter, 'value')));
     }
     return out;
   }
@@ -386,8 +407,9 @@ class MoonrakerClient {
     'exclude_object',
     'output_pin LED',
     PrinterStatus.cavityLed,
-    PrinterStatus.chamberHeater,
-    PrinterStatus.chamberSensor,
+    ...PrinterStatus.chamberHeaters,
+    ...PrinterStatus.chamberSensors,
+    PrinterStatus.dragonFilter,
   };
 
   /// Set when the printer was paired with a home bridge.
@@ -545,6 +567,7 @@ class MoonrakerClient {
     try {
       final list = await _call('printer.objects.list');
       final objs = List<String>.from(list['objects'] as List);
+      hasScreen = objs.contains('machine_state_manager'); // Snapmaker U1
       macros = objs
           .where((o) => o.startsWith('gcode_macro '))
           .map((o) => o.substring('gcode_macro '.length))
@@ -556,6 +579,7 @@ class MoonrakerClient {
         for (final o in objs)
           if (_wanted.contains(o) ||
               o.startsWith('output_pin fan') ||
+              o.startsWith('fan_generic ') ||
               RegExp(r'^extruder\d+$').hasMatch(o))
             o: null,
       };
@@ -682,8 +706,8 @@ class MoonrakerClient {
   Future<void> extrude(double mm) => gcode('M83\nG1 E$mm F300');
   Future<void> setHotend(int t) => gcode('M104 S$t');
   Future<void> setBed(int t) => gcode('M140 S$t');
-  Future<void> setChamber(int t) =>
-      gcode('SET_HEATER_TEMPERATURE HEATER=chamber_heater TARGET=$t');
+  Future<void> setChamber(int t) => gcode(
+      'SET_HEATER_TEMPERATURE HEATER=${status.chamberHeater.split(' ').last} TARGET=$t');
   Future<void> setSpeed(int pct) => gcode('M220 S$pct');
   Future<void> setFlow(int pct) => gcode('M221 S$pct');
   Future<void> setLed(bool on) => gcode(status.raw.containsKey(PrinterStatus.cavityLed)
@@ -695,6 +719,14 @@ class MoonrakerClient {
   Future<void> setFan(FanInfo fan, double fraction) {
     final s = (fraction * 255).round();
     if (fan.object == 'fan') return gcode('M106 S$s');
+    if (fan.object.startsWith('fan_generic ')) {
+      final name = fan.object.substring('fan_generic '.length);
+      return gcode('SET_FAN_SPEED FAN=$name SPEED=${fraction.toStringAsFixed(2)}');
+    }
+    // ponytail: the DragonBreath filter pin is on/off only.
+    if (fan.object == PrinterStatus.dragonFilter) {
+      return gcode('SET_PIN PIN=dragonbreath_filter VALUE=${fraction > 0 ? 1 : 0}');
+    }
     final n = fan.object.substring('output_pin fan'.length);
     return gcode('M106 P$n S$s');
   }
@@ -772,6 +804,27 @@ class MoonrakerClient {
       throw MoonrakerError(utf8.decode(body, allowMalformed: true));
     }
     return body;
+  }
+
+  /// Snapmaker U1: the extended firmware can mirror its touchscreen at /screen/.
+  bool hasScreen = false;
+
+  Uri _screen(String p, [Map<String, String>? q]) =>
+      Uri(scheme: 'http', host: host, port: 80, path: '/screen/$p', queryParameters: q);
+
+  Future<Uint8List> screenFrame() async {
+    final r = await _http.get(_screen('snapshot'), headers: authHeaders);
+    if (r.statusCode != 200 || !(r.headers['content-type'] ?? '').startsWith('image/')) {
+      throw MoonrakerError(viaRelay && r.statusCode == 400
+          ? 'Update the home bridge to see the screen from away.'
+          : 'Remote screen is off. Turn on Remote Screen in the printer\'s firmware-config (Web).');
+    }
+    return r.bodyBytes;
+  }
+
+  Future<void> screenTouch(String action, int x, int y) async {
+    await _http.post(_screen('touch', {'a': action, 'x': '$x', 'y': '$y'}),
+        headers: authHeaders);
   }
 
   /// Camera stream URLs registered in Moonraker (standard Klipper setups).

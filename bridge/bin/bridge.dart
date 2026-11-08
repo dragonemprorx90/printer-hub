@@ -542,8 +542,10 @@ class Bridge {
   Future<void> _http(String c, Map<String, dynamic> m, List<int> body) async {
     final id = m['id'];
     final path = '${m['p']}';
-    final uri = Uri.parse('http://$host:$port$path');
-    if (!path.startsWith('/') || uri.host != host || uri.port != port) {
+    // The U1 extended firmware serves its remote screen on port 80 (nginx).
+    final p = path.startsWith('/screen/') ? 80 : port;
+    final uri = Uri.parse('http://$host:$p$path');
+    if (!path.startsWith('/') || uri.host != host || uri.port != p) {
       await _send(c, {'t': 'res', 'id': id, 's': 400, 'h': {}, 'b': '', 'more': false});
       return;
     }
