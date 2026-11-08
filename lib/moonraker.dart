@@ -971,6 +971,20 @@ class MoonrakerClient {
     return j;
   }
 
+  /// A value in Moonraker's database under the app's own namespace.
+  Future<dynamic> dbGet(String key) async {
+    final r = await _http.get(_uri(['server', 'database', 'item'], {'namespace': 'printer_hub', 'key': key}),
+        headers: authHeaders);
+    if (r.statusCode != 200) return null;
+    final dynamic j = jsonDecode(r.body);
+    return j['result']?['value'];
+  }
+
+  Future<void> dbSet(String key, Object value) async => _check(await _http.post(
+      _uri(['server', 'database', 'item']),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: jsonEncode({'namespace': 'printer_hub', 'key': key, 'value': value})));
+
   // --- Rules (run by the home bridge, stored in Moonraker's database) -------
 
   Future<List<Map<String, dynamic>>> rules() async {

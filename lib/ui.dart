@@ -223,9 +223,11 @@ class Panel extends StatelessWidget {
 /// Tappable card surface used by list rows and tiles.
 class Tile extends StatelessWidget {
   final Widget child;
-  final VoidCallback? onTap;
+  final VoidCallback? onTap, onLongPress;
   final double radius;
-  const Tile({super.key, required this.child, this.onTap, this.radius = 16});
+  final bool selected;
+  const Tile(
+      {super.key, required this.child, this.onTap, this.onLongPress, this.radius = 16, this.selected = false});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -238,9 +240,9 @@ class Tile extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radius),
-            side: BorderSide(color: C.border),
+            side: BorderSide(color: selected ? C.accent : C.border, width: selected ? 2 : 1),
           ),
-          child: InkWell(onTap: onTap, child: child),
+          child: InkWell(onTap: onTap, onLongPress: onLongPress, child: child),
         ),
       );
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'moonraker.dart';
 import 'scan.dart';
+import 'settings.dart';
 import 'ui.dart';
 
 /// DragonBreath chamber heater on a U1: status, filament drying, fault clear.
@@ -813,6 +815,31 @@ class _RulesPanelState extends State<RulesPanel> {
     setState(() => _rules = widget.client.rules());
   }
 
+  Future<void> _toggle(List<Map<String, dynamic>> all, int i, bool on) async {
+    final list = [...all];
+    list[i] = {...list[i], 'off': !on};
+    await run(context, () => widget.client.setRules(list));
+    setState(() => _rules = widget.client.rules());
+  }
+
+  /// Copies a rule to every other printer (skipping ones that have it).
+  Future<void> _copyToAll(Map<String, dynamic> rule) async {
+    final others = [
+      for (final s in settings.strings('printers')) Printer.fromJson(jsonDecode(s)),
+    ].map(clientFor).where((c) => c != widget.client).toList();
+    if (others.isEmpty) return toast(context, 'You have only one printer');
+    var copied = 0;
+    await run(context, () async {
+      for (final c in others) {
+        final list = await c.rules();
+        if (list.any((r) => r['on'] == rule['on'] && r['at'] == rule['at'] && r['do'] == rule['do'])) continue;
+        await c.setRules([...list, rule]);
+        copied++;
+      }
+    });
+    if (mounted) toast(context, 'Copied to $copied printer${copied == 1 ? '' : 's'}');
+  }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
         future: _rules,
@@ -830,7 +857,7 @@ class _RulesPanelState extends State<RulesPanel> {
               for (final (i, r) in rules.indexed)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.bolt_rounded),
+                  leading: Switch(value: r['off'] != true, onChanged: (on) => _toggle(rules, i, on)),
                   title: Text('${switch (r['on']) {
                         'time' => 'Every day at ${r['at']}',
                         'progress' => 'At ${r['at']}%',
@@ -838,14 +865,81 @@ class _RulesPanelState extends State<RulesPanel> {
                         final o => _triggers[o] ?? o,
                       }}'
                       ' → ${r['label'] ?? r['do']}'),
-                  trailing: IconButton(
-                    tooltip: 'Remove',
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    onPressed: () => _remove(rules, i),
-                  ),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: 'Copy to all printers',
+                      icon: const Icon(Icons.copy_all_rounded),
+                      onPressed: () => _copyToAll(r),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove',
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () => _remove(rules, i),
+                    ),
+                  ]),
                 ),
             ]),
           );
+        },
+      );
+}
+
+/// Saved bed-mesh ranges over time (in Moonraker's database), to spot a bed
+/// that's slowly warping or a loose screw.
+class MeshHistory extends StatefulWidget {
+  final MoonrakerClient client;
+  final double range;
+  final String profile;
+  const MeshHistory({super.key, required this.client, required this.range, required this.profile});
+  @override
+  State<MeshHistory> createState() => _MeshHistoryState();
+}
+
+class _MeshHistoryState extends State<MeshHistory> {
+  late Future<List<Map>> _list = _load();
+
+  Future<List<Map>> _load() async =>
+      List<Map>.from(((await widget.client.dbGet('meshes').catchError((_) => null)) as List?) ?? const []);
+
+  Future<void> _save() async {
+    final list = [
+      ...await _list,
+      {'at': DateTime.now().toIso8601String(), 'range': widget.range, 'profile': widget.profile},
+    ];
+    // ponytail: keep the last 20; plenty to see a trend.
+    final kept = list.length > 20 ? list.sublist(list.length - 20) : list;
+    if (!mounted) return;
+    await run(context, () => widget.client.dbSet('meshes', kept), done: 'Mesh saved to history');
+    setState(() => _list = _load());
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<Map>>(
+        future: _list,
+        builder: (context, snap) {
+          final list = (snap.data ?? const []).reversed.take(5).toList();
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const SizedBox(height: 8),
+            Row(children: [
+              Text('History', style: TextStyle(color: C.muted, fontSize: 12)),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                label: const Text('Save this mesh'),
+              ),
+            ]),
+            for (final m in list)
+              Builder(builder: (_) {
+                final r = (m['range'] as num).toDouble();
+                final d = widget.range - r;
+                return Text(
+                  '${fmtDate(DateTime.parse('${m['at']}'))}: range ${r.toStringAsFixed(3)} mm'
+                  '${d.abs() < 0.0005 ? '' : ' (now ${d > 0 ? '+' : ''}${d.toStringAsFixed(3)})'}',
+                  style: TextStyle(fontSize: 13, color: d > 0.05 ? C.warn : null),
+                );
+              }),
+          ]);
         },
       );
 }

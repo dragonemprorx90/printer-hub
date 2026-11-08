@@ -35,6 +35,7 @@ class _FilesTabState extends State<FilesTab> {
   _Sort _sort = _Sort.newest;
   bool _favOnly = false, _dragging = false, _uploading = false;
   List<QueuedJob> _queue = const [];
+  final _sel = <String>{}; // long-press to select several files
   String _queueState = '';
 
   MoonrakerClient get c => widget.client;
@@ -60,6 +61,54 @@ class _FilesTabState extends State<FilesTab> {
     }
     _loadQueue();
   }
+
+  void _toggleSel(String path) =>
+      setState(() => _sel.contains(path) ? _sel.remove(path) : _sel.add(path));
+
+  Widget _selectionBar() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: Panel(
+          child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 8, children: [
+            Text('${_sel.length} selected', style: const TextStyle(fontWeight: FontWeight.w700)),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final picked = _sel.toList();
+                await run(context, () async {
+                  for (final p in picked) {
+                    await c.enqueue(p);
+                  }
+                }, done: 'Added ${picked.length} to the queue');
+                setState(_sel.clear);
+                _loadQueue();
+              },
+              icon: const Icon(Icons.queue_rounded),
+              label: const Text('Queue'),
+            ),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: C.danger),
+              onPressed: () async {
+                final picked = _sel.toList();
+                if (!await confirm(context, 'Delete ${picked.length} files?',
+                        message: 'They are removed from the printer.', action: 'Delete', danger: true) ||
+                    !mounted) {
+                  return;
+                }
+                await run(context, () async {
+                  for (final p in picked) {
+                    await c.deleteFile(p);
+                  }
+                }, done: 'Deleted ${picked.length} files');
+                setState(_sel.clear);
+                _all = null;
+                _load();
+              },
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('Delete'),
+            ),
+            TextButton(onPressed: () => setState(_sel.clear), child: const Text('Done')),
+          ]),
+        ),
+      );
 
   Future<void> _loadQueue() async {
     try {
@@ -382,6 +431,7 @@ class _FilesTabState extends State<FilesTab> {
                         leading: Icon(Icons.folder_rounded, color: C.warn, size: 32),
                         title: Text(d, style: const TextStyle(fontWeight: FontWeight.w600)),
                         trailing: IconButton(
+                          tooltip: 'Folder options',
                           icon: const Icon(Icons.more_horiz_rounded),
                           onPressed: () => _folderMenu(d),
                         ),
@@ -394,7 +444,9 @@ class _FilesTabState extends State<FilesTab> {
                     client: c,
                     favourite: favs.contains(f.path),
                     showDir: !browsing,
-                    onTap: () => _openFile(f),
+                    selected: _sel.contains(f.path),
+                    onTap: () => _sel.isEmpty ? _openFile(f) : _toggleSel(f.path),
+                    onLongPress: () => _toggleSel(f.path),
                   );
                 },
               ),
@@ -404,7 +456,7 @@ class _FilesTabState extends State<FilesTab> {
     Widget body = Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 960),
-        child: Column(children: [header, breadcrumb, queue, Expanded(child: list)]),
+        child: Column(children: [header, breadcrumb, if (_sel.isNotEmpty) _selectionBar(), queue, Expanded(child: list)]),
       ),
     );
     if (_isDesktop) {
@@ -479,19 +531,23 @@ class _Thumb extends StatelessWidget {
 class _FileTile extends StatelessWidget {
   final GcodeFile file;
   final MoonrakerClient client;
-  final bool favourite, showDir;
-  final VoidCallback onTap;
+  final bool favourite, showDir, selected;
+  final VoidCallback onTap, onLongPress;
   const _FileTile({
     required this.file,
     required this.client,
     required this.favourite,
     required this.showDir,
     required this.onTap,
+    required this.onLongPress,
+    this.selected = false,
   });
 
   @override
   Widget build(BuildContext context) => Tile(
         onTap: onTap,
+        onLongPress: onLongPress,
+        selected: selected,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(children: [

@@ -18,6 +18,25 @@ double filamentGrams(double mm, {double diameter = 1.75, double density = 1.24})
   return math.pi * r * r * mm / 1000 * density;
 }
 
+/// Grams printed in each of the last 8 weeks (Monday starts), oldest first.
+List<(DateTime, double)> gramsPerWeek(List<PrintJob> jobs, DateTime now, {int weeks = 8}) {
+  final today = DateTime(now.year, now.month, now.day);
+  final monday = today.subtract(Duration(days: today.weekday - 1));
+  final starts = [for (var i = weeks - 1; i >= 0; i--) monday.subtract(Duration(days: 7 * i))];
+  final grams = List<double>.filled(weeks, 0);
+  for (final j in jobs) {
+    for (var i = weeks - 1; i >= 0; i--) {
+      if (!j.start.isBefore(starts[i])) {
+        grams[i] += filamentGrams(j.filament,
+            diameter: settings.number('filamentDiameter', 1.75),
+            density: settings.number('filamentDensity', 1.24));
+        break;
+      }
+    }
+  }
+  return [for (var i = 0; i < weeks; i++) (starts[i], grams[i])];
+}
+
 double jobCost(PrintJob j) {
   final grams = filamentGrams(j.filament,
       diameter: settings.number('filamentDiameter', 1.75),
@@ -205,13 +224,26 @@ class _StatsPanel extends StatelessWidget {
         icon: const Icon(Icons.download_rounded, size: 18),
         label: const Text('Export CSV'),
       ),
-      child: Wrap(spacing: 28, runSpacing: 14, children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+       Wrap(spacing: 28, runSpacing: 14, children: [
         StatTile(label: 'Prints', value: '${totals?.jobs ?? jobs.length}'),
         StatTile(label: 'Success rate', value: rate),
         StatTile(label: 'Print time', value: fmtDuration(totals?.printTime ?? hours)),
         StatTile(label: 'Filament', value: '${fmtFilament(filament)} · ${(grams / 1000).toStringAsFixed(2)} kg'),
         StatTile(label: 'Est. cost', value: money(cost)),
         StatTile(label: 'Longest', value: fmtDuration(totals?.longest)),
+       ]),
+       const SizedBox(height: 18),
+       Text('Filament per week (g)', style: TextStyle(color: C.muted, fontSize: 12)),
+       const SizedBox(height: 6),
+       Builder(builder: (_) {
+         final weeks = gramsPerWeek(jobs, DateTime.now());
+         return BarChart(
+           values: [for (final w in weeks) w.$2],
+           labels: [for (final w in weeks) '${w.$1.day}/${w.$1.month}'],
+           format: (v) => '${v.round()} g',
+         );
+       }),
       ]),
     );
   }

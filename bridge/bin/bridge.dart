@@ -104,7 +104,8 @@ Future<void> main(List<String> argv) async {
           humidityLimit: double.tryParse(env['HUMIDITY_LIMIT'] ?? '') ?? 45,
           camera: camera,
           autoFilter: env['AUTO_FILTER'] != 'off',
-          quiet: parseQuietHours(env['QUIET_HOURS']));
+          quiet: parseQuietHours(env['QUIET_HOURS']),
+          spoolLow: double.tryParse(env['SPOOL_LOW_G'] ?? '') ?? 100);
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -214,9 +215,11 @@ class Alerts {
   Timer? _filterOff;
 
   final (int, int)? quiet; // start and end hour; only urgent alerts then
+  final double spoolLow; // grams; warn when a lane's spool has less
+  final _spoolWarned = <int, DateTime>{};
 
   Alerts(this.topic, this.host, this.port,
-      {this.name, this.humidityLimit = 45, this.camera, this.autoFilter = true, this.quiet});
+      {this.name, this.humidityLimit = 45, this.camera, this.autoFilter = true, this.quiet, this.spoolLow = 100});
 
   String get _title => name ?? host;
 
@@ -359,6 +362,7 @@ class Alerts {
         case 'complete':
           await send('$_title: print finished', file,
               tags: ['white_check_mark'], priority: 4, jpeg: await _keep('end'));
+          unawaited(_checkSpools());
         case 'error':
           await send('$_title: print failed', note.isEmpty ? file : note,
               tags: ['warning'], priority: 5, jpeg: await _keep('end'));
@@ -478,8 +482,38 @@ extension on Alerts {
     }
   }
 
+  /// Spoolman spools linked to U1 lanes that are running out.
+  Future<void> _checkSpools() async {
+    try {
+      Future<dynamic> get(String p) async =>
+          jsonDecode((await _client.get(Uri.parse('http://$host:$port$p'))).body)['result'];
+      final lanes = [
+        for (final o in (await get('/printer/objects/list'))['objects'] as List)
+          if ('$o'.startsWith('AFC_lane ')) '$o',
+      ];
+      if (lanes.isEmpty) return;
+      final st = (await get('/printer/objects/query?${lanes.map(Uri.encodeQueryComponent).join('&')}'))['status'] as Map;
+      for (final e in st.entries) {
+        final id = (e.value as Map)['spool_id'];
+        if (id is! num || id <= 0) continue;
+        final r = await _client.post(Uri.parse('http://$host:$port/server/spoolman/proxy'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'request_method': 'GET', 'path': '/v1/spool/$id', 'use_v2_response': true}));
+        final spool = jsonDecode(r.body)['result']?['response'];
+        final left = (spool?['remaining_weight'] as num?)?.toDouble();
+        if (left == null || left >= spoolLow) continue;
+        final prev = _spoolWarned[id.toInt()];
+        if (prev != null && DateTime.now().difference(prev).inHours < 24) continue;
+        _spoolWarned[id.toInt()] = DateTime.now();
+        final lane = (e.value as Map)['map'] ?? '${e.key}'.substring(9);
+        await send('$_title: spool in $lane is low', '${left.round()} g left on ${spool['filament']?['name'] ?? 'the spool'}.',
+            tags: ['warning']);
+      }
+    } catch (_) {} // no Spoolman or no lanes: nothing to check
+  }
+
   Future<void> _runRules(bool Function(Map) match) async {
-    for (final r in _rules.where(match)) {
+    for (final r in _rules.where((r) => r['off'] != true).where(match)) {
       final g = '${r['do'] ?? ''}'.trim();
       if (g.isEmpty) continue;
       if (g == '@keep') {

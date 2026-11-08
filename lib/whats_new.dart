@@ -6,6 +6,15 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.9.0', [
+    'Rules: turn each one on or off, and copy a rule to all your printers.',
+    'Recent alerts: see what your home bridge sent (Tools → Away from home).',
+    'Low-spool alert from the home bridge after a print (under 100 g by default).',
+    'History: filament used per week.',
+    'Bed mesh history: save a mesh and see how its range changes over time.',
+    'Files: long-press to select several, then queue or delete them together.',
+    'A short welcome tour for new installs.',
+  ]),
   ('1.8.0', [
     'Dryer schedule: a rule like "every day at 02:00 → dry filament 55°C for 6 h".',
     'Pictures during a print: a rule "every 10 min while printing → save a picture"; History shows them in order.',
@@ -79,6 +88,7 @@ List<(String, List<String>)> notesSince(String seen, [String current = kAppVersi
 Future<void> showWhatsNewIfUpdated(BuildContext context, {required bool freshInstall}) async {
   final seen = settings.text('seenVersion');
   settings.setText('seenVersion', kAppVersion);
+  if (freshInstall && seen.isEmpty) return _welcome(context);
   if (freshInstall || seen == kAppVersion) return;
   // ponytail: updating from before this screen existed (no seenVersion), show
   // the last two releases rather than guess which one they came from.
@@ -117,3 +127,33 @@ Future<void> showWhatsNewIfUpdated(BuildContext context, {required bool freshIns
     ),
   );
 }
+
+const _tips = [
+  (Icons.add_circle_outline_rounded, 'Add a printer', 'Tap + and enter its IP. Printers on your network are found for you.'),
+  (Icons.public_rounded, 'From anywhere', 'Run the home bridge on a NAS or Pi and paste its remote access code (or scan its QR).'),
+  (Icons.notifications_active_outlined, 'Alerts with the app closed', 'The bridge sends finished / failed / paused alerts, with a picture, to the free ntfy app.'),
+  (Icons.rule_rounded, 'Rules', 'Tools → Rules: e.g. "print finishes → light off", or a nightly filament dry.'),
+  (Icons.view_quilt_rounded, 'Wall', 'All your cameras on one screen, for a spare tablet.'),
+];
+
+Future<void> _welcome(BuildContext context) => showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Welcome to Printer Hub'),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              for (final (icon, title, text) in _tips)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(icon, color: C.accent),
+                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(text),
+                ),
+            ]),
+          ),
+        ),
+        actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text("Let's go"))],
+      ),
+    );

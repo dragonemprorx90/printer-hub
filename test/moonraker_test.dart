@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:printer_hub/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printer_hub/moonraker.dart';
+import 'package:printer_hub/tools_page.dart';
+import 'package:printer_hub/history_page.dart';
 import 'package:printer_hub/screen_page.dart';
 import 'package:printer_hub/u1_panels.dart';
 import 'package:printer_hub/update.dart';
@@ -238,6 +240,25 @@ void main() {
     expect(spoolFromQr(spoolQr(12)), 12);
     expect(spoolFromQr('http://192.168.68.64:7912/spool/show/7'), 7);
     expect(spoolFromQr('PHB1:xyz'), isNull);
+  });
+
+  test('filament per week buckets jobs by Monday', () {
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime(2026, 11, 8); // a Sunday
+    PrintJob job(DateTime at) => PrintJob('a.gcode', 'completed', at, 60, 1000, true);
+    final w = gramsPerWeek([job(DateTime(2026, 11, 3)), job(DateTime(2026, 10, 27)), job(DateTime(2025, 1, 1))], now,
+        weeks: 2);
+    expect(w.map((e) => e.$1), [DateTime(2026, 10, 26), DateTime(2026, 11, 2)]);
+    expect(w[0].$2, closeTo(w[1].$2, 0.001));
+    expect(w[1].$2, greaterThan(0));
+  });
+
+  test('ntfy poll lines become recent alerts, newest first', () {
+    final a = parseNtfyPoll('{"event":"open"}\n'
+        '{"event":"message","time":100,"title":"U1: print finished","message":"cube"}\n'
+        '{"event":"message","time":200,"title":"U1: first layer done","message":"x","attachment":{"url":"https://n/p.jpg"}}\n');
+    expect(a.map((x) => x.title), ['U1: first layer done', 'U1: print finished']);
+    expect(a.first.picture, 'https://n/p.jpg');
   });
 }
 

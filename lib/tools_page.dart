@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -91,6 +93,27 @@ const _filament = [
     Icons.upload_rounded,
   ),
 ];
+
+/// An alert the bridge sent, read back from ntfy (it keeps them ~12 h).
+typedef SentAlert = ({DateTime at, String title, String message, String? picture});
+
+List<SentAlert> parseNtfyPoll(String body) => [
+      for (final line in const LineSplitter().convert(body))
+        if (line.trim().isNotEmpty)
+          if (jsonDecode(line) case {'event': 'message', 'time': final num t} && final m)
+            (
+              at: DateTime.fromMillisecondsSinceEpoch((t * 1000).round()),
+              title: '${m['title'] ?? ''}',
+              message: '${m['message'] ?? ''}',
+              picture: (m['attachment'] as Map?)?['url'] as String?,
+            ),
+    ].reversed.toList();
+
+Future<List<SentAlert>> recentAlerts(String topic) async {
+  final r = await http.get(Uri.parse('$topic/json?poll=1&since=all'));
+  if (r.statusCode >= 300) throw 'ntfy refused it (HTTP ${r.statusCode})';
+  return parseNtfyPoll(utf8.decode(r.bodyBytes));
+}
 
 /// Publishes straight to the ntfy topic (the same one the bridge uses).
 Future<void> sendTestAlert(String topic) async {
@@ -263,6 +286,7 @@ class _ToolsTabState extends State<ToolsTab> {
                       : 'Large variation. Check the bed is clean and seated properly.',
                   style: TextStyle(color: C.muted, fontSize: 12),
                 ),
+                MeshHistory(client: c, range: hi - lo, profile: s.meshProfile),
               ],
             ),
     );
@@ -535,6 +559,41 @@ class _ToolsTabState extends State<ToolsTab> {
     },
   );
 
+  Future<void> _showAlerts(String topic) => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Recent alerts'),
+          content: SizedBox(
+            width: 480,
+            height: 420,
+            child: FutureBuilder<List<SentAlert>>(
+              future: recentAlerts(topic),
+              builder: (_, s) {
+                if (s.hasError) return Text('${s.error}');
+                if (!s.hasData) return const Center(child: CircularProgressIndicator());
+                if (s.data!.isEmpty) return const Text('No alerts in the last 12 hours.');
+                return ListView(children: [
+                  for (final a in s.data!)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(a.title),
+                      subtitle: Text('${fmtAgo(a.at)} · ${a.message}'),
+                      trailing: a.picture == null
+                          ? null
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.network(a.picture!, width: 64, height: 48, fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Icon(Icons.image_not_supported_outlined)),
+                            ),
+                    ),
+                ]);
+              },
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        ),
+      );
+
   Widget _remotePanel() {
     final alerts = c.relay?.alerts;
     if (c.relay != null) {
@@ -622,6 +681,11 @@ class _ToolsTabState extends State<ToolsTab> {
                   ),
                   icon: const Icon(Icons.qr_code_rounded, size: 18),
                   label: const Text('Show as QR'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _showAlerts(alerts),
+                  icon: const Icon(Icons.history_rounded, size: 18),
+                  label: const Text('Recent alerts'),
                 ),
                 TextButton.icon(
                   onPressed: () => run(context, () => sendTestAlert(alerts), done: 'Test alert sent. Check your phone.'),
