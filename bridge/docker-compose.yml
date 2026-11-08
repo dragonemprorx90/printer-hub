@@ -18,7 +18,8 @@ services:
 
   # Turns a Creality K1/K2 WebRTC-only camera into MJPEG for the bridge. It
   # connects to the camera only while a phone away from home is watching.
-  # Not needed for MJPEG cameras. (fps=3 is in the K2's own clock, which
+  # Not needed for MJPEG cameras. The 30 s ffmpeg timeout covers the K2's
+  # ~6 s WebRTC start (go2rtc's default 5 s made cold starts fail). (fps=3 is in the K2's own clock, which
   # runs fast: about 30 fps come out; the bridge sends only a few.)
   go2rtc:
     image: alexxit/go2rtc:1.9.15
@@ -26,5 +27,7 @@ services:
     network_mode: host
     command: >-
       go2rtc -c '{api: {listen: "127.0.0.1:1984"}, rtsp: {listen: "127.0.0.1:8554"},
-      webrtc: {listen: ""}, streams: {k2: "webrtc:http://192.168.68.53:8000/call/webrtc_local#format=creality",
+      webrtc: {listen: ""},
+      ffmpeg: {rtsp: "-fflags nobuffer -flags low_delay -timeout 30000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}"},
+      streams: {k2: "webrtc:http://192.168.68.53:8000/call/webrtc_local#format=creality",
       k2_jpeg: "ffmpeg:k2#video=mjpeg#raw=-vf fps=3,scale=1280:-2 -q:v 5"}}'
