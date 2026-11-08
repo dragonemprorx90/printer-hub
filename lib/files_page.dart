@@ -14,7 +14,7 @@ import 'ui.dart';
 
 enum _Sort { newest, name, size }
 
-const _gcodeExt = ['gcode', 'g', 'gco'];
+const _gcodeExt = ['gcode', 'g', 'gco', '3mf'];
 final _isDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
 class FilesTab extends StatefulWidget {
@@ -162,6 +162,38 @@ class _FilesTabState extends State<FilesTab> {
   }
 
   Future<void> _upload(String name, Uint8List bytes) async {
+    if (name.toLowerCase().endsWith('.3mf')) {
+      // Snapmaker Orca / Orca / Bambu project: take the sliced plate's G-code.
+      final Map<int, Uint8List> plates;
+      try {
+        plates = platesIn3mf(bytes);
+      } catch (e) {
+        return toast(context, 'Could not read $name: $e', error: true);
+      }
+      if (plates.isEmpty) {
+        return toast(context,
+            'No sliced plate in $name. In the slicer, slice it and use Export plate sliced file (.gcode.3mf).',
+            error: true);
+      }
+      var plate = plates.keys.first;
+      if (plates.length > 1) {
+        final pick = await showModalBottomSheet<int>(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const ListTile(title: Text('Which plate?')),
+              for (final n in plates.keys.toList()..sort())
+                ListTile(title: Text('Plate $n'), onTap: () => Navigator.pop(ctx, n)),
+            ]),
+          ),
+        );
+        if (pick == null || !mounted) return;
+        plate = pick;
+      }
+      final base = name.replaceAll(RegExp(r'(\.gcode)?\.3mf$', caseSensitive: false), '');
+      name = '${base}_plate$plate.gcode';
+      bytes = plates[plate]!;
+    }
     setState(() => _uploading = true);
     try {
       await c.upload(name, bytes, folder: _path);
@@ -183,7 +215,17 @@ class _FilesTabState extends State<FilesTab> {
     if (await confirm(context, 'Uploaded $name',
             message: 'Start printing it now?', action: 'Print') &&
         mounted) {
-      run(context, () => c.startPrint(dest), done: 'Print started');
+      if (c.isSnapmaker) {
+        // Moonraker reads a new file's metadata a moment after the upload.
+        var meta = <String, dynamic>{};
+        for (var i = 0; i < 5 && meta['filament_type'] == null; i++) {
+          if (i > 0) await Future.delayed(const Duration(seconds: 1));
+          meta = await c.metadata(dest).catchError((_) => <String, dynamic>{});
+        }
+        if (mounted) await snapmakerPrintSetup(context, c, dest, meta);
+      } else {
+        run(context, () => c.startPrint(dest), done: 'Print started');
+      }
     }
   }
 
@@ -643,6 +685,13 @@ class _FileSheetState extends State<_FileSheet> {
 
   Future<void> _print() async {
     if (_busy) return toast(context, 'A print is already running');
+    if (c.isSnapmaker) {
+      final nav = Navigator.of(context);
+      final meta = await _meta.catchError((_) => <String, dynamic>{});
+      if (!mounted) return;
+      if (await snapmakerPrintSetup(context, c, f.path, meta)) nav.pop();
+      return;
+    }
     if (!await confirm(context, 'Print ${f.name}?', action: 'Print') || !mounted) {
       return;
     }

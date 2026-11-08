@@ -943,3 +943,153 @@ class _MeshHistoryState extends State<MeshHistory> {
         },
       );
 }
+
+/// Head (0-3) a U1 lane feeds: "E2" -> 2.
+int laneHead(CfsSlot l) => int.tryParse(l.lane!.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+/// Default head for each tool: the current map if that head holds the right
+/// material, else the first loaded head with the same material and nearest
+/// colour, else the current map.
+Map<int, int> defaultHeads(List<ToolNeed> needs, List<CfsSlot> lanes, List<int> current) {
+  int dist(int a, int b) {
+    int c(int v, int s) => (v >> s) & 0xFF;
+    return [16, 8, 0].fold(0, (t, s) => t + (c(a, s) - c(b, s)).abs());
+  }
+
+  final out = <int, int>{};
+  for (final n in needs) {
+    final now = n.tool < current.length ? current[n.tool] : n.tool;
+    bool fits(CfsSlot l) => !l.empty && l.material.toUpperCase() == n.type.toUpperCase();
+    final nowLane = lanes.where((l) => laneHead(l) == now).firstOrNull;
+    if (nowLane != null && fits(nowLane)) {
+      out[n.tool] = now;
+      continue;
+    }
+    final ok = lanes.where(fits).toList()
+      ..sort((a, b) => n.color == null ? 0 : dist(a.color!, n.color!).compareTo(dist(b.color!, n.color!)));
+    out[n.tool] = ok.isEmpty ? now : laneHead(ok.first);
+  }
+  return out;
+}
+
+/// The U1's "Print configuration": pick the head for each filament and the
+/// print preferences, then start. Replaces Snapmaker's cloud-only screen.
+Future<bool> snapmakerPrintSetup(BuildContext context, MoonrakerClient c, String file, Map<String, dynamic> meta) async {
+  final lanes = [
+    for (final b in c.status.cfs)
+      for (final s in b.slots)
+        if (s.lane != null) s,
+  ];
+  final needs = toolNeeds(meta, lanes);
+  final heads = defaultHeads(needs, lanes, await c.extruderMap().catchError((_) => <int>[]));
+  var bed = settings.flag('u1.bedLevel', true), flow = settings.flag('u1.flow', false), lapse = settings.flag('u1.timelapse', false);
+  if (!context.mounted) return false;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => AlertDialog(
+        title: const Text('Print setup'),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(file.split('/').last, style: const TextStyle(fontWeight: FontWeight.w700)),
+              if (meta['estimated_time'] is num)
+                Text('${fmtDuration(meta['estimated_time'] as num)} · ${meta['filament_weight_total'] ?? '?'} g',
+                    style: TextStyle(color: C.muted)),
+              if (needs.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Text('Filaments', style: TextStyle(fontWeight: FontWeight.w700)),
+                for (final n in needs)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(children: [
+                      Container(
+                        width: 86,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                            color: n.color == null ? C.surfaceHi : Color(n.color!),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Column(children: [
+                          Text(n.type, style: TextStyle(color: _onColor(n.color), fontWeight: FontWeight.w700)),
+                          if (n.grams != null)
+                            Text('${n.grams!.toStringAsFixed(1)} g', style: TextStyle(color: _onColor(n.color), fontSize: 12)),
+                        ]),
+                      ),
+                      const Icon(Icons.arrow_right_alt_rounded),
+                      Expanded(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: heads[n.tool],
+                          items: [
+                            for (final l in lanes)
+                              DropdownMenuItem(
+                                value: laneHead(l),
+                                child: Row(children: [
+                                  CircleAvatar(radius: 10, backgroundColor: l.color == null ? C.border : Color(l.color!)),
+                                  const SizedBox(width: 8),
+                                  Text('${laneHead(l) + 1} · ${l.empty ? 'empty' : l.material}'),
+                                  if (!l.empty && l.material.toUpperCase() != n.type.toUpperCase()) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.warning_amber_rounded, size: 16, color: C.warn),
+                                  ],
+                                ]),
+                              ),
+                          ],
+                          onChanged: (h) => set(() => heads[n.tool] = h!),
+                        ),
+                      ),
+                    ]),
+                  ),
+              ],
+              const SizedBox(height: 14),
+              const Text('Print preferences', style: TextStyle(fontWeight: FontWeight.w700)),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Auto bed leveling'),
+                value: bed,
+                onChanged: (v) => set(() => bed = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Extrusion flow calibration'),
+                value: flow,
+                onChanged: (v) => set(() => flow = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Timelapse'),
+                value: lapse,
+                onChanged: (v) => set(() => lapse = v),
+              ),
+            ]),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton.icon(
+              onPressed: () => Navigator.pop(ctx, true),
+              icon: const Icon(Icons.print_rounded),
+              label: const Text('Print')),
+        ],
+      ),
+    ),
+  );
+  if (ok != true || !context.mounted) return false;
+  settings
+    ..setFlag('u1.bedLevel', bed)
+    ..setFlag('u1.flow', flow)
+    ..setFlag('u1.timelapse', lapse);
+  var started = false;
+  await run(context, () async {
+    await c.startSnapmakerPrint(file, heads, bedLevel: bed, flowCalibrate: flow, timelapse: lapse);
+    started = true;
+  }, done: 'Print started');
+  return started;
+}
+
+Color _onColor(int? argb) {
+  if (argb == null) return C.text;
+  final r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? Colors.black : Colors.white;
+}

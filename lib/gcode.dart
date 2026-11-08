@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show ZLibDecoder;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -201,3 +202,47 @@ class LayerPainter extends CustomPainter {
   bool shouldRepaint(LayerPainter o) =>
       o.layer != layer || o.model != model || o.color != color;
 }
+
+/// Files inside a zip (a .3mf is one) whose names pass [want].
+/// ponytail: stored and deflated entries only, no zip64. That covers what
+/// slicers write; use package:archive if a 3MF ever needs more.
+Map<String, Uint8List> unzip(Uint8List zip, bool Function(String name) want) {
+  final d = ByteData.sublistView(zip);
+  var eocd = -1;
+  for (var i = zip.length - 22; i >= 0 && i >= zip.length - 65557; i--) {
+    if (d.getUint32(i, Endian.little) == 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) throw const FormatException('Not a zip / 3MF file');
+  final count = d.getUint16(eocd + 10, Endian.little);
+  var p = d.getUint32(eocd + 16, Endian.little);
+  final out = <String, Uint8List>{};
+  for (var n = 0; n < count; n++) {
+    if (d.getUint32(p, Endian.little) != 0x02014b50) break;
+    final method = d.getUint16(p + 10, Endian.little);
+    final size = d.getUint32(p + 20, Endian.little);
+    final nameLen = d.getUint16(p + 28, Endian.little);
+    final extraLen = d.getUint16(p + 30, Endian.little);
+    final commentLen = d.getUint16(p + 32, Endian.little);
+    final local = d.getUint32(p + 42, Endian.little);
+    final name = utf8.decode(zip.sublist(p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + extraLen + commentLen;
+    if (!want(name)) continue;
+    final start = local + 30 + d.getUint16(local + 26, Endian.little) + d.getUint16(local + 28, Endian.little);
+    final raw = zip.sublist(start, start + size);
+    out[name] = switch (method) {
+      0 => raw,
+      8 => Uint8List.fromList(ZLibDecoder(raw: true).convert(raw)),
+      _ => throw FormatException('Unsupported zip compression ($method) in $name'),
+    };
+  }
+  return out;
+}
+
+/// Sliced plates in a .gcode.3mf: plate number -> G-code.
+Map<int, Uint8List> platesIn3mf(Uint8List bytes) => {
+      for (final e in unzip(bytes, (n) => RegExp(r'^Metadata/plate_\d+\.gcode$').hasMatch(n)).entries)
+        int.parse(RegExp(r'\d+').firstMatch(e.key.split('/').last)![0]!): e.value,
+    };

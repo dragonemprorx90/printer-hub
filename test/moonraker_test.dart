@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:printer_hub/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printer_hub/moonraker.dart';
+import 'package:printer_hub/gcode.dart';
 import 'package:printer_hub/tools_page.dart';
 import 'package:printer_hub/history_page.dart';
 import 'package:printer_hub/screen_page.dart';
@@ -259,6 +260,26 @@ void main() {
         '{"event":"message","time":200,"title":"U1: first layer done","message":"x","attachment":{"url":"https://n/p.jpg"}}\n');
     expect(a.map((x) => x.title), ['U1: first layer done', 'U1: print finished']);
     expect(a.first.picture, 'https://n/p.jpg');
+  });
+
+  test('3MF plates come out of the zip (stored and deflated)', () {
+    final plates = platesIn3mf(base64.decode('UEsDBBQAAAAIAJkAaV0HvkU1FQAAAFgCAAAWAAAATWV0YWRhdGEvcGxhdGVfMS5nY29kZbMuyEksSTXkcjey4LIeZY+yqcQGAFBLAwQUAAAAAACZAGld2lJtLQgAAAAIAAAAFgAAAE1ldGFkYXRhL3BsYXRlXzIuZ2NvZGU7cGxhdGUyClBLAwQUAAAACACZAGldz8h5VgoAAAAIAAAAEAAAADNELzNkbW9kZWwubW9kZWyzyc1PSc3RtwMAUEsBAhQDFAAAAAgAmQBpXQe+RTUVAAAAWAIAABYAAAAAAAAAAAAAAIABAAAAAE1ldGFkYXRhL3BsYXRlXzEuZ2NvZGVQSwECFAMUAAAAAACZAGld2lJtLQgAAAAIAAAAFgAAAAAAAAAAAAAAgAFJAAAATWV0YWRhdGEvcGxhdGVfMi5nY29kZVBLAQIUAxQAAAAIAJkAaV3PyHlWCgAAAAgAAAAQAAAAAAAAAAAAAACAAYUAAAAzRC8zZG1vZGVsLm1vZGVsUEsFBgAAAAADAAMAxgAAAL0AAAAAAA=='));
+    expect(plates.keys.toList()..sort(), [1, 2]);
+    expect(utf8.decode(plates[1]!), startsWith(';plate1\nG28'));
+    expect(utf8.decode(plates[2]!), ';plate2\n');
+    expect(() => platesIn3mf(Uint8List.fromList([1, 2, 3])), throwsFormatException);
+  });
+
+  test('U1 print setup picks the head with the right filament', () {
+    final lanes = [
+      CfsSlot('T0', 0xFF000000, 'PLA', null, 'E0'),
+      CfsSlot('T1', 0xFFF8F81C, 'PLA', null, 'E1'),
+      CfsSlot('T2', 0xFFFF8000, 'PETG', null, 'E2'),
+      CfsSlot('T3', null, 'PLA', null, 'E3'),
+    ];
+    final needs = toolNeeds({'filament_type': 'PLA;PETG;PLA', 'filament_colour': '#000000;#FF8000;#FFFF00'}, lanes);
+    // T0 keeps head 0; T1 (PETG) moves to head 2; T2 yellow PLA goes to the yellow head 1.
+    expect(defaultHeads(needs, lanes, [0, 1, 3]), {0: 0, 1: 2, 2: 1});
   });
 }
 

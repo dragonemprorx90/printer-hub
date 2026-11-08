@@ -6,6 +6,10 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.10.0', [
+    'U1 Print setup, instead of Snapmaker\'s cloud-only screen: choose which head prints each filament (with grams), turn on auto bed leveling, flow calibration or timelapse, then print. Works in LAN mode and from away.',
+    'Upload Snapmaker Orca .3mf files: the app takes the sliced plate\'s G-code (and asks which plate if there are several).',
+  ]),
   ('1.9.0', [
     'Rules: turn each one on or off, and copy a rule to all your printers.',
     'Recent alerts: see what your home bridge sent (Tools → Away from home).',

@@ -918,6 +918,32 @@ class MoonrakerClient {
     if (material != null) await gcode('SET_MATERIAL LANE=$lane MATERIAL=$material');
   }
 
+  /// Snapmaker U1 print setup, the way its own app starts a print: which
+  /// head prints each tool, the print preferences, then the file.
+  bool get isSnapmaker => hasScreen;
+
+  /// Tool -> head mapping the U1 will use now (print_task_config).
+  Future<List<int>> extruderMap() async {
+    final r = await _http.get(_uri(['printer', 'objects', 'query'], {'print_task_config': 'extruder_map_table'}),
+        headers: authHeaders);
+    final dynamic j = r.statusCode == 200 ? jsonDecode(r.body) : null;
+    return [
+      for (final v in (j?['result']?['status']?['print_task_config']?['extruder_map_table'] as List?) ?? const [])
+        (v as num).toInt(),
+    ];
+  }
+
+  Future<void> startSnapmakerPrint(String file, Map<int, int> toolToHead,
+      {bool bedLevel = false, bool flowCalibrate = false, bool timelapse = false}) async {
+    int b(bool v) => v ? 1 : 0;
+    await gcode([
+      for (final e in toolToHead.entries) 'SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=${e.key} MAP_EXTRUDER=${e.value}',
+      if (toolToHead.isNotEmpty) 'SET_PRINT_USED_EXTRUDERS EXTRUDERS=${toolToHead.values.toSet().join(',')}',
+      'SET_PRINT_PREFERENCES BED_LEVEL=${b(bedLevel)} FLOW_CALIBRATE=${b(flowCalibrate)} TIME_LAPSE_CAMERA=${b(timelapse)}',
+    ].join('\n'));
+    await startPrint(file);
+  }
+
   /// AFC lane (U1): feed tool [tool] from [lane].
   Future<void> setLaneMap(String lane, int tool) => gcode('SET_MAP LANE=$lane MAP=T$tool');
 
