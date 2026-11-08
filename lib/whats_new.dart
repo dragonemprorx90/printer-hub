@@ -1,0 +1,92 @@
+import 'package:flutter/material.dart';
+
+import 'settings.dart';
+import 'ui.dart';
+import 'update.dart';
+
+/// Release notes shown once after an update. Add the new version at the top.
+const kWhatsNew = <(String, List<String>)>[
+  ('1.5.1', [
+    'This screen: see what changed after each update.',
+  ]),
+  ('1.5.0', [
+    'Print sheet shows which lane feeds each tool, warns on a mismatch, and lets you remap a tool to another lane.',
+    'DragonBreath panel counts down the drying time.',
+    'Quiet hours for home bridge alerts (QUIET_HOURS).',
+    'Rotate or mirror the camera, per printer.',
+    'Wall can sort problems first.',
+    'Relay delay shown on the "from away" icon.',
+    'Vibrate and sound when a print finishes, fails or pauses.',
+  ]),
+  ('1.4.0', [
+    'Spoolman: set the active spool or link a spool to a U1 lane.',
+    'Pause at layer, and heat the chamber before a print.',
+    'Alerts with a camera picture, plus first layer, 10 min left and heater fault alerts.',
+    'DragonBreath filter runs during ABS/ASA/PC/PA prints.',
+  ]),
+  ('1.3.3', [
+    'U1 filament lanes, DragonBreath drying and fault clear, timelapse videos.',
+    'Printer screen works from away.',
+  ]),
+];
+
+/// -1, 0 or 1 comparing "1.2.10" style versions.
+int compareVersions(String a, String b) {
+  List<int> p(String v) => [for (final x in v.split('.')) int.tryParse(x) ?? 0];
+  final x = p(a), y = p(b);
+  for (var i = 0; i < 3; i++) {
+    final d = (i < x.length ? x[i] : 0).compareTo(i < y.length ? y[i] : 0);
+    if (d != 0) return d.sign;
+  }
+  return 0;
+}
+
+/// Notes for versions newer than [seen] up to the running one.
+List<(String, List<String>)> notesSince(String seen, [String current = kAppVersion]) => [
+      for (final n in kWhatsNew)
+        if (compareVersions(n.$1, seen) > 0 && compareVersions(n.$1, current) <= 0) n,
+    ];
+
+/// Shows "What's new" once per update. A fresh install (no printers yet)
+/// just records the version.
+Future<void> showWhatsNewIfUpdated(BuildContext context, {required bool freshInstall}) async {
+  final seen = settings.text('seenVersion');
+  settings.setText('seenVersion', kAppVersion);
+  if (freshInstall || seen == kAppVersion) return;
+  // ponytail: updating from before this screen existed (no seenVersion), show
+  // the last two releases rather than guess which one they came from.
+  final notes = seen.isEmpty ? kWhatsNew.take(2).toList() : notesSince(seen);
+  if (notes.isEmpty || !context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text("What's new in $kAppVersion"),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (v, items) in notes) ...[
+                  if (notes.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 4),
+                      child: Text(v, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  for (final i in items)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('•  ', style: TextStyle(color: C.accent)),
+                        Expanded(child: Text(i)),
+                      ]),
+                    ),
+                ],
+              ]),
+        ),
+      ),
+      actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Got it'))],
+    ),
+  );
+}

@@ -9,7 +9,7 @@ import 'settings.dart';
 import 'ui.dart';
 
 /// Keep in step with `version:` in pubspec.yaml.
-const kAppVersion = '1.5.0';
+const kAppVersion = '1.5.1';
 
 /// Where releases are published; can be changed in Settings.
 const kUpdateRepo = 'dragonemprorx90/printer-hub';

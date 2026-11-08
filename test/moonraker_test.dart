@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:printer_hub/moonraker.dart';
 import 'package:printer_hub/screen_page.dart';
 import 'package:printer_hub/u1_panels.dart';
+import 'package:printer_hub/update.dart';
 import 'package:printer_hub/wall_page.dart';
+import 'package:printer_hub/whats_new.dart';
 
 void main() {
   test('applyDelta parses a Moonraker status payload and merges partials', () {
@@ -167,6 +169,14 @@ void main() {
       ..applyDelta({'print_stats': {'state': state}});
     expect([st('paused'), st('printing'), st('standby'), st('standby', online: false)].map(wallRank),
         [0, 1, 2, 0]);
+  });
+
+  test("what's new lists versions since the last one seen", () {
+    expect(compareVersions('1.10.0', '1.9.9'), 1);
+    expect(compareVersions('1.5.0', '1.5.0'), 0);
+    expect(notesSince('1.4.0', '1.5.1').map((n) => n.$1), ['1.5.1', '1.5.0']);
+    expect(notesSince('1.5.1', '1.5.1'), isEmpty);
+    expect(kWhatsNew.first.$1, kAppVersion, reason: 'add notes for the new version');
   });
 }
 

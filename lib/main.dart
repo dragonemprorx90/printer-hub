@@ -15,6 +15,7 @@ import 'settings_page.dart';
 import 'ui.dart';
 import 'update.dart';
 import 'wall_page.dart';
+import 'whats_new.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -112,7 +113,10 @@ class _PrinterListPageState extends State<PrinterListPage> {
     for (final p in _printers) {
       watchPrinter(p, clientFor(p));
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => autoCheckForUpdate(context));
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await showWhatsNewIfUpdated(context, freshInstall: _printers.isEmpty);
+      if (mounted) autoCheckForUpdate(context);
+    });
   }
 
   void _save() => settings.setStrings(
