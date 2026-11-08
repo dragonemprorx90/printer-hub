@@ -10,6 +10,7 @@ import 'moonraker.dart';
 import 'notify.dart';
 import 'printer_page.dart';
 import 'settings.dart';
+import 'scan.dart';
 import 'settings_page.dart';
 import 'ui.dart';
 import 'update.dart';
@@ -523,7 +524,14 @@ class _PrinterDialogState extends State<PrinterDialog> {
             _field(_key, 'API key (optional)'),
             _field(_cam, 'Camera URL (optional)', hint: 'Leave empty to auto-detect'),
             _field(_relay, 'Remote access code (optional)',
-                hint: 'PHB1:… from your home bridge, for use away from home'),
+                hint: 'PHB1:… from your home bridge, for use away from home',
+                suffix: canScan
+                    ? IconButton(
+                        tooltip: 'Scan QR code',
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        onPressed: _scanRelay,
+                      )
+                    : null),
             if (_error != null) Text(_error!, style: const TextStyle(color: C.danger)),
           ]),
         ),
@@ -535,13 +543,24 @@ class _PrinterDialogState extends State<PrinterDialog> {
     );
   }
 
-  Widget _field(TextEditingController c, String label, {String? hint, bool number = false}) =>
+  Future<void> _scanRelay() async {
+    final raw = await scanQr(context, 'Scan remote access code');
+    if (raw == null || !mounted) return;
+    final code = pairCodeFrom(raw);
+    setState(() {
+      if (code != null) _relay.text = code;
+      _error = code == null ? 'That QR code is not a remote access code.' : null;
+    });
+  }
+
+  Widget _field(TextEditingController c, String label,
+          {String? hint, bool number = false, Widget? suffix}) =>
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: TextField(
           controller: c,
           keyboardType: number ? TextInputType.number : null,
-          decoration: InputDecoration(labelText: label, hintText: hint),
+          decoration: InputDecoration(labelText: label, hintText: hint, suffixIcon: suffix),
         ),
       );
 }

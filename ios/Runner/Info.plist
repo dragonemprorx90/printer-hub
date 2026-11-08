@@ -66,6 +66,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Printer Hub uses the camera to scan printer and remote access QR codes.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Printer Hub connects to your 3D printers and their cameras on your local network.</string>
 	<key>NSAppTransportSecurity</key>

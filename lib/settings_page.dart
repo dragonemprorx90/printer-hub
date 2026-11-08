@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'moonraker.dart';
+import 'scan.dart';
 import 'settings.dart';
 import 'ui.dart';
 import 'update.dart';
@@ -82,8 +83,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Scan with a phone camera to copy the code, or copy it here, then '
-              'use "Import printers" on the other device. API keys are included.',
+              'Scan it with "Scan to import" on the other device, or copy the code '
+              'and use "Import printers". API keys are included.',
               style: TextStyle(color: C.muted, fontSize: 12),
             ),
           ]),
@@ -104,9 +105,11 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Future<void> _import() async {
-    final code = await askText(context, 'Import printers',
-        hint: 'Paste a PH1:… code', action: 'Import');
+  Future<void> _import({bool scan = false}) async {
+    final code = scan
+        ? await scanQr(context, 'Scan printers code')
+        : await askText(context, 'Import printers',
+            hint: 'Paste a PH1:… code', action: 'Import');
     if (code == null || code.isEmpty || !mounted) return;
     try {
       final list = importPrinters(code);
@@ -299,6 +302,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: const Icon(Icons.input_rounded),
                   label: const Text('Import printers'),
                 ),
+                if (canScan)
+                  OutlinedButton.icon(
+                    onPressed: () => _import(scan: true),
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: const Text('Scan to import'),
+                  ),
               ]),
             ),
             gap,

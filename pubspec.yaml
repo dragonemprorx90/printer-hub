@@ -46,6 +46,7 @@ dependencies:
   url_launcher: ^6.3.3
   hub_link:
     path: packages/hub_link
+  mobile_scanner: ^7.5.0
 
 dev_dependencies:
   flutter_test:
