@@ -5,7 +5,8 @@ Creality K-series (K1, K2 Plus with CFS), Snapmaker U1, Voron and anything
 else running Moonraker.
 
 - Live status, temperatures with a 10-minute graph, progress ring and finish time
-- Live camera (including the Creality K2 WebRTC camera), snapshots, fullscreen zoom
+- Live camera (Creality K2 and camera-streamer / Snapmaker U1 WebRTC, MJPEG), also
+  from away through the home bridge; snapshots, fullscreen zoom
 - Move, extrude, fans, speed / flow, Z baby-stepping, pressure advance
 - Creality CFS: slot colours, humidity alerts, load / unload
 - Files with thumbnails, folders, print queue, 2D layer preview, start later
@@ -56,6 +57,13 @@ frames: it cannot read them or send commands.
 
 At home the app connects directly; away it goes through the bridge, and it
 switches back automatically when you return.
+
+**Camera from away.** Set `CAMERA_URL` on the bridge to an MJPEG stream or JPEG
+snapshot on your LAN. The bridge reads it only while a phone is watching and
+sends a few encrypted frames per second. Cameras with an MJPEG stream (e.g. the
+Snapmaker U1's `http://<ip>/webcam/stream.mjpg?fps=3`) work directly;
+WebRTC-only cameras (Creality K1/K2) go through the `go2rtc` container in
+`bridge/docker-compose.yml`.
 
 ## Build from source
 

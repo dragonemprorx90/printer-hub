@@ -11,6 +11,10 @@
 //
 // Options can also come from the environment (handy in Docker):
 //   RELAY_URL, PRINTER_HOST, MOONRAKER_PORT, BRIDGE_DATA
+//
+// Camera from away: --camera / CAMERA_URL is an MJPEG stream or JPEG
+// snapshot URL on the LAN (for WebRTC-only cameras, a go2rtc MJPEG URL).
+// It is read only while a phone is watching.
 
 import 'dart:async';
 import 'dart:convert';
@@ -113,8 +117,72 @@ Future<void> main(List<String> argv) async {
     log('Alerts are off for this pairing. Run with --reset to get a code with alerts.');
   }
 
+  final cameraUrl = args['camera'] ?? env['CAMERA_URL'];
+  final camera = cameraUrl == null || cameraUrl.isEmpty ? null : CameraFeed(Uri.parse(cameraUrl));
   log('Bridging printer $printer:$port through ${pair.relay}');
-  await Bridge(pair, await LinkCrypto.forPair(pair), printer, port).run();
+  if (camera != null) log('Camera from away: $cameraUrl');
+  await Bridge(pair, await LinkCrypto.forPair(pair), printer, port, camera: camera).run();
+}
+
+/// Reads a home camera (MJPEG stream or JPEG snapshot URL) only while a
+/// phone is asking for frames, and keeps the latest one.
+class CameraFeed {
+  final Uri url;
+  CameraFeed(this.url);
+
+  static const _idle = Duration(seconds: 20);
+  Uint8List? _frame;
+  var _frameAt = DateTime(0), _wanted = DateTime(0);
+  var _running = false;
+  String? _error;
+
+  bool get _watched => DateTime.now().difference(_wanted) < _idle;
+
+  Future<Uint8List> frame() async {
+    _wanted = DateTime.now();
+    if (!_running) unawaited(_run());
+    // A cold WebRTC camera behind go2rtc takes ~8 s for its first frame.
+    for (var i = 0; i < 200; i++) {
+      final f = _frame;
+      if (f != null && DateTime.now().difference(_frameAt).inSeconds < 3) return f;
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    throw _error ?? 'The camera sent no picture';
+  }
+
+  Future<void> _run() async {
+    _running = true;
+    log('Camera: a phone is watching');
+    final client = http.Client();
+    try {
+      while (_watched) {
+        try {
+          final res = await client.send(http.Request('GET', url)).timeout(const Duration(seconds: 20));
+          if (res.statusCode != 200) throw 'Camera returned HTTP ${res.statusCode}';
+          final split = JpegSplitter();
+          await for (final chunk in res.stream.timeout(const Duration(seconds: 15))) {
+            for (final f in split.add(chunk)) {
+              _frame = f;
+              _frameAt = DateTime.now();
+              _error = null;
+            }
+            if (!_watched) break;
+          }
+        } on TimeoutException {
+          _error = 'The camera sent no picture';
+        } catch (e) {
+          _error = '$e';
+        }
+        // Snapshot URLs end after one frame (≈1 fps); streams retry here.
+        if (_watched) await Future.delayed(const Duration(seconds: 1));
+      }
+    } finally {
+      client.close();
+      _running = false;
+      _frame = null;
+      log('Camera: idle, released');
+    }
+  }
 }
 
 /// Watches the printer around the clock and pushes the moments that matter
@@ -305,6 +373,7 @@ class Bridge {
   final LinkCrypto crypto;
   final String host;
   final int port;
+  final CameraFeed? camera;
 
   IOWebSocketChannel? _relay;
   final _sessions = <String, _Session>{};
@@ -312,7 +381,7 @@ class Bridge {
   Future<void> _recvChain = Future.value();
   Future<void> _sendChain = Future.value();
 
-  Bridge(this.pair, this.crypto, this.host, this.port);
+  Bridge(this.pair, this.crypto, this.host, this.port, {this.camera});
 
   Future<void> run() async {
     var backoff = 1;
@@ -433,6 +502,36 @@ class Bridge {
         if (m['more'] == true) return;
         s.uploads.remove(id);
         unawaited(_http(c, m, body.takeBytes()));
+      case 'cam':
+        unawaited(_camera(c, m['id']));
+    }
+  }
+
+  /// One camera frame, end-to-end encrypted like everything else.
+  Future<void> _camera(String c, Object? id) async {
+    final cam = camera;
+    if (cam == null) {
+      return _reply(c, id, 404, utf8.encode('This home bridge has no camera set up (CAMERA_URL)'));
+    }
+    try {
+      await _reply(c, id, 200, await cam.frame(), type: 'image/jpeg');
+    } catch (e) {
+      await _reply(c, id, 503, utf8.encode('$e'));
+    }
+  }
+
+  /// Sends a whole response body in relay-sized chunks.
+  Future<void> _reply(String c, Object? id, int status, List<int> body, {String? type}) async {
+    for (var i = 0; i == 0 || i < body.length; i += kChunkBytes) {
+      final end = math.min(i + kChunkBytes, body.length);
+      await _send(c, {
+        't': 'res',
+        'id': id,
+        if (i == 0) 's': status,
+        if (i == 0) 'h': {'content-type': ?type},
+        'b': b64(body.sublist(i, end)),
+        'more': end < body.length,
+      });
     }
   }
 

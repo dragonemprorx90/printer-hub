@@ -131,6 +131,23 @@ class RelayLink {
     return pending.response.future;
   }
 
+  /// The latest frame of the home camera, read by the bridge on the LAN.
+  Future<http.StreamedResponse> cameraFrame() {
+    if (_done.isCompleted) {
+      throw RelayError('Not connected to your home bridge');
+    }
+    final id = ++_nextId;
+    final pending = _Pending(http.Request('GET', Uri.parse('http://bridge/camera')));
+    _requests[id] = pending;
+    _seal({'t': 'cam', 'id': id});
+    // A bridge older than this app ignores 'cam'; don't wait forever.
+    return pending.response.future.timeout(const Duration(seconds: 30), onTimeout: () {
+      _requests.remove(id);
+      throw RelayError(
+          'No camera picture from home. Update the home bridge to see the camera from away.');
+    });
+  }
+
   void _end(String why) {
     if (_done.isCompleted) return;
     _ping?.cancel();

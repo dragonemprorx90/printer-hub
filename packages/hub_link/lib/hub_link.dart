@@ -5,6 +5,7 @@ library;
 
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 
@@ -134,4 +135,32 @@ class LinkCrypto {
 Future<String> tokenHash(String token) async {
   final h = await Sha256().hash(utf8.encode(token));
   return h.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+}
+
+/// Splits an MJPEG byte stream into JPEG frames (SOI 0xFFD8 … EOI 0xFFD9).
+/// Feed chunks with [add]; complete frames come back from it.
+class JpegSplitter {
+  List<int> _data = const [];
+
+  List<Uint8List> add(List<int> chunk) {
+    _data = [..._data, ...chunk];
+    final frames = <Uint8List>[];
+    var start = -1;
+    var consumed = 0;
+    for (var i = 0; i + 1 < _data.length; i++) {
+      if (_data[i] != 0xFF) continue;
+      if (_data[i + 1] == 0xD8 && start < 0) {
+        start = i;
+      } else if (_data[i + 1] == 0xD9 && start >= 0) {
+        frames.add(Uint8List.fromList(_data.sublist(start, i + 2)));
+        consumed = i + 2;
+        start = -1;
+      }
+    }
+    // Keep only the unfinished tail; drop garbage before it.
+    _data = start >= 0 ? _data.sublist(start) : _data.sublist(consumed);
+    // ponytail: a corrupt stream without EOI is capped at 4 MB, not unbounded.
+    if (_data.length > 4 << 20) _data = const [];
+    return frames;
+  }
 }

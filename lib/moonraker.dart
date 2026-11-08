@@ -753,6 +753,18 @@ class MoonrakerClient {
     }
   }
 
+  /// One home camera frame (JPEG) through the bridge, while away.
+  Future<Uint8List> relayFrame() async {
+    final link = _link;
+    if (link == null) throw MoonrakerError('Not connected through the home bridge');
+    final res = await link.cameraFrame();
+    final body = await res.stream.toBytes();
+    if (res.statusCode != 200) {
+      throw MoonrakerError(utf8.decode(body, allowMalformed: true));
+    }
+    return body;
+  }
+
   /// Camera stream URLs registered in Moonraker (standard Klipper setups).
   Future<List<String>> webcams() async {
     final r = await _http.get(_uri(['server', 'webcams', 'list']),

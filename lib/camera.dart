@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:http/http.dart' as http;
+import 'package:hub_link/hub_link.dart';
 
 import 'moonraker.dart';
 import 'ui.dart';
@@ -44,38 +45,16 @@ String completeAnswer(String offer, String answer) {
   return '${out.join(nl)}$nl';
 }
 
-/// Splits an MJPEG byte stream into JPEG frames (SOI 0xFFD8 … EOI 0xFFD9).
-/// Feed chunks with [add]; complete frames come back from it.
-class JpegSplitter {
-  List<int> _data = const [];
-
-  List<Uint8List> add(List<int> chunk) {
-    _data = [..._data, ...chunk];
-    final frames = <Uint8List>[];
-    var start = -1;
-    var consumed = 0;
-    for (var i = 0; i + 1 < _data.length; i++) {
-      if (_data[i] != 0xFF) continue;
-      if (_data[i + 1] == 0xD8 && start < 0) {
-        start = i;
-      } else if (_data[i + 1] == 0xD9 && start >= 0) {
-        frames.add(Uint8List.fromList(_data.sublist(start, i + 2)));
-        consumed = i + 2;
-        start = -1;
-      }
-    }
-    // Keep only the unfinished tail; drop garbage before it.
-    _data = start >= 0 ? _data.sublist(start) : _data.sublist(consumed);
-    // ponytail: a corrupt stream without EOI is capped at 4 MB, not unbounded.
-    if (_data.length > 4 << 20) _data = const [];
-    return frames;
-  }
-}
+/// Creality K1/K2 signalling (`:8000/call/webrtc_local`). Any other URL with
+/// "webrtc" in it is camera-streamer's (Snapmaker U1, many Klipper printers).
+bool isCrealitySignal(String url) => url.contains('/call/webrtc');
 
 /// Live camera. Picks the transport by itself:
+///  * away from home: JPEG frames from the home bridge through the relay,
 ///  * a camera URL the user typed (MJPEG, or a WebRTC signalling URL),
 ///  * Creality K1/K2 WebRTC signalling on :8000,
-///  * otherwise the first MJPEG webcam registered in Moonraker.
+///  * otherwise the first webcam registered in Moonraker (MJPEG or
+///    camera-streamer WebRTC).
 class PrinterCamera extends StatefulWidget {
   final MoonrakerClient client;
   final String? cameraUrl;
@@ -113,6 +92,7 @@ class PrinterCameraState extends State<PrinterCamera> {
   Future<void> _start() async {
     _set(_Mode.probing);
     try {
+      if (widget.client.viaRelay) return await _startRelay();
       final url = widget.cameraUrl ?? await _detect();
       if (url == null) return _set(_Mode.none);
       if (url.contains('webrtc')) {
@@ -123,6 +103,33 @@ class PrinterCameraState extends State<PrinterCamera> {
     } catch (e) {
       _error = '$e';
       _set(_Mode.error);
+    }
+  }
+
+  int _gen = 0;
+
+  /// Away from home the bridge reads the camera on the LAN and sends JPEG
+  /// frames end-to-end encrypted through the relay, a few per second and
+  /// only while this view is open.
+  Future<void> _startRelay() async {
+    final gen = ++_gen;
+    var failures = 0;
+    while (mounted && gen == _gen) {
+      if (!widget.client.viaRelay) return restart(); // home again
+      final Uint8List f;
+      try {
+        f = await widget.client.relayFrame();
+        failures = 0;
+      } catch (_) {
+        // A WebRTC camera that just had a viewer can refuse the bridge for
+        // ~30 s; the bridge keeps trying, so ask again a few times.
+        if (++failures >= 3) rethrow;
+        continue;
+      }
+      if (!mounted || gen != _gen) return;
+      _frame = f;
+      _set(_Mode.mjpeg);
+      await Future.delayed(const Duration(milliseconds: 300));
     }
   }
 
@@ -164,8 +171,8 @@ class PrinterCameraState extends State<PrinterCamera> {
     );
   }
 
-  /// Creality's signalling: POST the SDP offer as base64(JSON), receive the
-  /// answer the same way. Receive-only, LAN-only, so no STUN/TURN.
+  /// Receive-only WebRTC on the LAN (no STUN/TURN), with either Creality's
+  /// or camera-streamer's signalling.
   Future<void> _startWebRtc(String signalUrl) async {
     final renderer = RTCVideoRenderer();
     await renderer.initialize();
@@ -187,11 +194,6 @@ class PrinterCameraState extends State<PrinterCamera> {
         renderer.srcObject = e.streams.first;
       }
     };
-    await pc.addTransceiver(
-      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-      init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
-    );
-
     final gathered = Completer<void>();
     pc.onIceGatheringState = (s) {
       if (s == RTCIceGatheringState.RTCIceGatheringStateComplete &&
@@ -199,9 +201,44 @@ class PrinterCameraState extends State<PrinterCamera> {
         gathered.complete();
       }
     };
+    if (isCrealitySignal(signalUrl)) {
+      await _crealitySignal(pc, signalUrl, gathered.future);
+    } else {
+      await _cameraStreamerSignal(pc, signalUrl, gathered.future);
+    }
+
+    _watchdog = Timer(const Duration(seconds: 12), () async {
+      if (_mode != _Mode.probing || !mounted) return;
+      // The camera serves one viewer at a time and can hold on to a session
+      // that just closed, so try again a couple of times before giving up.
+      if (_attempts < 3) {
+        _attempts++;
+        await _teardown();
+        if (mounted) _start();
+        return;
+      }
+      _error =
+          'The camera answered but sent no video. '
+          'Close other camera viewers (Creality app, other devices) and retry.';
+      _set(_Mode.error);
+    });
+  }
+
+  /// Creality: POST our SDP offer as base64(JSON), receive the answer the
+  /// same way.
+  Future<void> _crealitySignal(
+    RTCPeerConnection pc,
+    String signalUrl,
+    Future<void> gathered,
+  ) async {
+    await pc.addTransceiver(
+      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+      init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+    );
+
     await pc.setLocalDescription(await pc.createOffer());
     // Host candidates arrive almost instantly on a LAN.
-    await gathered.future.timeout(const Duration(seconds: 2), onTimeout: () {});
+    await gathered.timeout(const Duration(seconds: 2), onTimeout: () {});
     final local = await pc.getLocalDescription();
 
     final body = base64.encode(
@@ -224,22 +261,37 @@ class PrinterCameraState extends State<PrinterCamera> {
         '${answer['type']}',
       ),
     );
+  }
 
-    _watchdog = Timer(const Duration(seconds: 12), () async {
-      if (_mode != _Mode.probing || !mounted) return;
-      // The camera serves one viewer at a time and can hold on to a session
-      // that just closed, so try again a couple of times before giving up.
-      if (_attempts < 3) {
-        _attempts++;
-        await _teardown();
-        if (mounted) _start();
-        return;
-      }
-      _error =
-          'The camera answered but sent no video. '
-          'Close other camera viewers (Creality app, other devices) and retry.';
-      _set(_Mode.error);
-    });
+  /// camera-streamer: the camera offers (JSON), we answer with its session
+  /// id. With keepAlive it pings over a data channel and wants pongs.
+  Future<void> _cameraStreamerSignal(
+    RTCPeerConnection pc,
+    String signalUrl,
+    Future<void> gathered,
+  ) async {
+    pc.onDataChannel = (ch) =>
+        ch.onMessage = (_) => ch.send(RTCDataChannelMessage('pong'));
+    Future<Map> post(Map body) async {
+      final r = await http
+          .post(
+            Uri.parse(signalUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (r.statusCode >= 300) throw 'Camera returned HTTP ${r.statusCode}';
+      return r.body.trim().isEmpty ? const {} : jsonDecode(r.body) as Map;
+    }
+
+    final offer = await post({'type': 'request', 'keepAlive': true});
+    await pc.setRemoteDescription(
+      RTCSessionDescription('${offer['sdp']}', '${offer['type']}'),
+    );
+    await pc.setLocalDescription(await pc.createAnswer());
+    await gathered.timeout(const Duration(seconds: 2), onTimeout: () {});
+    final local = await pc.getLocalDescription();
+    await post({'type': 'answer', 'id': offer['id'], 'sdp': local!.sdp});
   }
 
   int _attempts = 0;
@@ -251,6 +303,7 @@ class PrinterCameraState extends State<PrinterCamera> {
   String get debugState => '$_mode ${_error ?? ''}';
 
   Future<void> _teardown() async {
+    _gen++;
     _watchdog?.cancel();
     _mjpegClient?.close();
     _mjpegClient = null;
@@ -326,47 +379,35 @@ class PrinterCameraState extends State<PrinterCamera> {
 
   @override
   Widget build(BuildContext context) {
-    final away =
-        widget.client.viaRelay && (_mode == _Mode.none || _mode == _Mode.error);
-    final child = away
-        ? _msg(
-            Icons.public_rounded,
-            'Camera works at home for now',
-            detail: 'Remote camera arrives in the next update',
-          )
-        : switch (_mode) {
-            _Mode.probing => const Center(child: CircularProgressIndicator()),
-            _Mode.mjpeg =>
-              _frame == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : Image.memory(
-                      _frame!,
-                      gaplessPlayback: true,
-                      fit: widget.fit,
-                    ),
-            _Mode.webrtc => RTCVideoView(
-              _renderer!,
-              objectFit: widget.fit == BoxFit.contain
-                  ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
-                  : RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-            ),
-            _Mode.none => _msg(
-              Icons.videocam_off_rounded,
-              'No camera found',
-              detail: 'Set a camera URL in the printer settings',
-            ),
-            _Mode.error => _msg(
-              Icons.error_outline_rounded,
-              'Camera unavailable',
-              detail: _error,
-              retry: true,
-            ),
-            _Mode.stopped => _msg(
-              Icons.pause_circle_outline_rounded,
-              'Camera paused',
-              retry: true,
-            ),
-          };
+    final child = switch (_mode) {
+      _Mode.probing => const Center(child: CircularProgressIndicator()),
+      _Mode.mjpeg =>
+        _frame == null
+            ? const Center(child: CircularProgressIndicator())
+            : Image.memory(_frame!, gaplessPlayback: true, fit: widget.fit),
+      _Mode.webrtc => RTCVideoView(
+        _renderer!,
+        objectFit: widget.fit == BoxFit.contain
+            ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
+            : RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+      ),
+      _Mode.none => _msg(
+        Icons.videocam_off_rounded,
+        'No camera found',
+        detail: 'Set a camera URL in the printer settings',
+      ),
+      _Mode.error => _msg(
+        Icons.error_outline_rounded,
+        'Camera unavailable',
+        detail: _error,
+        retry: true,
+      ),
+      _Mode.stopped => _msg(
+        Icons.pause_circle_outline_rounded,
+        'Camera paused',
+        retry: true,
+      ),
+    };
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: AspectRatio(

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:printer_hub/camera.dart';
+import 'package:hub_link/hub_link.dart';
 import 'package:printer_hub/discovery.dart';
 import 'package:printer_hub/gcode.dart';
 import 'package:printer_hub/history_page.dart';

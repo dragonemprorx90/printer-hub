@@ -33,4 +33,9 @@ void main() {
     const answer = 'v=0\na=group:BUNDLE 0\nm=video 9 RTP/SAVPF 96\na=mid:0\n';
     expect(completeAnswer(offer, answer), answer);
   });
+
+  test('Creality vs camera-streamer WebRTC signalling', () {
+    expect(isCrealitySignal('http://192.168.68.53:8000/call/webrtc_local'), isTrue);
+    expect(isCrealitySignal('http://192.168.68.66/webcam/webrtc'), isFalse);
+  });
 }
