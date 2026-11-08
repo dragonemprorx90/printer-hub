@@ -121,5 +121,18 @@ void main() {
     expect(pngSize(b), (480, 320));
     expect(pngSize(Uint8List(10)), isNull);
   });
+
+  test('U1 AFC lanes show as an editable filament box', () {
+    final s = PrinterStatus()
+      ..applyDelta({
+        'AFC_lane E1': {'map': 'T1', 'load': true, 'color': '#F8F81C', 'material': 'PETG'},
+        'AFC_lane E0': {'map': 'T0', 'load': false, 'color': '#000000', 'material': 'PLA'},
+      });
+    final box = s.cfs.single;
+    expect(box.slots.map((x) => (x.label, x.lane, x.color, x.material)), [
+      ('T0', 'E0', null, 'PLA'),
+      ('T1', 'E1', 0xFFF8F81C, 'PETG'),
+    ]);
+  });
 }
 

@@ -73,7 +73,8 @@ class CfsSlot {
   final int? color; // ARGB, null when the slot is empty
   final String material; // raw Creality material code
   final double? remain; // only RFID spools report this
-  CfsSlot(this.label, this.color, this.material, [this.remain]);
+  final String? lane; // AFC lane name (U1), editable
+  CfsSlot(this.label, this.color, this.material, [this.remain, this.lane]);
   bool get empty => color == null;
 }
 
@@ -291,6 +292,9 @@ class PrinterStatus {
   /// Klipper `[led]` the U1 uses for its cavity light (white channel).
   static const cavityLed = 'led cavity_led';
 
+  /// DragonBreath heater state from its Klipper module (U1), or null.
+  Map<String, dynamic>? get dragon => raw['dragonbreath'];
+
   bool? get led {
     final v = _f('output_pin LED', 'value');
     if (v != null) return (v as num) > 0;
@@ -302,9 +306,8 @@ class PrinterStatus {
   /// Creality Filament System boxes that are connected.
   List<CfsBox> get cfs {
     final b = raw['box'];
-    if (b == null) return const [];
     final out = <CfsBox>[];
-    for (var i = 1; i <= 4; i++) {
+    for (var i = 1; i <= 4 && b != null; i++) {
       final t = b['T$i'];
       if (t is! Map || t['state'] != 'connect') continue;
       final colors = (t['color_value'] as List?) ?? const [];
@@ -320,6 +323,22 @@ class PrinterStatus {
         for (var s = 0; s < colors.length; s++)
           CfsSlot('$i${String.fromCharCode(65 + s)}', parseCfsColor(colors[s]),
               s < mats.length ? '${mats[s]}' : '', left(s)),
+      ]));
+    }
+    // Snapmaker U1 (extended firmware AFC stub): one lane per toolhead.
+    final lanes = raw.keys.where((k) => k.startsWith('AFC_lane ')).toList()..sort();
+    if (lanes.isNotEmpty) {
+      out.add(CfsBox('Lanes', null, null, [
+        for (final k in lanes)
+          CfsSlot(
+            '${raw[k]!['map'] ?? k.substring(9)}',
+            raw[k]!['load'] == true
+                ? parseCfsColor('${raw[k]!['color'] ?? ''}'.replaceAll('#', ''))
+                : null,
+            '${raw[k]!['material'] ?? ''}',
+            null,
+            k.substring('AFC_lane '.length),
+          ),
       ]));
     }
     return out;
@@ -410,6 +429,7 @@ class MoonrakerClient {
     ...PrinterStatus.chamberHeaters,
     ...PrinterStatus.chamberSensors,
     PrinterStatus.dragonFilter,
+    'dragonbreath',
   };
 
   /// Set when the printer was paired with a home bridge.
@@ -580,6 +600,7 @@ class MoonrakerClient {
           if (_wanted.contains(o) ||
               o.startsWith('output_pin fan') ||
               o.startsWith('fan_generic ') ||
+              o.startsWith('AFC_lane ') ||
               RegExp(r'^extruder\d+$').hasMatch(o))
             o: null,
       };
@@ -806,6 +827,88 @@ class MoonrakerClient {
     return body;
   }
 
+  /// AFC lane (U1): colour as 0xRRGGBB and/or material name.
+  Future<void> setLane(String lane, {int? color, String? material}) async {
+    if (color != null) {
+      final hex = (color & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+      await gcode('SET_COLOR LANE=$lane COLOR=${hex}FF');
+    }
+    if (material != null) await gcode('SET_MATERIAL LANE=$lane MATERIAL=$material');
+  }
+
+  Future<void> resetHeaterFault() => gcode('DRAGONBREATH_RESET');
+
+  // --- DragonBreath heater, spoken to directly (drying isn't in Klipper) ----
+
+  (String, String)? _heater; // host, token from the printer's [dragonbreath]
+
+  Future<Uri> _heaterUri(String path) async {
+    // From away the bridge looks the heater up itself (see bridge _target).
+    if (viaRelay) return Uri(scheme: 'http', host: host, port: 80, path: '/dragonbreath$path');
+    if (_heater == null) {
+      final r = await _http.get(_uri(['printer', 'objects', 'query'], {'configfile': 'settings'}),
+          headers: authHeaders);
+      final dynamic j = r.statusCode == 200 ? jsonDecode(r.body) : null;
+      final db = j?['result']?['status']?['configfile']?['settings']?['dragonbreath'];
+      if (db == null) throw MoonrakerError('No DragonBreath heater is set up on this printer');
+      _heater = ('${db['host']}', '${db['token'] ?? 'web'}');
+    }
+    return Uri(scheme: 'http', host: _heater!.$1, path: path);
+  }
+
+  Map<String, String> get _heaterHeaders => {
+        'Content-Type': 'application/json',
+        'X-DragonBreath-Auth': _heater?.$2 ?? 'web',
+      };
+
+  Future<Map<String, dynamic>> heaterState() async {
+    final r = await _http.get(await _heaterUri('/api/v2/state'), headers: _heaterHeaders);
+    if (r.statusCode != 200) throw MoonrakerError('Heater not reachable (HTTP ${r.statusCode})');
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  /// Sends a heater command, e.g. drying_start {target_c, hours} or drying_stop.
+  Future<Map<String, dynamic>> heaterCommand(String name, [Map<String, dynamic> fields = const {}]) async {
+    final rev = (await heaterState())['state_revision'];
+    final r = await _http.post(await _heaterUri('/api/v2/command'),
+        headers: _heaterHeaders,
+        body: jsonEncode({
+          'api_version': 2,
+          'request_id': 'printer-hub-${DateTime.now().microsecondsSinceEpoch}',
+          'expected_revision': rev,
+          'actor': {'kind': 'web', 'id': 'printer-hub'},
+          'command': {'name': name, ...fields},
+        }));
+    final j = jsonDecode(r.body) as Map<String, dynamic>;
+    if (j['ok'] != true) {
+      throw MoonrakerError('Heater refused: ${j['message'] ?? j['error'] ?? r.statusCode}');
+    }
+    return j;
+  }
+
+  // --- Timelapse videos -----------------------------------------------------
+
+  Future<List<(String, int, DateTime)>> timelapses() async {
+    final r = await _http.get(_uri(['server', 'files', 'list'], {'root': 'timelapse'}),
+        headers: authHeaders);
+    if (r.statusCode >= 300) return const [];
+    final out = [
+      for (final f in (jsonDecode(r.body)['result'] as List?) ?? const [])
+        if ('${f['path']}'.endsWith('.mp4'))
+          ('${f['path']}', (f['size'] as num).toInt(),
+              DateTime.fromMillisecondsSinceEpoch(((f['modified'] as num) * 1000).round())),
+    ]..sort((a, b) => b.$3.compareTo(a.$3));
+    return out;
+  }
+
+  Uri timelapseUrl(String path) => _uri(['server', 'files', 'timelapse', ...path.split('/')]);
+
+  Future<Uint8List> timelapseBytes(String path) async {
+    final r = await _http.get(timelapseUrl(path), headers: authHeaders);
+    if (r.statusCode != 200) throw MoonrakerError('Download failed (HTTP ${r.statusCode})');
+    return r.bodyBytes;
+  }
+
   /// Snapmaker U1: the extended firmware can mirror its touchscreen at /screen/.
   bool hasScreen = false;
 
@@ -815,7 +918,7 @@ class MoonrakerClient {
   Future<Uint8List> screenFrame() async {
     final r = await _http.get(_screen('snapshot'), headers: authHeaders);
     if (r.statusCode != 200 || !(r.headers['content-type'] ?? '').startsWith('image/')) {
-      throw MoonrakerError(viaRelay && r.statusCode == 400
+      throw MoonrakerError(viaRelay && r.statusCode == 404
           ? 'Update the home bridge to see the screen from away.'
           : 'Remote screen is off. Turn on Remote Screen in the printer\'s firmware-config (Web).');
     }

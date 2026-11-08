@@ -6,6 +6,7 @@ import 'charts.dart';
 import 'console_page.dart';
 import 'moonraker.dart';
 import 'settings.dart';
+import 'u1_panels.dart';
 import 'ui.dart';
 
 class ToolsTab extends StatefulWidget {
@@ -152,6 +153,7 @@ class _ToolsTabState extends State<ToolsTab> {
           _filamentPanel(),
           _maintenancePanel(),
           _powerPanel(),
+          TimelapsePanel(client: c),
           _remotePanel(),
           _consolePanel(),
         ];

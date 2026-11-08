@@ -537,24 +537,46 @@ class Bridge {
 
   static const _forwardHeaders = {'range', 'content-type', 'x-api-key', 'accept'};
 
+  (String, String)? _heater; // DragonBreath host and token, from the printer
+
+  /// Where a relayed path goes: Moonraker, the U1's remote screen on port 80,
+  /// or the DragonBreath heater named in the printer's own [dragonbreath].
+  /// Never anywhere else.
+  Future<(Uri, Map<String, String>)> target(String path) async {
+    if (!path.startsWith('/') || path.startsWith('//')) throw const FormatException('bad path');
+    if (path.startsWith('/dragonbreath/')) {
+      if (_heater == null) {
+        final r = await _client.get(
+            Uri.parse('http://$host:$port/printer/objects/query?configfile=settings'));
+        final dynamic j = jsonDecode(r.body);
+        final db = j['result']?['status']?['configfile']?['settings']?['dragonbreath'];
+        if (db == null) throw const FormatException('no DragonBreath on this printer');
+        _heater = ('${db['host']}', '${db['token'] ?? 'web'}');
+      }
+      final uri = Uri.parse('http://${_heater!.$1}${path.substring('/dragonbreath'.length)}');
+      if (uri.host != _heater!.$1) throw const FormatException('bad path');
+      return (uri, {'X-DragonBreath-Auth': _heater!.$2});
+    }
+    // The U1 extended firmware serves its remote screen on port 80 (nginx).
+    final p = path.startsWith('/screen/') ? 80 : port;
+    final uri = Uri.parse('http://$host:$p$path');
+    if (uri.host != host || uri.port != p) throw const FormatException('bad path');
+    return (uri, const <String, String>{});
+  }
+
   /// Performs a request against Moonraker only (never any other host) and
   /// streams the reply back in chunks.
   Future<void> _http(String c, Map<String, dynamic> m, List<int> body) async {
     final id = m['id'];
     final path = '${m['p']}';
-    // The U1 extended firmware serves its remote screen on port 80 (nginx).
-    final p = path.startsWith('/screen/') ? 80 : port;
-    final uri = Uri.parse('http://$host:$p$path');
-    if (!path.startsWith('/') || uri.host != host || uri.port != p) {
-      await _send(c, {'t': 'res', 'id': id, 's': 400, 'h': {}, 'b': '', 'more': false});
-      return;
-    }
     try {
+      final (uri, extra) = await target(path);
       final req = http.Request('${m['m']}', uri)..bodyBytes = body;
       final headers = Map<String, dynamic>.from((m['h'] as Map?) ?? const {});
       headers.forEach((k, v) {
         if (_forwardHeaders.contains(k.toLowerCase())) req.headers[k] = '$v';
       });
+      req.headers.addAll(extra);
       final res = await _client.send(req).timeout(const Duration(seconds: 60));
       final head = {
         if (res.headers['content-type'] != null) 'content-type': res.headers['content-type'],
@@ -585,7 +607,8 @@ class Bridge {
       }
       await flush(false);
     } catch (e) {
-      await _send(c, {'t': 'res', 'id': id, 's': 502, 'h': {}, 'b': b64(utf8.encode('$e')), 'more': false});
+      if (path.startsWith('/dragonbreath/')) _heater = null; // its IP may have changed
+      await _send(c, {'t': 'res', 'id': id, 's': e is FormatException ? 400 : 502, 'h': {}, 'b': b64(utf8.encode('$e')), 'more': false});
     }
   }
 }

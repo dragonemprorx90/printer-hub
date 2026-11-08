@@ -13,6 +13,7 @@ import 'moonraker.dart';
 import 'screen_page.dart';
 import 'settings.dart';
 import 'tools_page.dart';
+import 'u1_panels.dart';
 import 'ui.dart';
 
 /// One printer: five tabs, bottom bar on phones, side rail on wide screens.
@@ -216,7 +217,10 @@ class _OverviewTabState extends State<OverviewTab> {
         final job = _JobPanel(
             s: s, client: c, onBrowseFiles: widget.onBrowseFiles);
         final temps = _Temps(s: s, client: c);
-        final cfs = _CfsPanel(boxes: s.cfs);
+        final cfs = Column(children: [
+          _CfsPanel(boxes: s.cfs, client: c),
+          if (s.dragon != null) HeaterPanel(s: s, client: c),
+        ]);
         final actions = _Actions(s: s, client: c, printer: widget.printer);
         const gap = SizedBox(height: 16, width: 16);
         return LayoutBuilder(builder: (context, box) {
@@ -710,7 +714,8 @@ class _TempHistoryState extends State<_TempHistory> {
 
 class _CfsPanel extends StatelessWidget {
   final List<CfsBox> boxes;
-  const _CfsPanel({required this.boxes});
+  final MoonrakerClient client;
+  const _CfsPanel({required this.boxes, required this.client});
 
   @override
   Widget build(BuildContext context) {
@@ -734,7 +739,13 @@ class _CfsPanel extends StatelessWidget {
                 for (final slot in b.slots)
                   Padding(
                     padding: const EdgeInsets.only(right: 10),
-                    child: _SlotDot(slot: slot),
+                    child: slot.lane == null
+                        ? _SlotDot(slot: slot)
+                        : InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => editLane(context, client, slot),
+                            child: _SlotDot(slot: slot),
+                          ),
                   ),
                 const Spacer(),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
