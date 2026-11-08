@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.6.1', [
+    'Send a file to another printer from its file sheet, and start it there.',
+  ]),
   ('1.6.0', [
     'Rules: "when a print finishes, turn the light off", or every day at a set time. Your home bridge runs them, even with the app closed.',
     'Pictures of each print: tap a print in History to see its first layer and the end (taken by your home bridge).',

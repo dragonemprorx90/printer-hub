@@ -541,6 +541,40 @@ class _FileSheetState extends State<_FileSheet> {
   GcodeFile get f => widget.file;
   bool get _busy => c.status.state == 'printing' || c.status.state == 'paused';
 
+  List<Printer> get _others => [
+        for (final s in settings.strings('printers')) Printer.fromJson(jsonDecode(s)),
+      ].where((p) => clientFor(p) != c).toList();
+
+  /// Copies this file to another printer and offers to start it there.
+  Future<void> _send() async {
+    final to = await showModalBottomSheet<Printer>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Send to')),
+          for (final p in _others)
+            ListTile(
+              title: Text(p.name),
+              subtitle: Text(clientFor(p).status.online ? clientFor(p).status.state : 'offline'),
+              onTap: () => Navigator.pop(ctx, p),
+            ),
+        ]),
+      ),
+    );
+    if (to == null || !mounted) return;
+    final other = clientFor(to);
+    var sent = false;
+    await run(context, () async {
+      await other.upload(f.name, await c.download(f.path));
+      sent = true;
+    }, done: 'Sent to ${to.name}');
+    if (!sent || !mounted) return;
+    final idle = other.status.online && !{'printing', 'paused'}.contains(other.status.state);
+    if (idle && await confirm(context, 'Print ${f.name} on ${to.name} now?', action: 'Print') && mounted) {
+      await run(context, () => other.startPrint(f.name), done: 'Printing on ${to.name}');
+    }
+  }
+
   Future<void> _preheat() async {
     if (_busy) return toast(context, 'A print is already running');
     final t = await askNumber(context, 'Heat the chamber to',
@@ -728,6 +762,12 @@ class _FileSheetState extends State<_FileSheet> {
                 avatar: const Icon(Icons.schedule_rounded, size: 16),
                 label: const Text('Start later'),
                 onPressed: _later),
+            if (_others.isNotEmpty)
+              ActionChip(
+                avatar: const Icon(Icons.send_rounded, size: 16),
+                label: const Text('Send to another printer'),
+                onPressed: _send,
+              ),
             if (c.status.chamberHeatable)
               ActionChip(
                 avatar: const Icon(Icons.local_fire_department_outlined, size: 16),
