@@ -6,6 +6,15 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.7.0', [
+    'Print sheet shows grams needed per lane against grams left on its spool, and warns when it will run out.',
+    'Lane editor: "Choose spool" after loading a new roll.',
+    'History shows the spool a print used and its real cost from the spool price (when Spoolman tracks it).',
+    'Rules: new triggers (first layer, % progress, paused, heater fault) and a "send me a picture" action.',
+    'Send a test alert and show the alerts topic as a QR (Tools → Away from home).',
+    'Tap a printer\'s icon to give it its own colour.',
+    'Back up and restore all settings (Settings → Printers).',
+  ]),
   ('1.6.2', [
     'Add spool: pick a lane and type only the weight. The material and colour come from the lane, and the spool is linked to it.',
   ]),

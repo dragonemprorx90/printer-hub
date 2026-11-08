@@ -281,6 +281,25 @@ class _EmptyState extends StatelessWidget {
       );
 }
 
+const _printerColors = [
+  0xFF339CFF, 0xFF5DC977, 0xFFF3883B, 0xFFE5484D, 0xFF8E4EC6, 0xFFE93D82, 0xFF12A594, 0xFFAD7F58,
+];
+
+Future<int?> pickPrinterColor(BuildContext context) => showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Printer colour'),
+        content: Wrap(spacing: 10, runSpacing: 10, children: [
+          for (final c in _printerColors)
+            InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => Navigator.pop(ctx, c),
+              child: CircleAvatar(radius: 20, backgroundColor: Color(c)),
+            ),
+        ]),
+      ),
+    );
+
 class _PrinterCard extends StatelessWidget {
   final Printer printer;
   final VoidCallback onOpen, onEdit, onDelete;
@@ -333,15 +352,28 @@ class _PrinterCard extends StatelessWidget {
                         ),
                 )
               else
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: C.accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Icon(Icons.print_rounded, color: C.accent, size: 30),
-                ),
+                StatefulBuilder(builder: (context, set) {
+                  final tint = Color(settings.printerColor(printer.key) ?? C.accent.toARGB32());
+                  return Tooltip(
+                    message: 'Printer colour',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () async {
+                        final c = await pickPrinterColor(context);
+                        if (c != null) set(() => settings.setPrinterColor(printer.key, c));
+                      },
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: tint.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Icon(Icons.print_rounded, color: tint, size: 30),
+                      ),
+                    ),
+                  );
+                }),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'charts.dart';
@@ -89,6 +91,14 @@ const _filament = [
     Icons.upload_rounded,
   ),
 ];
+
+/// Publishes straight to the ntfy topic (the same one the bridge uses).
+Future<void> sendTestAlert(String topic) async {
+  final r = await http.post(Uri.parse(topic),
+      headers: {'Title': 'Printer Hub test alert', 'Tags': 'white_check_mark'},
+      body: 'Alerts from your printer will arrive like this.');
+  if (r.statusCode >= 300) throw 'ntfy refused it (HTTP ${r.statusCode})';
+}
 
 const _defaultMaintenance = [
   ('Clean nozzle and hotend', 200.0),
@@ -588,9 +598,8 @@ class _ToolsTabState extends State<ToolsTab> {
                   ],
                 ),
               ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
+              Wrap(spacing: 4, children: [
+                TextButton.icon(
                   onPressed: () => launchUrl(
                     Uri.parse('https://docs.ntfy.sh/subscribe/phone/'),
                     mode: LaunchMode.externalApplication,
@@ -598,7 +607,28 @@ class _ToolsTabState extends State<ToolsTab> {
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
                   label: const Text('Get the ntfy app'),
                 ),
-              ),
+                TextButton.icon(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Scan to subscribe'),
+                      content: SizedBox(
+                        width: 240,
+                        height: 240,
+                        child: QrImageView(data: alerts, backgroundColor: Colors.white),
+                      ),
+                      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+                    ),
+                  ),
+                  icon: const Icon(Icons.qr_code_rounded, size: 18),
+                  label: const Text('Show as QR'),
+                ),
+                TextButton.icon(
+                  onPressed: () => run(context, () => sendTestAlert(alerts), done: 'Test alert sent. Check your phone.'),
+                  icon: const Icon(Icons.notifications_active_outlined, size: 18),
+                  label: const Text('Send a test alert'),
+                ),
+              ]),
               Text(
                 'Keep the topic private: anyone who has it can read your alerts.',
                 style: TextStyle(color: C.muted, fontSize: 12),

@@ -388,6 +388,13 @@ class Alerts {
       if (layer is num && layer >= 2 && _sent.add('first_layer')) {
         await send('$_title: first layer done', 'Have a look before it carries on.',
             tags: ['mag'], priority: 2, jpeg: await _keep('first'));
+        unawaited(_runRules((r) => r['on'] == 'first_layer'));
+      }
+      for (final r in _rules.where((r) => r['on'] == 'progress')) {
+        final at = double.tryParse('${r['at']}');
+        if (at != null && _progress * 100 >= at && _sent.add('progress $at ${r['do']}')) {
+          unawaited(_runRules((x) => identical(x, r)));
+        }
       }
       final dur = (_stats['print_duration'] as num?)?.toDouble() ?? 0;
       if (_progress > 0.5 && dur > 0) {
@@ -401,6 +408,7 @@ class Alerts {
     if (_dragon['fault'] == true && _sent.add('heater_fault')) {
       await send('$_title: chamber heater fault', '${_dragon['fault_reason'] ?? 'Check the DragonBreath.'}',
           tags: ['fire'], priority: 5);
+      unawaited(_runRules((r) => r['on'] == 'heater_fault'));
     } else if (_dragon['fault'] == false) {
       _sent.remove('heater_fault');
     }
@@ -444,6 +452,13 @@ extension on Alerts {
     for (final r in _rules.where(match)) {
       final g = '${r['do'] ?? ''}'.trim();
       if (g.isEmpty) continue;
+      if (g == '@picture') {
+        final file = '${_stats['filename'] ?? ''}'.split('/').last;
+        final pct = _state == 'printing' ? ' (${(_progress * 100).round()}%)' : '';
+        await send('$_title: picture$pct', file.isEmpty ? 'From your rule' : file,
+            tags: ['camera'], picture: true);
+        continue;
+      }
       try {
         await _client.post(Uri.parse('http://$host:$port/printer/gcode/script'),
             headers: {'Content-Type': 'application/json'}, body: jsonEncode({'script': g}));

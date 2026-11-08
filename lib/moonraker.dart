@@ -74,7 +74,8 @@ class CfsSlot {
   final String material; // raw Creality material code
   final double? remain; // only RFID spools report this
   final String? lane; // AFC lane name (U1), editable
-  CfsSlot(this.label, this.color, this.material, [this.remain, this.lane]);
+  final int? spoolId; // Spoolman spool linked to the lane
+  CfsSlot(this.label, this.color, this.material, [this.remain, this.lane, this.spoolId]);
   bool get empty => color == null;
 }
 
@@ -110,6 +111,14 @@ List<String> snapshotsFor(PrintJob job, List<String> files) {
   ]..sort((a, b) => a.endsWith('__first.jpg') ? -1 : b.endsWith('__first.jpg') ? 1 : 0);
 }
 
+/// Spool IDs Moonraker's Spoolman integration put in a history job.
+List<int> jobSpoolIds(Map job) => [
+      for (final a in (job['auxiliary_data'] as List?) ?? const [])
+        if (a is Map && a['name'] == 'spool_ids')
+          for (final id in (a['value'] as List?) ?? const [])
+            if (id is num) id.toInt(),
+    ];
+
 /// 93784 s -> "1 d 2 h".
 String fmtUptime(num secs) {
   final d = secs ~/ 86400, h = (secs % 86400) ~/ 3600, m = (secs % 3600) ~/ 60;
@@ -132,7 +141,8 @@ class Spool {
   final String name, material;
   final int? color; // ARGB
   final double? remaining; // grams
-  Spool(this.id, this.name, this.material, this.color, this.remaining);
+  final double? pricePerKg;
+  Spool(this.id, this.name, this.material, this.color, this.remaining, [this.pricePerKg]);
 
   factory Spool.fromJson(Map<String, dynamic> j) {
     final f = (j['filament'] as Map?) ?? const {};
@@ -144,6 +154,10 @@ class Spool {
       '${f['material'] ?? ''}',
       hex.length >= 6 ? parseCfsColor(hex.substring(0, 6)) : null,
       (j['remaining_weight'] as num?)?.toDouble(),
+      switch ((j['price'] ?? f['price'], j['initial_weight'] ?? f['weight'])) {
+        (final num p, final num w) when w > 0 => p / w * 1000,
+        _ => null,
+      },
     );
   }
 }
@@ -383,6 +397,7 @@ class PrinterStatus {
             '${raw[k]!['material'] ?? ''}',
             null,
             k.substring('AFC_lane '.length),
+            switch (raw[k]!['spool_id']) { final num n when n > 0 => n.toInt(), _ => null },
           ),
       ]));
     }
@@ -415,9 +430,10 @@ class PrintJob {
   final double duration, filament;
   final bool exists;
   final String? material;
+  final List<int> spoolIds; // recorded by Moonraker's Spoolman integration
   PrintJob(this.filename, this.status, this.start, this.duration, this.filament,
       this.exists,
-      {this.material});
+      {this.material, this.spoolIds = const []});
 }
 
 class HistoryTotals {
@@ -1199,6 +1215,7 @@ class MoonrakerClient {
           ((j['filament_used'] as num?) ?? 0).toDouble(),
           j['exists'] == true,
           material: jobMaterial(j as Map),
+          spoolIds: jobSpoolIds(j),
         ),
     ];
   }

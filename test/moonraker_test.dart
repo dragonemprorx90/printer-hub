@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:printer_hub/settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printer_hub/moonraker.dart';
 import 'package:printer_hub/screen_page.dart';
 import 'package:printer_hub/u1_panels.dart';
@@ -190,6 +193,39 @@ void main() {
           'Other__1794164593__first.jpg',
         ]),
         ['My_Part_v2___1794164593__first.jpg', 'My_Part_v2___1794164593__end.jpg']);
+  });
+
+  test('spool checks: grams needed against grams left', () {
+    final lane = CfsSlot('T0', 0xFF000000, 'PLA', null, 'E0', 7);
+    final needs = toolNeeds({'filament_type': 'PLA', 'filament_weight': [30.0]}, [lane]);
+    expect(needs.single.grams, 30.0);
+    expect(lowSpool(needs.single, [Spool(7, 'x', 'PLA', null, 20)]), isTrue);
+    expect(lowSpool(needs.single, [Spool(7, 'x', 'PLA', null, 500)]), isFalse);
+    expect(lowSpool(needs.single, const []), isFalse);
+  });
+
+  test('history job spool ids and spool price per kg', () {
+    expect(jobSpoolIds({'auxiliary_data': [{'name': 'spool_ids', 'value': [3, 5]}]}), [3, 5]);
+    expect(jobSpoolIds({'auxiliary_data': []}), isEmpty);
+    expect(Spool.fromJson({'id': 1, 'price': 20, 'initial_weight': 1000, 'filament': {}}).pricePerKg, 20);
+    expect(Spool.fromJson({'id': 1, 'filament': {'price': 15, 'weight': 750}}).pricePerKg, 20);
+  });
+
+  test('lanes carry their linked spool', () {
+    final s = PrinterStatus()
+      ..applyDelta({'AFC_lane E0': {'map': 'T0', 'load': true, 'color': '#000000', 'material': 'PLA', 'spool_id': 4}});
+    expect(s.cfs.single.slots.single.spoolId, 4);
+  });
+
+  test('settings backup round-trips', () async {
+    SharedPreferences.setMockInitialValues({'printers': <String>['{}'], 'wallSort': true});
+    await settings.load();
+    final b = settings.exportAll();
+    SharedPreferences.setMockInitialValues({});
+    await settings.load();
+    await settings.importAll(jsonDecode(jsonEncode(b)) as Map<String, dynamic>);
+    expect(settings.flag('wallSort', false), isTrue);
+    expect(settings.strings('printers'), ['{}']);
   });
 }
 

@@ -299,10 +299,18 @@ class _JobTile extends StatelessWidget {
   /// Pictures the home bridge took at the first layer and the end.
   Future<void> _pictures(BuildContext context) async {
     final files = snapshotsFor(job, await client.snapshotFiles().catchError((_) => <String>[]));
+    final spools = job.spoolIds.isEmpty
+        ? <Spool>[]
+        : (await client.spools().catchError((_) => <Spool>[])).where((s) => job.spoolIds.contains(s.id)).toList();
     if (!context.mounted) return;
-    if (files.isEmpty) {
+    if (files.isEmpty && spools.isEmpty) {
       return toast(context, 'No pictures for this print (the home bridge takes them when it has a camera)');
     }
+    // ponytail: one spool's price for the whole job; multi-spool jobs use the first.
+    final price = spools.map((s) => s.pricePerKg).nonNulls.firstOrNull;
+    final grams = filamentGrams(job.filament,
+        diameter: settings.number('filamentDiameter', 1.75),
+        density: settings.number('filamentDensity', 1.24));
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -311,6 +319,19 @@ class _JobTile extends StatelessWidget {
           width: 520,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              for (final s in spools)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(radius: 12, backgroundColor: s.color == null ? C.border : Color(s.color!)),
+                  title: Text(s.name.isEmpty ? 'Spool ${s.id}' : s.name),
+                  subtitle: Text('Spool used${s.remaining == null ? '' : ' · ${s.remaining!.round()} g left now'}'),
+                ),
+              if (price != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text('Filament cost: ${money(grams / 1000 * price)} '
+                      '(spool price, about ${grams.toStringAsFixed(0)} g)'),
+                ),
               for (final f in files)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),

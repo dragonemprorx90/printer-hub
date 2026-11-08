@@ -126,7 +126,7 @@ const _colors = [
 Future<void> editLane(BuildContext context, MoonrakerClient client, CfsSlot slot) async {
   int? color = slot.color == null ? null : slot.color! & 0xFFFFFF;
   var material = slot.material.isEmpty ? 'PLA' : slot.material;
-  final ok = await showDialog<bool>(
+  final ok = await showDialog<Object>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => AlertDialog(
@@ -166,15 +166,57 @@ Future<void> editLane(BuildContext context, MoonrakerClient client, CfsSlot slot
               ]),
             ]),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'spool'), child: const Text('Choose spool')),
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
         ],
       ),
     ),
   );
-  if (ok != true || !context.mounted) return;
+  if (!context.mounted) return;
+  if (ok == 'spool') return chooseLaneSpool(context, client, slot);
+  if (ok != true) return;
   await run(context, () => client.setLane(slot.lane!, color: color, material: material),
       done: 'Lane ${slot.label} updated');
+}
+
+/// After loading a new spool: pick it from Spoolman for this lane.
+Future<void> chooseLaneSpool(BuildContext context, MoonrakerClient client, CfsSlot slot) async {
+  List<Spool> spools;
+  try {
+    if (!await client.hasSpoolman()) throw 'Spoolman is not set up on this printer';
+    spools = await client.spools();
+  } catch (e) {
+    if (context.mounted) toast(context, '$e', error: true);
+    return;
+  }
+  if (!context.mounted) return;
+  final pick = await showModalBottomSheet<int>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: ListView(shrinkWrap: true, children: [
+        ListTile(title: Text('Spool in lane ${slot.label}')),
+        for (final s in spools)
+          ListTile(
+            leading: CircleAvatar(radius: 12, backgroundColor: s.color == null ? C.border : Color(s.color!)),
+            title: Text(s.name.isEmpty ? 'Spool ${s.id}' : s.name),
+            subtitle: Text([s.material, if (s.remaining != null) '${s.remaining!.round()} g left'].join(' · ')),
+            selected: s.id == slot.spoolId,
+            onTap: () => Navigator.pop(ctx, s.id),
+          ),
+        if (slot.spoolId != null)
+          ListTile(
+            leading: const Icon(Icons.link_off_rounded),
+            title: const Text('No spool'),
+            onTap: () => Navigator.pop(ctx, 0),
+          ),
+        if (spools.isEmpty) const ListTile(title: Text('No spools yet. Add one in Tools → Spools.')),
+      ]),
+    ),
+  );
+  if (pick == null || !context.mounted) return;
+  await run(context, () => client.setLaneSpool(slot.lane!, pick),
+      done: pick == 0 ? 'Lane ${slot.label} unlinked' : 'Spool set for lane ${slot.label}');
 }
 
 /// Timelapse videos recorded by the printer.
@@ -443,11 +485,12 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
 }
 
 /// What each tool in a gcode file needs, and the lane that feeds it now.
-typedef ToolNeed = ({int tool, String type, int? color, CfsSlot? lane});
+typedef ToolNeed = ({int tool, String type, int? color, CfsSlot? lane, double? grams});
 
 List<ToolNeed> toolNeeds(Map<String, dynamic> meta, List<CfsSlot> lanes) {
   final types = '${meta['filament_type'] ?? ''}'.split(';');
   final colors = '${meta['filament_colour'] ?? ''}'.split(';');
+  final weights = (meta['filament_weight'] as List?) ?? const [];
   if (types.join().trim().isEmpty) return const [];
   return [
     for (var i = 0; i < types.length; i++)
@@ -456,6 +499,7 @@ List<ToolNeed> toolNeeds(Map<String, dynamic> meta, List<CfsSlot> lanes) {
         type: types[i].trim(),
         color: i < colors.length ? parseCfsColor(colors[i].replaceAll('#', '')) : null,
         lane: lanes.where((l) => l.label == 'T$i').firstOrNull,
+        grams: i < weights.length ? (weights[i] as num?)?.toDouble() : null,
       ),
   ];
 }
@@ -463,11 +507,29 @@ List<ToolNeed> toolNeeds(Map<String, dynamic> meta, List<CfsSlot> lanes) {
 bool needMismatch(ToolNeed n) =>
     n.lane == null || n.lane!.empty || n.lane!.material.toUpperCase() != n.type.toUpperCase();
 
+/// Grams left on the lane's Spoolman spool, if it has one.
+double? spoolLeft(ToolNeed n, List<Spool> spools) =>
+    spools.where((s) => s.id == n.lane?.spoolId).firstOrNull?.remaining;
+
 /// In the print sheet: which lane feeds each tool, with a warning and remap.
-class FilamentCheck extends StatelessWidget {
+class FilamentCheck extends StatefulWidget {
   final Map<String, dynamic> meta;
   final MoonrakerClient client;
   const FilamentCheck({super.key, required this.meta, required this.client});
+  @override
+  State<FilamentCheck> createState() => _FilamentCheckState();
+}
+
+class _FilamentCheckState extends State<FilamentCheck> {
+  Map<String, dynamic> get meta => widget.meta;
+  MoonrakerClient get client => widget.client;
+  late final Future<List<Spool>> _spools = () async {
+    try {
+      return await client.hasSpoolman() ? await client.spools() : <Spool>[];
+    } catch (_) {
+      return <Spool>[];
+    }
+  }();
 
   Future<void> _remap(BuildContext context, ToolNeed n, List<CfsSlot> lanes) async {
     final lane = await showModalBottomSheet<String>(
@@ -503,7 +565,15 @@ class FilamentCheck extends StatelessWidget {
           if (lanes.isEmpty) return const SizedBox.shrink();
           final needs = toolNeeds(meta, lanes);
           if (needs.isEmpty) return const SizedBox.shrink();
-          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          return FutureBuilder<List<Spool>>(
+            future: _spools,
+            builder: (context, sp) => _list(context, needs, lanes, sp.data ?? const []),
+          );
+        },
+      );
+
+  Widget _list(BuildContext context, List<ToolNeed> needs, List<CfsSlot> lanes, List<Spool> spools) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Filament', style: TextStyle(color: C.muted, fontSize: 12)),
             for (final n in needs)
               InkWell(
@@ -521,16 +591,27 @@ class FilamentCheck extends StatelessWidget {
                         backgroundColor: n.lane?.color == null ? C.border : Color(n.lane!.color!)),
                     const SizedBox(width: 6),
                     Text(n.lane == null ? 'no lane' : '${n.lane!.lane} ${n.lane!.empty ? 'empty' : n.lane!.material}'),
-                    if (needMismatch(n)) ...[
+                    if (n.grams != null)
+                      Text(' · ${n.grams!.toStringAsFixed(0)} g'
+                          '${spoolLeft(n, spools) == null ? '' : ' of ${spoolLeft(n, spools)!.round()} g left'}',
+                          style: TextStyle(color: C.muted)),
+                    if (needMismatch(n) || lowSpool(n, spools)) ...[
                       const SizedBox(width: 6),
-                      const Icon(Icons.warning_amber_rounded, size: 16, color: C.warn),
+                      Tooltip(
+                        message: lowSpool(n, spools) ? 'Not enough filament left on this spool' : 'Wrong or no filament',
+                        child: const Icon(Icons.warning_amber_rounded, size: 16, color: C.warn),
+                      ),
                     ],
                   ]),
                 ),
               ),
           ]);
-        },
-      );
+}
+
+/// The spool has less than the print needs (plus 5 g to spare).
+bool lowSpool(ToolNeed n, List<Spool> spools) {
+  final left = spoolLeft(n, spools);
+  return left != null && n.grams != null && left < n.grams! + 5;
 }
 
 /// Printer host health: CPU, memory, storage, versions and any warnings.
@@ -584,6 +665,10 @@ class _HealthPanelState extends State<HealthPanel> {
 }
 
 const _triggers = {
+  'first_layer': 'First layer is done',
+  'progress': 'Print reaches…',
+  'paused': 'Print pauses',
+  'heater_fault': 'Chamber heater faults',
   'complete': 'Print finishes',
   'error': 'Print fails',
   'cancelled': 'Print is cancelled',
@@ -602,6 +687,7 @@ class _RulesPanelState extends State<RulesPanel> {
   late Future<List<Map<String, dynamic>>> _rules = widget.client.rules();
 
   List<(String, String)> _actions(PrinterStatus s) => [
+        ('Send me a picture', '@picture'),
         if (s.raw.containsKey(PrinterStatus.cavityLed)) ('Light off', 'SET_LED LED=cavity_led WHITE=0'),
         if (s.raw.containsKey('output_pin LED')) ('Light off', 'SET_PIN PIN=LED VALUE=0'),
         ('All heaters off', 'TURN_OFF_HEATERS'),
@@ -628,6 +714,10 @@ class _RulesPanelState extends State<RulesPanel> {
       final t = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 22, minute: 0));
       if (t == null || !mounted) return;
       at = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    } else if (on == 'progress') {
+      final p = await askNumber(context, 'At what progress?', presets: const [25, 50, 75, 90], unit: '%');
+      if (p == null || p <= 0 || p > 100 || !mounted) return;
+      at = '$p';
     }
     final acts = _actions(c.status);
     final pick = await showModalBottomSheet<(String, String)>(
@@ -677,7 +767,11 @@ class _RulesPanelState extends State<RulesPanel> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.bolt_rounded),
-                  title: Text('${r['on'] == 'time' ? 'Every day at ${r['at']}' : _triggers[r['on']] ?? r['on']}'
+                  title: Text('${switch (r['on']) {
+                        'time' => 'Every day at ${r['at']}',
+                        'progress' => 'At ${r['at']}%',
+                        final o => _triggers[o] ?? o,
+                      }}'
                       ' → ${r['label'] ?? r['do']}'),
                   trailing: IconButton(
                     tooltip: 'Remove',

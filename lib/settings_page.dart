@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -103,6 +104,45 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// Printers (with their remote codes), presets, favourites and so on.
+  Future<void> _backup() async {
+    if (!await confirm(context, 'Back up settings?',
+            message: 'The file includes your remote access codes. Keep it private.', action: 'Save file') ||
+        !mounted) {
+      return;
+    }
+    try {
+      final saved = await FilePicker.saveFile(
+        fileName: 'printer-hub-backup-${fmtDate(DateTime.now())}.json',
+        bytes: utf8.encode(const JsonEncoder.withIndent('  ').convert(settings.exportAll())),
+      );
+      if (saved != null && mounted) toast(context, 'Backup saved');
+    } catch (e) {
+      if (mounted) toast(context, 'Could not save: $e', error: true);
+    }
+  }
+
+  Future<void> _restore() async {
+    final pick = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['json']);
+    if (pick == null || !mounted) return;
+    final bytes = await pick.readAsBytes();
+    if (!mounted) return;
+    try {
+      final m = jsonDecode(utf8.decode(bytes));
+      if (m is! Map<String, dynamic> || !m.containsKey('printers')) throw 'Not a Printer Hub backup';
+      if (!await confirm(context, 'Restore this backup?',
+              message: 'It replaces your printers and settings. Close and reopen the app afterwards.',
+              action: 'Restore', danger: true) ||
+          !mounted) {
+        return;
+      }
+      await settings.importAll(m);
+      if (mounted) toast(context, 'Restored. Close and reopen the app.');
+    } catch (e) {
+      if (mounted) toast(context, 'Could not restore: $e', error: true);
+    }
   }
 
   Future<void> _import({bool scan = false}) async {
@@ -309,6 +349,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     icon: const Icon(Icons.qr_code_scanner_rounded),
                     label: const Text('Scan to import'),
                   ),
+                OutlinedButton.icon(
+                  onPressed: _backup,
+                  icon: const Icon(Icons.save_alt_rounded),
+                  label: const Text('Back up settings'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _restore,
+                  icon: const Icon(Icons.settings_backup_restore_rounded),
+                  label: const Text('Restore settings'),
+                ),
               ]),
             ),
             gap,

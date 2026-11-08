@@ -11,6 +11,26 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> load() async => _p = await SharedPreferences.getInstance();
 
+  /// Everything, for a backup file.
+  Map<String, Object?> exportAll() => {for (final k in _p.getKeys()) k: _p.get(k)};
+
+  /// Restores a backup made by [exportAll]; unknown value types are skipped.
+  Future<void> importAll(Map<String, dynamic> m) async {
+    for (final e in m.entries) {
+      final v = e.value;
+      if (v is bool) await _p.setBool(e.key, v);
+      if (v is int) await _p.setInt(e.key, v);
+      if (v is double) await _p.setDouble(e.key, v);
+      if (v is String) await _p.setString(e.key, v);
+      if (v is List) await _p.setStringList(e.key, [for (final x in v) '$x']);
+    }
+    notifyListeners();
+  }
+
+  /// Per-printer colour (ARGB) to tell printers apart.
+  int? printerColor(String key) => _p.getInt('printerColor.$key');
+  void setPrinterColor(String key, int c) => _write(() => _p.setInt('printerColor.$key', c));
+
   static const _presetDefaults = {
     'nozzle': [0, 190, 210, 230, 250, 270],
     'bed': [0, 55, 60, 70, 80, 100],
