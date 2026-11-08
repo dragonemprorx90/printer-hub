@@ -225,13 +225,30 @@ class PrinterCameraState extends State<PrinterCamera> {
       ),
     );
 
-    _watchdog = Timer(const Duration(seconds: 10), () {
-      if (_mode == _Mode.probing) {
-        _error = 'The camera answered but sent no video';
-        _set(_Mode.error);
+    _watchdog = Timer(const Duration(seconds: 12), () async {
+      if (_mode != _Mode.probing || !mounted) return;
+      // The camera serves one viewer at a time and can hold on to a session
+      // that just closed, so try again a couple of times before giving up.
+      if (_attempts < 3) {
+        _attempts++;
+        await _teardown();
+        if (mounted) _start();
+        return;
       }
+      _error =
+          'The camera answered but sent no video. '
+          'Close other camera viewers (Creality app, other devices) and retry.';
+      _set(_Mode.error);
     });
   }
+
+  int _attempts = 0;
+
+  /// True once real video (WebRTC) or a first MJPEG frame is showing.
+  bool get isLive =>
+      _mode == _Mode.webrtc || (_mode == _Mode.mjpeg && _frame != null);
+
+  String get debugState => '$_mode ${_error ?? ''}';
 
   Future<void> _teardown() async {
     _watchdog?.cancel();
@@ -253,6 +270,7 @@ class PrinterCameraState extends State<PrinterCamera> {
   Future<void> restart() async {
     await _teardown();
     _error = null;
+    _attempts = 0;
     _start();
   }
 

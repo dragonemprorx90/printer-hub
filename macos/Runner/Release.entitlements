@@ -8,5 +8,9 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- WebRTC camera video arrives as incoming UDP; without this the
+	     printer's camera answers but no frames get through. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
 </dict>
 </plist>
