@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.6.2', [
+    'Add spool: pick a lane and type only the weight. The material and colour come from the lane, and the spool is linked to it.',
+  ]),
   ('1.6.1', [
     'Send a file to another printer from its file sheet, and start it there.',
   ]),

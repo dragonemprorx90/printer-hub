@@ -1083,7 +1083,7 @@ class MoonrakerClient {
   static const _density = {'PLA': 1.24, 'PETG': 1.27, 'ABS': 1.04, 'ASA': 1.07, 'TPU': 1.21, 'PA': 1.14, 'PC': 1.2, 'PVA': 1.23};
 
   /// Adds a spool, reusing the vendor and filament when Spoolman has them.
-  Future<void> addSpool({required String vendor, required String material, required int color, double grams = 1000}) async {
+  Future<int> addSpool({required String vendor, required String material, required int color, double grams = 1000}) async {
     final hex = (color & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
     final vendors = (await _spoolman('GET', '/v1/vendor', null, {'name': vendor})) as List;
     final vendorId = vendors.isNotEmpty
@@ -1102,7 +1102,8 @@ class MoonrakerClient {
             'diameter': 1.75,
             'weight': grams,
           }))['id'];
-    await _spoolman('POST', '/v1/spool', {'filament_id': filId, 'remaining_weight': grams});
+    final spool = await _spoolman('POST', '/v1/spool', {'filament_id': filId, 'remaining_weight': grams});
+    return (spool['id'] as num).toInt();
   }
 
   Future<int?> activeSpool() async {

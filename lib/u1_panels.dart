@@ -266,7 +266,49 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
 
   void _reload() => setState(() => _data = _load());
 
+  /// From a lane: its material and colour are already set, so only the
+  /// weight is asked, and the new spool is linked to that lane.
   Future<void> _add() async {
+    final c = widget.client;
+    final lanes = [
+      for (final b in c.status.cfs)
+        for (final s in b.slots)
+          if (s.lane != null && !s.empty) s,
+    ];
+    if (lanes.isEmpty) return _addManual();
+    final pick = await showModalBottomSheet<Object>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Add the spool in…')),
+          for (final l in lanes)
+            ListTile(
+              leading: CircleAvatar(radius: 12, backgroundColor: Color(l.color!)),
+              title: Text('Lane ${l.label} · ${l.material}'),
+              onTap: () => Navigator.pop(ctx, l),
+            ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Another spool (choose material and colour)'),
+            onTap: () => Navigator.pop(ctx, 'manual'),
+          ),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    if (pick is! CfsSlot) return _addManual();
+    final g = await askNumber(context, 'Filament weight on the spool',
+        presets: const [1000, 750, 500, 250], unit: ' g');
+    if (g == null || g <= 0 || !mounted) return;
+    await run(context, () async {
+      final id = await c.addSpool(
+          vendor: 'Generic', material: pick.material, color: pick.color!, grams: g.toDouble());
+      await c.setLaneSpool(pick.lane!, id);
+    }, done: 'Spool added to lane ${pick.label}');
+    _reload();
+  }
+
+  Future<void> _addManual() async {
     final vendor = TextEditingController(text: 'Generic');
     final grams = TextEditingController(text: '1000');
     var material = 'PLA';
