@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.13.0', [
+    'Orca plugin 1.2: "Use this printer in Orca" loads the matching Orca printer preset (bed size, nozzles), connects it to the printer with Orca\'s own Snapmaker or Creality agent, and sets each filament slot to the loaded material. Then Orca\'s sync button next to Filament loads the colours.',
+  ]),
   ('1.12.1', [
     'Home bridge: the U1 filament data Orca reads now replaces old entries instead of adding duplicates.',
   ]),

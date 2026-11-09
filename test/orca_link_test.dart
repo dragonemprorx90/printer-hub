@@ -60,5 +60,16 @@ void main() {
     final noHeader = await http.post(Uri.parse('http://127.0.0.1:17127/hub/action?printer=x&do=cancel'));
     expect(noHeader.statusCode, 403);
   });
+
+  test('K2 CFS codes are hidden, not shown as materials', () {
+    final s = PrinterStatus()
+      ..applyDelta({
+        'box': {
+          'T1': {'state': 'connect', 'color_value': ['0ff1e1e'], 'material_type': ['000001']},
+        },
+      });
+    expect(hubFilaments(s).single['material'], '');
+    expect(hubFilaments(s).single['color'], '#FF1E1E');
+  });
 }
 

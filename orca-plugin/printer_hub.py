@@ -3,9 +3,9 @@
 #
 # [tool.orcaslicer.plugin]
 # name = "Printer Hub"
-# description = "Your printers beside the 3D view: live status, loaded filaments, light / pause / resume / cancel, and one-click filament colour sync into Orca. Uses the Printer Hub Mac app."
+# description = "Your printers beside the 3D view: live status, loaded filaments, light / pause / resume / cancel, and Use this printer, which loads its Orca printer preset, connection and filaments. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "1.1.0"
+# version = "1.2.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -16,10 +16,11 @@ is contacted). Orca asks once to allow 127.0.0.1.
 - Devices: every printer in Printer Hub with state, progress, temperatures and
   its loaded filaments (U1 lanes, K2 CFS), refreshed every 5 s, also from away.
 - Controls: light, pause, resume, cancel.
-- Sync colours: sets Orca's filament slots to the printer's filaments. Slot 1 =
-  tool T0 and so on. When a slot's preset is the wrong material, it switches to
-  a preset with the right one. Orca keeps colour in the filament *preset*, so
-  two slots sharing one preset share a colour: the panel says when that happens.
+- Use this printer: selects the matching Orca printer preset (bed size, nozzles,
+  extruders), points its connection at the printer with Orca's own agent
+  (Snapmaker for the U1, CrealityPrint for the K2) and sets each filament slot
+  to the loaded material. Then Orca's sync button next to "Filament" loads the
+  exact colours. Orca 2.5's plugin API can't set slot colours itself.
 - Sending prints: add a physical printer in Orca, host type "Octo/Klipper",
   host 127.0.0.1:7126/<printer-name>; Printer Hub uploads and opens print setup.
 """
@@ -84,7 +85,7 @@ PAGE = """
           Math.round(p.progress * 100) + '%"></div></div>' : '') +
         (fil ? '<div class="fil">' + fil + '</div>' : '') +
         '<div class="actions">' +
-          (fil ? '<button onclick="phSync(\\'' + s + '\\')">Sync colours to Orca</button>' : '') +
+          (p.model ? '<button onclick="phSync(\\'' + s + '\\')">Use this printer in Orca</button>' : '') +
           (p.light != null ? '<button onclick="phAct(\\'' + s + '\\',\\'light\\')">Light ' + (p.light ? 'off' : 'on') + '</button>' : '') +
           (p.state === "printing" ? '<button onclick="phAct(\\'' + s + '\\',\\'pause\\')">Pause</button>' : '') +
           (p.state === "paused" ? '<button onclick="phAct(\\'' + s + '\\',\\'resume\\')">Resume</button>' : '') +
@@ -145,31 +146,43 @@ def _preset_for(material, current):
     return current
 
 
-def sync_colours(slug):
+def _printer_preset(model):
+    """The Orca printer preset for this model, preferring a 0.4 nozzle."""
+    words = model.lower().split()
+    names = [n for n in orca.host.preset_bundle().printers.preset_names()
+             if all(w in n.lower() for w in words)]
+    names.sort(key=lambda n: ("0.4" not in n, len(n)))
+    return names[0] if names else None
+
+
+def use_printer(slug):
     """Runs on the Script worker (preset edits are not allowed on the UI thread)."""
     printer = next((p for p in _get("/hub/printers") if p["slug"] == slug), None)
     if printer is None:
         return "That printer is gone from Printer Hub."
+    preset = _printer_preset(printer.get("model", ""))
+    if preset is None:
+        return "Orca has no %s printer preset. Add it in Orca's printer list first." % printer.get("model")
+    host = printer["host"] if printer.get("agent") != "moonraker" else "%s:%s" % (printer["host"], printer["port"])
+    tx = orca.host.preset.printer.begin_update(preset_name=preset)
+    tx.set("print_host", host)
+    tx.set("host_type", printer.get("host_type", "moonraker"))
+    tx.set("printer_agent", printer.get("agent", "moonraker"))
+    tx.commit()
+    # Filament slots: the loaded material (colour comes from Orca's own sync).
     slots = list(orca.host.preset_bundle().current_filament_preset_names())
-    done, notes, colour_of = [], [], {}
+    changed = []
     for f in printer.get("filaments", []):
         slot = f["tool"] + 1
-        if not f.get("material") or not f.get("color"):
+        if not f.get("material") or slot > len(slots):
             continue
-        if slot > len(slots):
-            notes.append("T%d has no Orca slot (add filaments in Orca)" % f["tool"])
-            continue
-        preset = _preset_for(f["material"], slots[slot - 1])
-        tx = orca.host.preset.filament.begin_update(slot_number=slot, preset_name=preset)
-        tx.set("filament_colour", f["color"])
-        tx.commit()
-        if preset in colour_of and colour_of[preset] != f["color"]:
-            notes.append("slots share '%s', so they share a colour" % preset)
-        colour_of[preset] = f["color"]
-        slots[slot - 1] = preset
-        done.append(str(slot))
-    msg = ("Synced slot " + ", ".join(done)) if done else "Nothing to sync"
-    return msg + ("" if not notes else " · " + "; ".join(dict.fromkeys(notes)))
+        want = _preset_for(f["material"], slots[slot - 1])
+        if want and want != slots[slot - 1]:
+            orca.host.preset.filament.begin_update(slot_number=slot, preset_name=want).commit()
+            changed.append(str(slot))
+    return ("Loaded %s, connected to %s." % (preset, host) +
+            (" Filament slot %s set to the loaded material." % ", ".join(changed) if changed else "") +
+            " Now press the sync button next to Filament for the colours.")
 
 
 class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
@@ -196,9 +209,9 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
                 await asyncio.sleep(0.2)
                 continue
             try:
-                text = sync_colours(slug)
+                text = use_printer(slug)
             except Exception as e:  # cancelled dialog, missing preset, Printer Hub closed
-                text = "Sync stopped: %s" % e
+                text = "Stopped: %s" % e
             if self.panel is not None:
                 self.panel.post({"command": "note", "text": text})
         return orca.ExecutionResult.success("Printer Hub closed.")
@@ -210,7 +223,7 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
         if command == "refresh":
             self.panel.post(fetch_printers())
         elif command == "sync":
-            self.panel.post({"command": "note", "text": "Syncing colours…"})
+            self.panel.post({"command": "note", "text": "Loading the printer into Orca…"})
             self.jobs.put(message.get("printer", ""))
         elif command == "action":
             try:

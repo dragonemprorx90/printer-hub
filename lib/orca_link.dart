@@ -44,6 +44,18 @@ Map<String, (String?, Uint8List)> parseMultipart(Uint8List body, String boundary
   return out;
 }
 
+/// What Orca calls this printer: preset model words and its printer agent.
+Map<String, String> orcaModel(MoonrakerClient c) {
+  final s = c.status;
+  if (c.isSnapmaker) return {'model': 'Snapmaker U1', 'agent': 'snapmaker', 'host_type': 'moonraker'};
+  if (s.raw.containsKey('box') || s.raw.containsKey(PrinterStatus.chamberHeaters.first)) {
+    final x = s.axisMax.first;
+    final model = x >= 340 ? 'K2 Plus' : x >= 290 ? 'K2 Pro' : 'K2';
+    return {'model': 'Creality $model', 'agent': 'crealityprint', 'host_type': 'crealityprint'};
+  }
+  return {'model': '', 'agent': 'moonraker', 'host_type': 'moonraker'};
+}
+
 /// Loaded filaments in Orca's slot order: U1 lanes by tool (T0 -> 1), CFS
 /// slots in box order. `tool` is the 0-based Orca filament index.
 List<Map<String, Object?>> hubFilaments(PrinterStatus s) {
@@ -55,7 +67,8 @@ List<Map<String, Object?>> hubFilaments(PrinterStatus s) {
       out.add({
         'tool': tool,
         'label': slot.label,
-        'material': slot.empty ? '' : slot.material,
+        // Creality reports material as a numeric code ("000001"); hide it rather than show a code.
+        'material': slot.empty || RegExp(r'^\d+$').hasMatch(slot.material) ? '' : slot.material,
         'color': slot.color == null
             ? null
             : '#${(slot.color! & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
@@ -157,7 +170,14 @@ class OrcaLink {
       } else if (path == '/hub/printers') {
         json(200, [
           for (final p in printers())
-            {'name': p.name, 'slug': printerSlug(p.name), ..._status(clientFor(p).status)},
+            {
+              'name': p.name,
+              'slug': printerSlug(p.name),
+              'host': p.host,
+              'port': p.port,
+              ...orcaModel(clientFor(p)),
+              ..._status(clientFor(p).status),
+            },
         ]);
       } else {
         json(404, {'error': 'not found'});
