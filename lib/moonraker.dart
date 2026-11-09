@@ -1025,9 +1025,26 @@ class MoonrakerClient {
           'actor': {'kind': 'web', 'id': 'printer-hub'},
           'command': {'name': name, ...fields},
         }));
-    final j = jsonDecode(r.body) as Map<String, dynamic>;
+    final Map<String, dynamic> j;
+    try {
+      j = jsonDecode(r.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw MoonrakerError('Heater did not answer (HTTP ${r.statusCode}): ${r.body.trim()}');
+    }
     if (j['ok'] != true) {
       throw MoonrakerError('Heater refused: ${j['message'] ?? j['error'] ?? r.statusCode}');
+    }
+    // Accepted is not the same as running: say what the heater actually did.
+    final st = j['state'] as Map?;
+    if (name == 'drying_start' && st != null && st['mode'] != 'drying') {
+      final safety = st['safety'] as Map? ?? const {};
+      final why = [
+        'mode ${st['mode']}',
+        if (st['source'] != null) 'controlled by ${st['source']}',
+        if (safety['inhibited'] == true) 'inhibited',
+        if (safety['reason'] != null) '${safety['reason']}',
+      ].join(', ');
+      throw MoonrakerError('Heater accepted but is not drying ($why)');
     }
     return j;
   }

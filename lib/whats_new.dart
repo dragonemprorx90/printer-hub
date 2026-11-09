@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.20.1', [
+    'DragonBreath: if the heater accepts "Dry filament" but doesn\'t start drying, the app now says why (its mode, who controls it, or a safety lock) instead of doing nothing.',
+  ]),
   ('1.20.0', [
     'Faster camera on the Creality K2: the app remembers where the camera is, connects as soon as the first network route is ready, and every view of a printer (preview, fullscreen) shares one live connection that stays warm for 45 seconds, so going back or fullscreen no longer waits for the camera to free up.',
     'Orca plugin: the camera picture now works for the K2 too, taken from the app\'s live camera.',
