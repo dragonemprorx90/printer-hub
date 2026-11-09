@@ -910,14 +910,24 @@ class MoonrakerClient {
     // The K2's Creality Moonraker reports every file as slicer "Unknown" with
     // no details: read them from the file's own header and summary instead.
     if (m['estimated_time'] == null && m['filament_type'] == null && '${m['slicer'] ?? 'Unknown'}' == 'Unknown') {
-      try {
-        final head = await downloadRange(path, 0, 16383);
-        final tail = await _tail(path, 131072);
-        m.addAll(gcodeMeta(latin1.decode(head, allowInvalid: true) + latin1.decode(tail, allowInvalid: true)));
-      } catch (_) {}
+      final key = '$path|${m['modified']}|${m['size']}';
+      final known = _fileMeta[key];
+      if (known != null) {
+        m.addAll(lruPut(_fileMeta, key, () => known, cap: 200));
+      } else {
+        try {
+          final head = await downloadRange(path, 0, 16383);
+          final tail = await _tail(path, 131072);
+          final read = gcodeMeta(latin1.decode(head, allowInvalid: true) + latin1.decode(tail, allowInvalid: true));
+          m.addAll(lruPut(_fileMeta, key, () => read, cap: 200));
+        } catch (_) {}
+      }
     }
     return m;
   }
+
+  /// Details read from files themselves, by path, modified time and size.
+  final _fileMeta = <String, Map<String, dynamic>>{};
 
   /// The last [n] bytes of a file (an HTTP suffix range).
   Future<Uint8List> _tail(String path, int n) async {
@@ -1567,6 +1577,17 @@ class MoonrakerClient {
     _statusCtrl.close();
     _consoleCtrl.close();
   }
+}
+
+/// [key]'s value in [m], made by [make] when missing; keeps only the newest
+/// [cap] entries ([m] must keep insertion order, as Dart's default Map does).
+V lruPut<K, V>(Map<K, V> m, K key, V Function() make, {int cap = 300}) {
+  final v = m.remove(key) ?? make();
+  m[key] = v;
+  while (m.length > cap) {
+    m.remove(m.keys.first);
+  }
+  return v;
 }
 
 /// Moonraker-style metadata read from a G-code's own comments (OrcaSlicer,

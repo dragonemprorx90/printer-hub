@@ -11,8 +11,14 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> load() async => _p = await SharedPreferences.getInstance();
 
-  /// Everything, for a backup file.
-  Map<String, Object?> exportAll() => {for (final k in _p.getKeys()) k: _p.get(k)};
+  /// Sign-ins to model sites: kept on this device, never in a backup file.
+  static const secretKeys = {'models.creality.token', 'models.creality.uid', 'models.thingiverse'};
+
+  /// Everything except [secretKeys], for a backup file.
+  Map<String, Object?> exportAll() => {
+        for (final k in _p.getKeys())
+          if (!secretKeys.contains(k)) k: _p.get(k),
+      };
 
   /// Restores a backup made by [exportAll]; unknown value types are skipped.
   Future<void> importAll(Map<String, dynamic> m) async {

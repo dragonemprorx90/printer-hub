@@ -38,9 +38,13 @@ Future<void> main(List<String> argv) async {
     final hasValue = i + 1 < argv.length && !argv[i + 1].startsWith('--');
     args[a.substring(2)] = hasValue ? argv[++i] : 'true';
   }
+  if (args.containsKey('version')) {
+    stdout.writeln('printer-hub-bridge $kBridgeVersion');
+    return;
+  }
   if (args.containsKey('help')) {
     stdout.writeln('Usage: bridge --relay <url> --printer <ip> [--port 7125] '
-        '[--data <dir>] [--show-code] [--reset]');
+        '[--data <dir>] [--show-code] [--reset] [--version]');
     return;
   }
   final env = Platform.environment;
@@ -123,11 +127,21 @@ Future<void> main(List<String> argv) async {
     log('Alerts are off for this pairing. Run with --reset to get a code with alerts.');
   }
 
-  log('Bridging printer $printer:$port through ${pair.relay}');
+  log('Printer Hub bridge $kBridgeVersion: printer $printer:$port through ${pair.relay}');
   if (camera != null) log('Camera from away: $cameraUrl');
-  await Bridge(pair, await LinkCrypto.forPair(pair), printer, port,
-          camera: camera, slicerPort: int.tryParse(env['SLICER_PORT'] ?? '') ?? 7070)
-      .run();
+  final slicerPort = int.tryParse(env['SLICER_PORT'] ?? '') ?? 7070;
+  unawaited(_logSlicer(slicerPort));
+  await Bridge(pair, await LinkCrypto.forPair(pair), printer, port, camera: camera, slicerPort: slicerPort).run();
+}
+
+/// Says once at start whether slicing from the app will work.
+Future<void> _logSlicer(int port) async {
+  try {
+    final r = await http.get(Uri.parse('http://127.0.0.1:$port/slicer/presets')).timeout(const Duration(seconds: 3));
+    log(r.statusCode == 200 ? 'Slicer: ready on port $port' : 'Slicer: answered HTTP ${r.statusCode} on port $port');
+  } catch (_) {
+    log('Slicer: not running (optional; add slicer to COMPOSE_PROFILES to slice from the app)');
+  }
 }
 
 /// Reads a home camera (MJPEG stream or JPEG snapshot URL) only while a
@@ -385,6 +399,7 @@ class Alerts {
           await send('$_title: print finished', file,
               tags: ['white_check_mark'], priority: 4, jpeg: await _keep('end'));
           unawaited(_checkSpools());
+          unawaited(_prune());
         case 'error':
           await send('$_title: print failed', note.isEmpty ? file : note,
               tags: ['warning'], priority: 5, jpeg: await _keep('end'));
@@ -627,6 +642,22 @@ extension on Alerts {
     }
   }
 
+  /// Deletes old snapshots (see [snapshotsToPrune]); run after each print.
+  Future<void> _prune() async {
+    const dir = '.printer-hub/snapshots';
+    try {
+      final r = await _client.get(Uri.parse('http://$host:$port/server/files/directory?path=gcodes/$dir'));
+      final files = [for (final f in (jsonDecode(r.body)['result']?['files'] as List? ?? const [])) '${f['filename']}'];
+      final old = snapshotsToPrune(files, DateTime.now());
+      for (final n in old) {
+        await _client.delete(Uri.parse('http://$host:$port/server/files/gcodes/$dir/${Uri.encodeComponent(n)}'));
+      }
+      if (old.isNotEmpty) log('Removed ${old.length} old snapshots');
+    } catch (e) {
+      log('Snapshot cleanup skipped: $e');
+    }
+  }
+
   bool get _filterOn => _sent.contains('filter_on');
 
   Future<void> _setFilter(bool on) async {
@@ -653,6 +684,24 @@ extension on Alerts {
       }
     } catch (_) {}
   }
+}
+
+/// Set at build time (dart compile exe -DVERSION=1.23.0).
+const kBridgeVersion = String.fromEnvironment('VERSION', defaultValue: 'dev');
+
+/// Snapshot files to delete: older than [maxAge] (by the print start in the
+/// name), or past the newest [keep]. Names without a time are left alone.
+List<String> snapshotsToPrune(Iterable<String> names, DateTime now,
+    {int keep = 3000, Duration maxAge = const Duration(days: 180)}) {
+  final dated = <(String, int)>[
+    for (final n in names)
+      if (RegExp(r'__(\d+)__').firstMatch(n) case final m?) (n, int.parse(m[1]!)),
+  ]..sort((a, b) => b.$2.compareTo(a.$2));
+  final oldest = now.subtract(maxAge).millisecondsSinceEpoch ~/ 1000;
+  return [
+    for (var i = 0; i < dated.length; i++)
+      if (i >= keep || dated[i].$2 < oldest) dated[i].$1,
+  ];
 }
 
 /// "cube.gcode" started at t, kind "first" -> "cube__1794164593__first.jpg".

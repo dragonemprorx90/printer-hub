@@ -481,8 +481,16 @@ class _FilesTabState extends State<FilesTab> {
             ? ListView(children: [
                 const SizedBox(height: 56),
                 StateView.empty(
-                    _favOnly ? Icons.star_outline_rounded : Icons.folder_open_rounded,
-                    _favOnly ? 'No favourite files yet' : 'No files here'),
+                  _favOnly ? Icons.star_outline_rounded : Icons.folder_open_rounded,
+                  _favOnly ? 'No favourite files yet' : 'No files here',
+                  action: _favOnly
+                      ? null
+                      : FilledButton.tonalIcon(
+                          onPressed: _findModels,
+                          icon: const Icon(Icons.travel_explore_rounded),
+                          label: const Text('Find models online'),
+                        ),
+                ),
               ])
             : ListView.separated(
                 key: ValueKey(_path), // new folder: rows replay their entrance
@@ -875,6 +883,11 @@ class _FileSheetState extends State<_FileSheet> {
               return Wrap(spacing: 28, runSpacing: 12, children: [
                 StatTile(label: 'Est. time', value: fmtDuration(m['estimated_time'] as num?)),
                 StatTile(label: 'Filament', value: fmtFilament((m['filament_total'] as num?) ?? 0)),
+                StatTile(
+                    label: 'Weight',
+                    value: m['filament_weight_total'] is num
+                        ? '${(m['filament_weight_total'] as num).toStringAsFixed(1)} g'
+                        : '—'),
                 StatTile(
                     label: 'Layer height',
                     value: m['layer_height'] != null ? '${m['layer_height']} mm' : '—'),

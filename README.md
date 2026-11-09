@@ -47,6 +47,8 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
    ```
    Paste the pairing code it prints into **Edit printer → Remote access code**.
 
+3. **Find models (optional)**: in **Files**, tap the globe to search Printables, Creality Cloud and Thingiverse, or browse MakerWorld. Ready files print straight away, and models are sliced on your home bridge.
+
 Every option (NAS web UIs, Docker Desktop, without Docker, alerts, OrcaSlicer, slicing from the app, troubleshooting) is in **[docs/SETUP.md](docs/SETUP.md)**.
 
 ## How it works

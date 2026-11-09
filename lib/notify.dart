@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -52,6 +53,18 @@ Future<void> notify(String title, String body) async {
   );
 }
 
+/// Mid-print alerts not yet sent for this print: 'first' once the second
+/// layer starts, 'almost' once about 10 minutes are left. [sent] carries
+/// what was already sent for the same file.
+@visibleForTesting
+Set<String> milestones({required String state, int? layer, double? eta, required Set<String> sent}) {
+  if (state != 'printing') return const {};
+  return {
+    if (layer != null && layer >= 2 && !sent.contains('first')) 'first',
+    if (eta != null && eta > 0 && eta <= 600 && !sent.contains('almost')) 'almost',
+  };
+}
+
 /// Turns printer state changes into notifications and keeps the macOS
 /// menu-bar status current. Safe to call repeatedly for the same printer.
 ///
@@ -60,11 +73,28 @@ Future<void> notify(String title, String body) async {
 /// server-side relay; add one only if that becomes a real need.
 void watchPrinter(Printer p, MoonrakerClient c) {
   if (!_watched.add(p.key)) return;
-  String? last;
+  String? last, milestoneFile;
+  var sent = <String>{};
   final humidityAlerted = <String, DateTime>{};
   c.stream.listen((s) {
     if (!s.online) return;
     final state = s.state, file = s.filename ?? '';
+    if (file != milestoneFile) {
+      milestoneFile = file;
+      // Joining a print already past these points shouldn't alert.
+      sent = {
+        if ((s.currentLayer ?? 0) >= 2) 'first',
+        if (s.eta != null && s.eta! <= 600) 'almost',
+      };
+    }
+    for (final m in milestones(state: state, layer: s.currentLayer, eta: s.eta, sent: sent)) {
+      sent.add(m);
+      if (m == 'first' && settings.flag('notifyFirstLayer')) {
+        notify('${p.name}: first layer done', 'Have a look before it goes on: $file');
+      } else if (m == 'almost' && settings.flag('notifyAlmost')) {
+        notify('${p.name}: almost done', 'About 10 minutes left on $file');
+      }
+    }
     if (last != null && state != last) {
       if ((state == 'complete' || state == 'error' || state == 'paused') &&
           settings.flag('feedback')) {

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'main.dart' show orcaLink;
+import 'models_page.dart' show CrealitySource;
 import 'moonraker.dart';
 import 'orca_link.dart';
 import 'scan.dart';
@@ -251,6 +252,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('notifyDone', 'Print finished'),
                   ('notifyError', 'Print failed or cancelled'),
                   ('notifyPause', 'Print paused (e.g. filament run-out)'),
+                  ('notifyFirstLayer', 'First layer done'),
+                  ('notifyAlmost', 'Almost done (about 10 minutes left)'),
                   ('notifyHumidity', 'CFS humidity too high'),
                   ('feedback', 'Vibrate and sound while the app is open'),
                 ])
@@ -283,6 +286,41 @@ class _SettingsPageState extends State<SettingsPage> {
                   'The system may ask you to allow notifications the first time.',
                   style: TextStyle(color: C.muted, fontSize: 12),
                 ),
+              ]),
+            ),
+            gap,
+            Panel(
+              title: 'Model sites',
+              icon: Icons.travel_explore_rounded,
+              child: Column(children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Creality Cloud'),
+                  subtitle: Text(CrealitySource.signedIn ? 'Signed in on this device' : 'Not signed in'),
+                  trailing: CrealitySource.signedIn
+                      ? TextButton(
+                          onPressed: () async {
+                            await CrealitySource.signOut();
+                            _refresh();
+                          },
+                          child: const Text('Sign out'))
+                      : null,
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Thingiverse'),
+                  subtitle: Text(settings.text('models.thingiverse').isEmpty ? 'No app token' : 'App token saved'),
+                  trailing: settings.text('models.thingiverse').isEmpty
+                      ? null
+                      : TextButton(
+                          onPressed: () {
+                            settings.setText('models.thingiverse', '');
+                            _refresh();
+                          },
+                          child: const Text('Remove')),
+                ),
+                Text('Sign-ins stay on this device and are left out of settings backups.',
+                    style: TextStyle(color: C.muted, fontSize: 12)),
               ]),
             ),
             gap,

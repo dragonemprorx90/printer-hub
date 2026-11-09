@@ -143,7 +143,8 @@ class _WallTile extends StatelessWidget {
                   const Spacer(),
                   if (active)
                     Text(
-                      '${(s.progress * 100).toStringAsFixed(0)}% · ${fmtDuration(s.eta)} left',
+                      '${(s.progress * 100).toStringAsFixed(0)}% · ${fmtDuration(s.eta)} left'
+                      '${s.eta == null ? '' : ' · done ${fmtTime(DateTime.now().add(Duration(seconds: s.eta!.round())))}'}',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                 ]),

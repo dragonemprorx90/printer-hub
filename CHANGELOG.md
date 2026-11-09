@@ -3,7 +3,17 @@
 Every release of Printer Hub (app, home bridge, relay and Orca plugin ship together).
 Downloads: [GitHub releases](https://github.com/dragonemprorx90/printer-hub/releases).
 
-## 1.22.0 — unreleased
+## 1.23.0 — unreleased
+
+- New alerts: "first layer done" (check it before walking away) and "almost done" (about 10 minutes left). Both are in Settings → Notifications.
+- Console: ↑/↓ recall earlier commands (with a Recent list on iPhone), and a button copies the whole output.
+- Find models: sign out of Creality Cloud, open a model on its website, a picture counter, pull to refresh, remembered searches per site, and a question before downloading files over 100 MB. Clearer messages when you're offline or a site is slow.
+- Files: a weight stat on each file, K2 file details load once and then open instantly, and an empty folder offers Find models.
+- Settings → Model sites shows and clears your Creality Cloud sign-in and Thingiverse token. Settings backups no longer include them.
+- History: a job printed from several spools is priced at their average, and the CSV export has a grams column. The wall view shows when each print will finish.
+- Home bridge: removes camera snapshots older than 180 days (or beyond the newest 3000), says at start whether slicing is ready, and has --version.
+
+## 1.22.0 — 2026-11-09
 
 - Find models online: Files → the globe button searches Printables, Creality Cloud and Thingiverse, or browses MakerWorld. G-code or a 3MF already sliced for your K2 Plus or U1 goes straight to the printer; anything else is sliced on your home bridge first.
 - Creality Cloud downloads use your account: sign in once on Creality's own page inside the app. Thingiverse needs a free app token from thingiverse.com/developers.

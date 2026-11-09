@@ -63,5 +63,12 @@ void main() {
     expect(d['T1'], {'lane': '1', 'name': 'E1', 'color': '#F8F81C', 'material': 'PLA', 'spool_id': 4});
     expect(d['T0'], {'lane': '0', 'name': 'E0', 'color': '', 'material': ''});
   });
-}
 
+  test('old snapshots are pruned by age and count, undated names kept', () {
+    final now = DateTime.utc(2026, 11, 9);
+    int t(int daysAgo) => now.subtract(Duration(days: daysAgo)).millisecondsSinceEpoch ~/ 1000;
+    final names = ['a__${t(1)}__end.jpg', 'b__${t(200)}__first.jpg', 'c__${t(2)}__t1.jpg', 'notes.txt'];
+    expect(snapshotsToPrune(names, now), ['b__${t(200)}__first.jpg']);
+    expect(snapshotsToPrune(names, now, keep: 1), ['c__${t(2)}__t1.jpg', 'b__${t(200)}__first.jpg']);
+  });
+}

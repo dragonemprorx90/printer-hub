@@ -17,6 +17,10 @@ docker compose down && docker compose run --rm bridge --reset --show-code && doc
 
 Since 1.18 the Mac app runs without Apple's app sandbox, so it can install its own updates. Updates are downloaded only from this repository's GitHub releases over HTTPS.
 
+## Model sites
+
+Printer Hub keeps your Creality Cloud session token and your Thingiverse app token on the device only. They are left out of the settings backup file. Settings → Model sites signs out of Creality Cloud and removes the Thingiverse token. Creality Cloud sign-in happens on Creality's own page inside the app, so your password goes only to Creality. MakerWorld is shown as its own website, and its sign-in stays inside that web view.
+
 ## Reporting a problem
 
 Please report vulnerabilities privately through GitHub's **Report a vulnerability** button (Security tab), not in a public issue. Include the version and steps to reproduce.

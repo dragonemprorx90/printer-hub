@@ -77,4 +77,10 @@ void main() {
     final dl = seen.firstWhere((r) => r.url.path.endsWith('3mfDownload'));
     expect([dl.headers['__CXY_TOKEN_'], dl.headers['__CXY_UID_']], ['t', 'u']);
   });
+
+  test('model summaries become plain text', () {
+    expect(plainText('<p>Fits <b>M3</b> &amp; M4 screws&nbsp;&lt;5&nbsp;mm&gt;</p><p>Tom&#39;s &quot;remix&quot;&#33;</p>'),
+        'Fits M3 & M4 screws <5 mm>\nTom\'s "remix"!');
+    expect(plainText('  '), '');
+  });
 }

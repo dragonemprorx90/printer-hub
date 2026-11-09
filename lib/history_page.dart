@@ -48,6 +48,13 @@ double jobCost(PrintJob j) {
   return material + energy;
 }
 
+/// Price per kg for a job printed from [spools]: their average.
+/// ponytail: averaged, not weighted by how much each spool gave.
+double? spoolPrice(List<Spool> spools) {
+  final p = spools.map((s) => s.pricePerKg).nonNulls.toList();
+  return p.isEmpty ? null : p.reduce((a, b) => a + b) / p.length;
+}
+
 String money(double v) => '${settings.text('currency', '\$')}${v.toStringAsFixed(2)}';
 
 String _csvCell(Object? v) {
@@ -58,7 +65,7 @@ String _csvCell(Object? v) {
 /// History as CSV (one row per job).
 String historyCsv(List<PrintJob> jobs) {
   final rows = [
-    ['file', 'status', 'started', 'duration_s', 'filament_mm', 'material', 'est_cost'],
+    ['file', 'status', 'started', 'duration_s', 'filament_mm', 'filament_g', 'material', 'est_cost'],
     for (final j in jobs)
       [
         j.filename,
@@ -66,6 +73,9 @@ String historyCsv(List<PrintJob> jobs) {
         j.start.toIso8601String(),
         j.duration.round(),
         j.filament.round(),
+        filamentGrams(j.filament,
+                diameter: settings.number('filamentDiameter', 1.75), density: settings.number('filamentDensity', 1.24))
+            .toStringAsFixed(1),
         j.material ?? '',
         jobCost(j).toStringAsFixed(2),
       ],
@@ -331,8 +341,7 @@ class _JobTile extends StatelessWidget {
     if (files.isEmpty && spools.isEmpty) {
       return toast(context, 'No pictures for this print (the home bridge takes them when it has a camera)');
     }
-    // ponytail: one spool's price for the whole job; multi-spool jobs use the first.
-    final price = spools.map((s) => s.pricePerKg).nonNulls.firstOrNull;
+    final price = spoolPrice(spools);
     final grams = filamentGrams(job.filament,
         diameter: settings.number('filamentDiameter', 1.75),
         density: settings.number('filamentDensity', 1.24));

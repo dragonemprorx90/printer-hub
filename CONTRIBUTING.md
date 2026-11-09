@@ -7,8 +7,13 @@ Bug reports, printer-compatibility notes and pull requests are welcome.
 ```bash
 flutter analyze lib test
 flutter test
+(cd bridge && dart pub get && dart analyze --fatal-infos && dart test)
+(cd packages/hub_link && dart pub get && dart test)
+python3 slicer/test_server.py   # needs OrcaSlicer (Mac app or the slicer image); add gmsh to test STEP
 python3 -c 'import ast; ast.parse(open("orca-plugin/printer_hub.py").read())'
 ```
+
+CI runs the slicer test inside its Docker image on every change to `slicer/`.
 
 - UI changes follow [docs/designs/ui-style.md](docs/designs/ui-style.md): tokens `R` (radius), `T` (type), `M` (motion) and `C` (colour) in `lib/ui.dart`, and `StateView` for empty and error states.
 - Keep the app's `/hub/*` API (used by the Orca plugin) backwards compatible.

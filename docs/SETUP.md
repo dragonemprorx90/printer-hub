@@ -149,6 +149,9 @@ docker compose pull && docker compose up -d
 | Camera from away is black (K1/K2) | `.env` needs both `COMPOSE_PROFILES=creality` and the `CAMERA_URL` line. Check `docker compose logs go2rtc`. |
 | App says the bridge is offline | `docker compose logs bridge`. Check that `RELAY_URL` is your own relay and that the NAS can reach the internet. |
 | "The slicer isn't running on your home bridge" | Update the bridge (`docker compose pull && docker compose up -d`) and add `slicer` to `COMPOSE_PROFILES`. Check `docker compose logs slicer`. |
+| Find models: Creality download asks you to sign in again | Creality ended the session. Sign in again on its page in the app (Settings → Model sites shows the state). |
+| Find models: "Thingiverse refused the token" | Create a new app at thingiverse.com/developers, then use the key button in Find models → Thingiverse to paste its App Token. |
+| MakerWorld: tapping Download does nothing | Sign in to MakerWorld on its page first. Printer Hub catches 3MF, STL and STEP downloads only. |
 | Lost the pairing code | `docker compose run --rm bridge --show-code` |
 | Mac update didn't install | Printer Hub must live in Applications, and your user must be allowed to change it (admin). Otherwise the app opens the download. |
 

@@ -40,7 +40,10 @@ class Thumbs {
   static final _waiting = <Completer<void>>[];
 
   static Future<Uint8List?> of(MoonrakerClient c, String path) =>
-      _cache.putIfAbsent('${c.host}|$path', () => _load(c, path));
+      lruPut(_cache, '${c.host}|$path', () => _load(c, path), cap: 300);
+
+  @visibleForTesting
+  static int get cached => _cache.length;
 
   static Future<Uint8List?> _load(MoonrakerClient c, String path) async {
     // ponytail: at most 4 downloads in flight so a long list doesn't flood
