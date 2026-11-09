@@ -5,7 +5,7 @@
 # name = "Printer Hub"
 # description = "Your printers beside the 3D view: live status, loaded filaments, light / pause / resume / cancel, and Use this printer, which loads its Orca printer preset, connection and filaments. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "1.3.0"
+# version = "1.4.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -167,8 +167,13 @@ def use_printer(slug):
     # Printer Hub's local Moonraker for this printer: reaches it at home and,
     # through the home bridge, from anywhere.
     host = printer.get("proxy") or "%s:%s" % (printer["host"], printer["port"])
+    ip, _, port = host.partition(":")
     tx = orca.host.preset.printer.begin_update(preset_name=preset)
-    tx.set("print_host", host)
+    # The port goes in printhost_port: Orca's Creality agent drops a port
+    # written into print_host and falls back to 80, and printhost_port wins
+    # over an inline port anyway.
+    tx.set("print_host", ip)
+    tx.set("printhost_port", port)
     tx.set("host_type", printer.get("host_type", "moonraker"))
     tx.set("printer_agent", printer.get("agent", "moonraker"))
     tx.commit()

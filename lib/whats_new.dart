@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.14.2', [
+    'Orca plugin 1.4: fixes the K2 not syncing in Orca (Orca used port 80 instead of Printer Hub\'s). Save the plugin again, then press "Use this printer in Orca" once more.',
+  ]),
   ('1.14.1', [
     'Fix: Orca could reach the wrong printer (the K2 got the U1\'s colours). Each printer now keeps its own local Orca address for good. Press "Use this printer in Orca" once more for each printer.',
   ]),
