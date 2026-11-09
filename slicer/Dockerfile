@@ -1,7 +1,8 @@
 # Printer Hub slicer: OrcaSlicer's command line for the home bridge.
 # Published as ghcr.io/<owner>/printer-hub-slicer for amd64 and arm64.
 #   docker build -t printer-hub-slicer slicer
-FROM ubuntu:24.04
+# Debian 13: Orca 2.5's AppImage links FFmpeg 7 (libav*.so.61), which Ubuntu 24.04 lacks.
+FROM debian:trixie-slim
 ARG TARGETARCH=amd64
 ARG ORCA_VERSION=2.5.0
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,7 +10,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl python3 python3-gmsh xvfb xauth \
       libgtk-3-0t64 libwebkit2gtk-4.1-0 libgl1 libegl1 libglu1-mesa libosmesa6 \
-      libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libsecret-1-0 \
+      libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libsecret-1-0 libmspack0t64 \
+      libavformat61 libavcodec61 libswscale8 libavutil59 \
  && rm -rf /var/lib/apt/lists/*
 # The AppImage, unpacked (no FUSE in containers).
 RUN arch=$([ "$TARGETARCH" = arm64 ] && echo _aarch64 || true) \
