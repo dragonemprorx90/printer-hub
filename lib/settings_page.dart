@@ -398,7 +398,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     'host type "Octo/Klipper", hostname 127.0.0.1:$kOrcaPort. To skip the printer question, '
                     'add its name: 127.0.0.1:$kOrcaPort/${widget.printers.isEmpty ? 'printer-name' : printerSlug(widget.printers.first.name)}\n'
                     '2. Slice and press Print or Send. Printer Hub uploads it (at home or from away) and opens print setup.\n'
-                    '3. Optional, Orca 2.5+: save the plugin below and install it in Orca\'s Plugins dialog for a live printer panel.',
+                    '3. Orca 2.5+: save the plugin below and install it in Orca\'s Plugins dialog for a live printer panel. '
+                    'For filament colours, set the Orca printer\'s host to 127.0.0.1 with the port shown on its card, then use Orca\'s Filament sync.',
                     style: TextStyle(color: C.muted, fontSize: 13),
                   ),
                   const SizedBox(height: 8),

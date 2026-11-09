@@ -6,6 +6,10 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.15.0', [
+    'Orca plugin 2.0: opens by itself when Orca starts; after closing it, click "Open Printer Hub" in Orca\'s notification to bring it back.',
+    'Removed "Use this printer in Orca". Each printer card shows its Orca connection (127.0.0.1 and port) to enter once; Orca\'s own Filament sync then loads the colours.',
+  ]),
   ('1.14.2', [
     'Orca plugin 1.4: fixes the K2 not syncing in Orca (Orca used port 80 instead of Printer Hub\'s). Save the plugin again, then press "Use this printer in Orca" once more.',
   ]),
