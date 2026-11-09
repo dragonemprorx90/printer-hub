@@ -172,7 +172,8 @@ class _FilesTabState extends State<FilesTab> {
     final files = await showSliceDialog(context, c, name, bytes, folder: _path);
     if (files == null || files.isEmpty || !mounted) return;
     _all = null;
-    await _load();
+    // Moonraker reads the new file's time and filament a moment after upload.
+    await Future.wait([_load(), c.metadataWhenReady(files.first)]);
     if (!mounted) return;
     final f = _files?.where((f) => f.path == files.first).firstOrNull;
     if (f != null) _openFile(f);
