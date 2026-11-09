@@ -1,0 +1,32 @@
+# Printer Hub home bridge: reach your printer from anywhere, plus print alerts.
+# Runs on anything with Docker: a NAS, a Raspberry Pi (64-bit OS), or a PC.
+#
+#   1. Copy .env.example to .env and fill it in (or run install.sh).
+#   2. docker compose up -d
+#   3. docker compose run --rm bridge --show-code   → pairing code for the app
+#
+# One bridge per printer: copy this folder (with its own .env and data/).
+services:
+  bridge:
+    image: ghcr.io/dragonemprorx90/printer-hub-bridge:${BRIDGE_VERSION:-latest}
+    restart: unless-stopped
+    network_mode: host        # reach the printer on your LAN
+    env_file: .env
+    volumes:
+      - ./data:/data          # keeps the pairing across restarts and updates
+
+  # Only for Creality K1 / K2 (WebRTC-only cameras): turns the camera into
+  # MJPEG for the bridge, and only while a phone away from home is watching.
+  # Turned on by COMPOSE_PROFILES=creality in .env.
+  go2rtc:
+    profiles: [creality]
+    image: alexxit/go2rtc:1.9.15
+    restart: unless-stopped
+    network_mode: host
+    # The 30 s ffmpeg timeout covers the K2's ~6 s WebRTC start.
+    command: >-
+      go2rtc -c '{api: {listen: "127.0.0.1:1984"}, rtsp: {listen: "127.0.0.1:8554"},
+      webrtc: {listen: ""},
+      ffmpeg: {rtsp: "-fflags nobuffer -flags low_delay -timeout 30000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}"},
+      streams: {cam: "webrtc:http://${PRINTER_HOST}:8000/call/webrtc_local#format=creality",
+      cam_jpeg: "ffmpeg:cam#video=mjpeg#raw=-vf fps=3,scale=1280:-2 -q:v 5"}}'

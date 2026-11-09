@@ -201,8 +201,10 @@ class _OverviewTabState extends State<OverviewTab> {
   MoonrakerClient get c => widget.client;
 
   Future<void> _fullscreen() async {
-    // One video session at a time: the K2's camera may refuse a second.
-    await _cam.currentState?.stop();
+    // At home both views share one WebRTC session (RtcCamera), so the
+    // preview keeps running. Away, don't pull relay frames twice.
+    final away = c.viaRelay;
+    if (away) await _cam.currentState?.stop();
     if (!mounted) return;
     await Navigator.push(
       context,
@@ -214,7 +216,7 @@ class _OverviewTabState extends State<OverviewTab> {
             title: widget.printer.name),
       ),
     );
-    _cam.currentState?.restart();
+    if (away) _cam.currentState?.restart();
   }
 
   Future<void> _snapshot() async {

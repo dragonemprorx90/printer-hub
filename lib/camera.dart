@@ -50,6 +50,193 @@ String completeAnswer(String offer, String answer) {
 /// "webrtc" in it is camera-streamer's (Snapmaker U1, many Klipper printers).
 bool isCrealitySignal(String url) => url.contains('/call/webrtc');
 
+/// Camera URL per printer host, found once per app run. Probing the K2's
+/// :8000 endpoint can take seconds, so later opens skip it.
+final _detected = <String, String?>{};
+
+/// The camera to use for [client]: [typed] if set, else Creality's WebRTC
+/// signalling on :8000, else the first webcam Moonraker knows. Null = none.
+Future<String?> detectCamera(MoonrakerClient client, String? typed) async {
+  if (typed != null && typed.isNotEmpty) return typed;
+  final host = client.host;
+  if (_detected.containsKey(host)) return _detected[host];
+  final creality = 'http://$host:8000/call/webrtc_local';
+  // Both probes at once; Creality wins when it answers.
+  final cams = client.webcams().then<List<String>?>((v) => v).catchError((_) => null);
+  try {
+    final r = await http.get(Uri.parse(creality)).timeout(const Duration(seconds: 3));
+    if (r.statusCode == 200) return _detected[host] = creality;
+  } catch (_) {}
+  final list = await cams;
+  if (list == null) return null; // Moonraker unreachable: don't cache
+  return _detected[host] = list.isEmpty ? null : list.first;
+}
+
+/// One WebRTC connection per camera, shared by every view of it and by the
+/// Orca panel's snapshot, and kept [linger] after the last user leaves.
+/// Creality cameras serve one viewer and refuse a new one for ~30 s after a
+/// session ends, so reopening a page or going fullscreen reuses this.
+class RtcCamera {
+  static final _all = <String, RtcCamera>{};
+  static const linger = Duration(seconds: 45);
+
+  final String url;
+
+  /// The video stream once it arrives; back to null if the session drops.
+  final stream = ValueNotifier<MediaStream?>(null);
+  late final Future<void> ready;
+  RTCPeerConnection? _pc;
+  int _users = 0;
+  Timer? _linger;
+  bool _closed = false;
+
+  RtcCamera._(this.url) {
+    ready = _connect();
+    ready.catchError((_) => close()); // a failed session is never reused
+  }
+
+  static RtcCamera acquire(String url) {
+    final c = _all.putIfAbsent(url, () => RtcCamera._(url));
+    c._users++;
+    c._linger?.cancel();
+    return c;
+  }
+
+  void release() {
+    if (--_users > 0 || _closed) return;
+    _linger = Timer(linger, close);
+  }
+
+  /// Ends the connection now; the next [acquire] starts a fresh one.
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    _linger?.cancel();
+    if (identical(_all[url], this)) _all.remove(url);
+    stream.value = null;
+    await _pc?.close();
+    _pc = null;
+  }
+
+  Future<void> _connect() async {
+    final pc = await createPeerConnection({'iceServers': [], 'sdpSemantics': 'unified-plan'});
+    if (_closed) return pc.close();
+    _pc = pc;
+    pc.onTrack = (e) {
+      if (e.track.kind == 'video' && e.streams.isNotEmpty && !_closed) stream.value = e.streams.first;
+    };
+    pc.onConnectionState = (st) {
+      if (st == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+          st == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+        close();
+      }
+    };
+    // LAN only: host candidates come at once. Send the offer/answer shortly
+    // after the first one instead of waiting for gathering to "complete",
+    // which can take seconds with several network interfaces.
+    final gathered = Completer<void>();
+    void done() => gathered.isCompleted ? null : gathered.complete();
+    pc.onIceCandidate = (_) => Timer(const Duration(milliseconds: 250), done);
+    pc.onIceGatheringState = (s) {
+      if (s == RTCIceGatheringState.RTCIceGatheringStateComplete) done();
+    };
+    final g = gathered.future.timeout(const Duration(seconds: 2), onTimeout: () {});
+    if (isCrealitySignal(url)) {
+      await _crealitySignal(pc, url, g);
+    } else {
+      await _cameraStreamerSignal(pc, url, g);
+    }
+  }
+
+  /// One still frame (PNG) from the live stream, waiting up to [wait] for
+  /// the first decoded frame.
+  Future<Uint8List> frame({Duration wait = const Duration(seconds: 8)}) async {
+    await ready;
+    final until = DateTime.now().add(wait);
+    while (true) {
+      final track = stream.value?.getVideoTracks().firstOrNull;
+      if (track != null) {
+        try {
+          final b = (await track.captureFrame()).asUint8List();
+          if (b.length > 1000) return b; // not a blank first frame
+        } catch (_) {}
+      }
+      if (DateTime.now().isAfter(until)) throw 'The camera sent no picture';
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+  }
+}
+
+/// Creality: POST our SDP offer as base64(JSON), receive the answer the
+/// same way.
+Future<void> _crealitySignal(
+  RTCPeerConnection pc,
+  String signalUrl,
+  Future<void> gathered,
+) async {
+  await pc.addTransceiver(
+    kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+    init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+  );
+
+  await pc.setLocalDescription(await pc.createOffer());
+  // Host candidates arrive almost instantly on a LAN.
+  await gathered.timeout(const Duration(seconds: 2), onTimeout: () {});
+  final local = await pc.getLocalDescription();
+
+  final body = base64.encode(
+    utf8.encode(jsonEncode({'type': 'offer', 'sdp': local!.sdp})),
+  );
+  final r = await http
+      .post(
+        Uri.parse(signalUrl),
+        headers: {'Content-Type': 'plain/text'},
+        body: body,
+      )
+      .timeout(const Duration(seconds: 8));
+  final txt = r.body.trim();
+  final answer = jsonDecode(
+    txt.startsWith('{') ? txt : utf8.decode(base64.decode(txt)),
+  );
+  await pc.setRemoteDescription(
+    RTCSessionDescription(
+      completeAnswer(local.sdp!, '${answer['sdp']}'),
+      '${answer['type']}',
+    ),
+  );
+}
+
+/// camera-streamer: the camera offers (JSON), we answer with its session
+/// id. With keepAlive it pings over a data channel and wants pongs.
+Future<void> _cameraStreamerSignal(
+  RTCPeerConnection pc,
+  String signalUrl,
+  Future<void> gathered,
+) async {
+  pc.onDataChannel = (ch) =>
+      ch.onMessage = (_) => ch.send(RTCDataChannelMessage('pong'));
+  Future<Map> post(Map body) async {
+    final r = await http
+        .post(
+          Uri.parse(signalUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 8));
+    if (r.statusCode >= 300) throw 'Camera returned HTTP ${r.statusCode}';
+    return r.body.trim().isEmpty ? const {} : jsonDecode(r.body) as Map;
+  }
+
+  final offer = await post({'type': 'request', 'keepAlive': true});
+  await pc.setRemoteDescription(
+    RTCSessionDescription('${offer['sdp']}', '${offer['type']}'),
+  );
+  await pc.setLocalDescription(await pc.createAnswer());
+  await gathered.timeout(const Duration(seconds: 2), onTimeout: () {});
+  final local = await pc.getLocalDescription();
+  await post({'type': 'answer', 'id': offer['id'], 'sdp': local!.sdp});
+}
+
 /// Live camera. Picks the transport by itself:
 ///  * away from home: JPEG frames from the home bridge through the relay,
 ///  * a camera URL the user typed (MJPEG, or a WebRTC signalling URL),
@@ -74,7 +261,6 @@ class PrinterCamera extends StatefulWidget {
 class PrinterCameraState extends State<PrinterCamera> {
   _Mode _mode = _Mode.probing;
   String? _error;
-  RTCPeerConnection? _pc;
   RTCVideoRenderer? _renderer;
   Timer? _watchdog;
   http.Client? _mjpegClient;
@@ -94,7 +280,7 @@ class PrinterCameraState extends State<PrinterCamera> {
     _set(_Mode.probing);
     try {
       if (widget.client.viaRelay) return await _startRelay();
-      final url = widget.cameraUrl ?? await _detect();
+      final url = await detectCamera(widget.client, widget.cameraUrl);
       if (url == null) return _set(_Mode.none);
       if (url.contains('webrtc')) {
         await _startWebRtc(url);
@@ -134,22 +320,6 @@ class PrinterCameraState extends State<PrinterCamera> {
     }
   }
 
-  Future<String?> _detect() async {
-    final host = widget.client.host;
-    final creality = 'http://$host:8000/call/webrtc_local';
-    try {
-      final r = await http
-          .get(Uri.parse(creality))
-          .timeout(const Duration(seconds: 3));
-      if (r.statusCode == 200) return creality;
-    } catch (_) {}
-    try {
-      final cams = await widget.client.webcams();
-      if (cams.isNotEmpty) return cams.first;
-    } catch (_) {}
-    return null;
-  }
-
   Future<void> _startMjpeg(String url) async {
     final client = http.Client();
     _mjpegClient = client;
@@ -172,46 +342,39 @@ class PrinterCameraState extends State<PrinterCamera> {
     );
   }
 
-  /// Receive-only WebRTC on the LAN (no STUN/TURN), with either Creality's
-  /// or camera-streamer's signalling.
+  RtcCamera? _rtc;
+  VoidCallback? _onStream;
+
+  /// Receive-only WebRTC on the LAN (no STUN/TURN), through the shared
+  /// [RtcCamera] session for this camera.
   Future<void> _startWebRtc(String signalUrl) async {
     final renderer = RTCVideoRenderer();
     await renderer.initialize();
     _renderer = renderer;
-
-    final pc = await createPeerConnection({
-      'iceServers': [],
-      'sdpSemantics': 'unified-plan',
-    });
-    _pc = pc;
+    final cam = _rtc = RtcCamera.acquire(signalUrl);
     // A track arrives as soon as the answer is applied, before any media, so
     // only count the camera as live once a real frame has been decoded.
     renderer.onFirstFrameRendered = () {
       _watchdog?.cancel();
       _set(_Mode.webrtc);
     };
-    pc.onTrack = (e) {
-      if (e.track.kind == 'video' && e.streams.isNotEmpty) {
-        renderer.srcObject = e.streams.first;
+    void attach() {
+      final st = cam.stream.value;
+      if (st != null) {
+        renderer.srcObject = st;
+      } else if (_mode == _Mode.webrtc && mounted) {
+        restart(); // the shared session dropped
       }
-    };
-    final gathered = Completer<void>();
-    pc.onIceGatheringState = (s) {
-      if (s == RTCIceGatheringState.RTCIceGatheringStateComplete &&
-          !gathered.isCompleted) {
-        gathered.complete();
-      }
-    };
-    if (isCrealitySignal(signalUrl)) {
-      await _crealitySignal(pc, signalUrl, gathered.future);
-    } else {
-      await _cameraStreamerSignal(pc, signalUrl, gathered.future);
     }
+    cam.stream.addListener(_onStream = attach);
+    attach();
+    await cam.ready;
 
-    _watchdog = Timer(const Duration(seconds: 12), () async {
+    _watchdog = Timer(const Duration(seconds: 8), () async {
       if (_mode != _Mode.probing || !mounted) return;
-      // The camera serves one viewer at a time and can hold on to a session
-      // that just closed, so try again a couple of times before giving up.
+      // No frame: drop this session (it may be a refused one) and retry a
+      // couple of times, the camera can hold on to a session that just closed.
+      await cam.close();
       if (_attempts < 3) {
         _attempts++;
         await _teardown();
@@ -223,76 +386,6 @@ class PrinterCameraState extends State<PrinterCamera> {
           'Close other camera viewers (Creality app, other devices) and retry.';
       _set(_Mode.error);
     });
-  }
-
-  /// Creality: POST our SDP offer as base64(JSON), receive the answer the
-  /// same way.
-  Future<void> _crealitySignal(
-    RTCPeerConnection pc,
-    String signalUrl,
-    Future<void> gathered,
-  ) async {
-    await pc.addTransceiver(
-      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-      init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
-    );
-
-    await pc.setLocalDescription(await pc.createOffer());
-    // Host candidates arrive almost instantly on a LAN.
-    await gathered.timeout(const Duration(seconds: 2), onTimeout: () {});
-    final local = await pc.getLocalDescription();
-
-    final body = base64.encode(
-      utf8.encode(jsonEncode({'type': 'offer', 'sdp': local!.sdp})),
-    );
-    final r = await http
-        .post(
-          Uri.parse(signalUrl),
-          headers: {'Content-Type': 'plain/text'},
-          body: body,
-        )
-        .timeout(const Duration(seconds: 8));
-    final txt = r.body.trim();
-    final answer = jsonDecode(
-      txt.startsWith('{') ? txt : utf8.decode(base64.decode(txt)),
-    );
-    await pc.setRemoteDescription(
-      RTCSessionDescription(
-        completeAnswer(local.sdp!, '${answer['sdp']}'),
-        '${answer['type']}',
-      ),
-    );
-  }
-
-  /// camera-streamer: the camera offers (JSON), we answer with its session
-  /// id. With keepAlive it pings over a data channel and wants pongs.
-  Future<void> _cameraStreamerSignal(
-    RTCPeerConnection pc,
-    String signalUrl,
-    Future<void> gathered,
-  ) async {
-    pc.onDataChannel = (ch) =>
-        ch.onMessage = (_) => ch.send(RTCDataChannelMessage('pong'));
-    Future<Map> post(Map body) async {
-      final r = await http
-          .post(
-            Uri.parse(signalUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 8));
-      if (r.statusCode >= 300) throw 'Camera returned HTTP ${r.statusCode}';
-      return r.body.trim().isEmpty ? const {} : jsonDecode(r.body) as Map;
-    }
-
-    final offer = await post({'type': 'request', 'keepAlive': true});
-    await pc.setRemoteDescription(
-      RTCSessionDescription('${offer['sdp']}', '${offer['type']}'),
-    );
-    await pc.setLocalDescription(await pc.createAnswer());
-    await gathered.timeout(const Duration(seconds: 2), onTimeout: () {});
-    final local = await pc.getLocalDescription();
-    await post({'type': 'answer', 'id': offer['id'], 'sdp': local!.sdp});
   }
 
   int _attempts = 0;
@@ -309,8 +402,10 @@ class PrinterCameraState extends State<PrinterCamera> {
     _mjpegClient?.close();
     _mjpegClient = null;
     _frame = null;
-    await _pc?.close();
-    _pc = null;
+    if (_onStream != null) _rtc?.stream.removeListener(_onStream!);
+    _onStream = null;
+    _rtc?.release();
+    _rtc = null;
     await _renderer?.dispose();
     _renderer = null;
   }

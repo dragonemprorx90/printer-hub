@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'camera.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 
@@ -60,6 +61,17 @@ Future<List<int>> cameraSnapshot(Printer p, MoonrakerClient c) async {
         return await r.fold<List<int>>([], (a, b) => a..addAll(b));
       }
     } catch (_) {}
+  }
+  // WebRTC-only cameras (Creality K1/K2): a frame from the shared session,
+  // which stays open between the panel's refreshes.
+  final url = await detectCamera(c, p.cameraUrl);
+  if (url != null && url.contains('webrtc')) {
+    final cam = RtcCamera.acquire(url);
+    try {
+      return await cam.frame();
+    } finally {
+      cam.release();
+    }
   }
   throw 'No camera picture for ${p.name}';
 }
@@ -357,8 +369,9 @@ class OrcaLink {
         if (p == null) return json(404, {'error': 'no such printer'});
         final c = clientFor(p);
         void jpeg(List<int> bytes) {
+          final png = bytes.length > 4 && bytes[0] == 0x89 && bytes[1] == 0x50; // WebRTC frames
           res.headers
-            ..contentType = ContentType('image', 'jpeg')
+            ..contentType = ContentType('image', png ? 'png' : 'jpeg')
             ..set('cache-control', 'no-store');
           res.add(bytes);
         }

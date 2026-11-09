@@ -6,6 +6,11 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.20.0', [
+    'Faster camera on the Creality K2: the app remembers where the camera is, connects as soon as the first network route is ready, and every view of a printer (preview, fullscreen) shares one live connection that stays warm for 45 seconds, so going back or fullscreen no longer waits for the camera to free up.',
+    'Orca plugin: the camera picture now works for the K2 too, taken from the app\'s live camera.',
+    'Home bridge: a new one-command setup for any NAS, Raspberry Pi or PC with Docker (deploy/install.sh), with an optional K2 camera helper. Full guide in docs/SETUP.md and a printable PDF.',
+  ]),
   ('1.19.0', [
     'Motion: switching tabs fades the page in and its cards arrive one after another; printer cards, files and history rows slide in the same way.',
     'Cards sink slightly when pressed, status pills change colour smoothly, and the "Printing" dot gently pulses.',

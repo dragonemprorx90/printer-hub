@@ -1,91 +1,88 @@
 # Printer Hub
 
-Control and watch your Klipper / Moonraker 3D printers from your phone or Mac:
-Creality K-series (K1, K2 Plus with CFS), Snapmaker U1, Voron and anything
-else running Moonraker.
+[![Latest release](https://img.shields.io/github/v/release/dragonemprorx90/printer-hub?label=release)](https://github.com/dragonemprorx90/printer-hub/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/dragonemprorx90/printer-hub/build.yml?label=build)](https://github.com/dragonemprorx90/printer-hub/actions/workflows/build.yml)
+![Platforms](https://img.shields.io/badge/app-iPhone%20%C2%B7%20iPad%20%C2%B7%20Mac-informational)
+![Bridge](https://img.shields.io/badge/bridge-Docker%20amd64%20%C2%B7%20arm64-informational)
 
-- Live status, temperatures with a 10-minute graph, progress ring and finish time
-- Live camera (Creality K2 and camera-streamer / Snapmaker U1 WebRTC, MJPEG), also
-  from away through the home bridge; snapshots, fullscreen zoom
-- Move, extrude, fans, speed / flow, Z baby-stepping, pressure advance
-- Creality CFS: slot colours, humidity alerts, load / unload
-- Files with thumbnails, folders, print queue, 2D layer preview, start later
-- Skip a failed object mid-print, bed mesh heat-map, calibration wizards
-- Macros with favourites and parameters, console
-- History with cost estimates, monthly charts and CSV export
-- Notifications, Mac menu-bar status, wall view, light / dark themes
-- **Remote access from anywhere, free and end-to-end encrypted** (see below)
+Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, at home and from anywhere. It works with the Creality K1 / K2 Plus (with CFS), the Snapmaker U1, Voron, and anything else running Moonraker.
 
-## Install
+**[Setup guide](docs/SETUP.md)** · **[Setup guide (PDF)](docs/Printer-Hub-Setup.pdf)** · **[Changelog](CHANGELOG.md)** · **[Download](https://github.com/dragonemprorx90/printer-hub/releases/latest)**
 
-Download from the [latest release](../../releases/latest):
+## Features
 
-| File | For |
-|---|---|
-| `PrinterHub-x.y.z.ipa` | iPhone / iPad. Unsigned: install with **SideStore** or AltStore, which sign it with your own Apple ID. |
-| `PrinterHub-x.y.z.dmg` | Mac (Apple Silicon). Open it, drag Printer Hub to Applications. First launch: right-click → Open. |
+**Watch**
+- Live camera: Creality K1/K2 and Snapmaker U1 WebRTC, plus MJPEG. Fullscreen zoom, snapshots, and a camera wall for a spare tablet.
+- Status, a progress ring with the finish time, and temperatures with a 10-minute graph.
+- Alerts with the app closed: finished, failed, paused, CFS humidity and low spool, each with a picture.
 
-The app checks this repo's releases for updates (Settings → Updates).
+**Control**
+- Move, home, extrude, fans, speed and flow, Z baby-stepping, pressure advance.
+- Creality CFS: slot colours, humidity, load and unload. Snapmaker U1 tool heads and the printer's own screen.
+- Skip a failed object mid-print, bed mesh heat-map, calibration wizards.
+- Macros with favourites and parameters, plus a console.
 
-## Remote access (optional, free)
+**Files and history**
+- Files with thumbnails, folders, a print queue, a 2D layer preview and "start later".
+- History with pictures, cost estimates, monthly charts and CSV export. Spool tracking (Spoolman).
 
-Printer Hub talks to your printer directly on your Wi-Fi. To use it away from
-home without opening router ports:
+**From anywhere: free and end-to-end encrypted**
+- A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.
+- The app switches between home and away by itself.
 
-```
-Phone ⇄ your relay (Cloudflare, free) ⇄ home bridge (NAS / Pi / Mac) ⇄ printer
-```
+**OrcaSlicer (Mac)**
+- Send prints straight from Orca.
+- A live printer panel inside Orca 2.5+ with camera, controls, filaments, history and rules.
 
-Everything between the phone and the bridge is encrypted end to end
-(ChaCha20-Poly1305, keys from a pairing code). The relay only forwards sealed
-frames: it cannot read them or send commands.
+## Quick start
 
-1. **Relay.** With a free Cloudflare account:
+1. **App**: install `PrinterHub-x.y.z.ipa` with SideStore or LiveContainer on iPhone, or `PrinterHub-x.y.z.dmg` on the Mac, from the [latest release](https://github.com/dragonemprorx90/printer-hub/releases/latest). Tap **+** and pick your printer.
+2. **From anywhere (optional)**: deploy the [relay](docs/SETUP.md#2-relay-once), then on your NAS, Pi or Linux PC run:
    ```bash
-   cd relay && npm install && npx wrangler login && npx wrangler deploy
+   curl -fsSL https://raw.githubusercontent.com/dragonemprorx90/printer-hub/main/deploy/install.sh | sh
    ```
-   Note the `https://printer-hub-relay.<you>.workers.dev` address.
-2. **Home bridge.** On an always-on device on the same network as the printer:
-   - NAS with Docker: copy `bridge/` with the Linux binary from the release
-     into `bridge/build/`, set `RELAY_URL` and `PRINTER_HOST` in
-     `bridge/docker-compose.yml`, and start the project.
-   - Or run the binary directly:
-     `printer-hub-bridge --relay <relay url> --printer <printer ip>`
-3. **Pair.** The bridge prints a `PHB1:…` code and QR on first start. Paste it
-   into the printer's **Remote access code** (Edit printer). Treat it like a
-   password; `--reset` on the bridge issues a new one and locks out old phones.
+   Paste the pairing code it prints into **Edit printer → Remote access code**.
 
-At home the app connects directly; away it goes through the bridge, and it
-switches back automatically when you return.
+Every option (NAS web UIs, Docker Desktop, without Docker, alerts, OrcaSlicer, troubleshooting) is in **[docs/SETUP.md](docs/SETUP.md)**.
 
-**Camera from away.** Set `CAMERA_URL` on the bridge to an MJPEG stream or JPEG
-snapshot on your LAN. The bridge reads it only while a phone is watching and
-sends a few encrypted frames per second. Cameras with an MJPEG stream (e.g. the
-Snapmaker U1's `http://<ip>/webcam/stream.mjpg?fps=3`) work directly;
-WebRTC-only cameras (Creality K1/K2) go through the `go2rtc` container in
-`bridge/docker-compose.yml`.
+## How it works
 
-## Build from source
+```
+                 at home: direct on your Wi-Fi
+   ┌────────┐ ─────────────────────────────────────────▶ ┌─────────┐
+   │  App   │                                            │ Printer │
+   │ iPhone │      ┌──────────────┐     ┌────────────┐   │Moonraker│
+   │  Mac   │ ◀──▶ │ Relay        │ ◀──▶│ Home bridge│◀─▶│         │
+   └────────┘      │ (Cloudflare) │     │ NAS/Pi/PC  │   └─────────┘
+       away        └──────────────┘     └────────────┘
+                   only sealed frames    ChaCha20-Poly1305, keys from
+                                         your pairing code
+```
 
-Flutter 3.47+. `flutter test`, then `flutter build macos` / `flutter build ios
---no-codesign`. The release workflow in `.github/workflows/build.yml` builds
-every artifact; push a `v*` tag to publish one.
+The relay only forwards sealed frames. It can't read them or send commands. Only devices with your pairing code can talk to the bridge. See [SECURITY.md](SECURITY.md).
+
+## Project layout
 
 | Folder | What |
 |---|---|
-| `lib/` | The app |
-| `packages/hub_link/` | Pairing codes and encryption shared by app and bridge |
+| `lib/` | The Flutter app (iOS, iPadOS, macOS) |
+| `bridge/` | Home bridge (Dart) and its Docker image |
+| `deploy/` | Ready-to-run Docker Compose setup and installer for the bridge |
 | `relay/` | Cloudflare Worker relay |
-| `bridge/` | Home bridge (Dart) and Docker files |
+| `packages/hub_link/` | Pairing codes and encryption shared by the app and the bridge |
+| `orca-plugin/` | OrcaSlicer 2.5+ panel (`printer_hub.py`) |
+| `docs/` | Setup guide, PDF, UI style spec (`docs/designs/`) |
+| `tool/` | Maintenance scripts (changelog, PDF) |
 
-## Orca Slicer
+## Build from source
 
-On the Mac, Printer Hub can receive prints straight from Orca Slicer (Settings → Orca Slicer):
+You need Flutter 3.47+.
 
-1. In Orca, open the printer's connection settings: host type **Octo/Klipper**, hostname `127.0.0.1:7126`
-   (or `127.0.0.1:7126/<printer-name>`, e.g. `127.0.0.1:7126/k2-plus`, to skip the printer question).
-2. Slice and press **Print** or **Send**. Printer Hub uploads the file, at home or from away through
-   the home bridge, and opens print setup (the U1's head mapping and print preferences).
+```bash
+flutter test
+flutter build macos            # Mac app
+flutter build ios --no-codesign
+cd bridge && dart compile exe bin/bridge.dart -o printer-hub-bridge
+```
 
-Orca Slicer 2.5+ plugin: `orca-plugin/printer_hub.py` (also attached to each release, and saved from
-Settings → Orca Slicer). Install it from Orca's Plugins dialog for a live printer panel beside the 3D view.
+Releases are built by [`.github/workflows/build.yml`](.github/workflows/build.yml). Pushing a `v*` tag publishes the app, the bridge binaries and the multi-arch Docker image (`ghcr.io/dragonemprorx90/printer-hub-bridge`). See [CONTRIBUTING.md](CONTRIBUTING.md) for the release checklist.

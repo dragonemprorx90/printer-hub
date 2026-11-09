@@ -1,0 +1,25 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: {label: Printer Hub version, placeholder: "Settings → About, e.g. 1.20.0"}
+    validations: {required: true}
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      multiple: true
+      options: [iPhone / iPad app, Mac app, Home bridge, Relay, OrcaSlicer plugin]
+    validations: {required: true}
+  - type: input
+    id: printer
+    attributes: {label: Printer, placeholder: "e.g. Creality K2 Plus, Snapmaker U1"}
+  - type: textarea
+    id: what
+    attributes: {label: What happened, description: What you did, what you expected, what you saw.}
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes: {label: Logs, description: "Bridge: docker compose logs --tail 100 bridge. Remove your pairing code.", render: text}
