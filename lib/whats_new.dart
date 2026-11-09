@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.18.1', [
+    'iPhone: "Update" asks whether to install with LiveContainer or SideStore and hands the new version straight to it.',
+  ]),
   ('1.18.0', [
     'Mac: updates install themselves. Printer Hub downloads the new version in the background, installs it, then asks you to restart. (Install this version by hand once; from then on it\'s automatic.)',
     'iPhone: "Update" hands the new version straight to SideStore instead of opening a download link.',

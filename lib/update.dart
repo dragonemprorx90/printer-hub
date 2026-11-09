@@ -9,7 +9,7 @@ import 'settings.dart';
 import 'ui.dart';
 
 /// Keep in step with `version:` in pubspec.yaml.
-const kAppVersion = '1.18.0';
+const kAppVersion = '1.18.1';
 
 /// Where releases are published; can be changed in Settings.
 const kUpdateRepo = 'dragonemprorx90/printer-hub';
@@ -255,8 +255,19 @@ Future<void> _install(BuildContext context, UpdateInfo u) async {
     return;
   }
   if (url != null && Platform.isIOS) {
-    final sidestore = Uri.parse('sidestore://install?url=${Uri.encodeComponent(url)}');
-    if (await launchUrl(sidestore, mode: LaunchMode.externalApplication)) return;
+    final scheme = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Install ${u.version} with'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'sidestore'), child: const Text('SideStore')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, 'livecontainer'), child: const Text('LiveContainer')),
+        ],
+      ),
+    );
+    if (scheme == null) return;
+    final app = Uri.parse('$scheme://install?url=${Uri.encodeComponent(url)}');
+    if (await launchUrl(app, mode: LaunchMode.externalApplication)) return;
   }
   launchUrl(Uri.parse(url ?? u.pageUrl), mode: LaunchMode.externalApplication);
 }
