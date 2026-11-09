@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.16.1', [
+    'Orca plugin 3.1: when Orca starts it opens the Printer Hub panel and also shows a notification with an "Open Printer Hub" link, in case the panel didn\'t open.',
+  ]),
   ('1.16.0', [
     'Orca plugin 3.0: camera picture, layer / finish time, temperatures with targets, heater status, filament mismatch warnings against Orca\'s slots, and an "in Orca" badge on each printer.',
     'Plugin controls: temperatures and preheat (from Orca\'s filament), home, motors off, E-stop, fans, speed, flow, Z offset, pause at layer, macros, exclude object, DragonBreath drying / filter / fault clear, bed mesh range.',

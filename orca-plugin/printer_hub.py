@@ -5,7 +5,7 @@
 # name = "Printer Hub"
 # description = "Your printers beside the 3D view: camera, progress, temperatures, controls, filaments and spools, history with pictures, rules and print alerts. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "3.0.0"
+# version = "3.1.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -392,8 +392,10 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
         self.started = True
         try:
             self._open()
+            self._notify("Printer Hub is open on the right.")
         except Exception:
-            self.started = False  # UI not ready yet; try again on the next event
+            # Couldn't dock it yet: ask instead, one click away.
+            self._notify("Printer Hub is ready.")
 
     def _notify(self, text, warn=False):
         try:
