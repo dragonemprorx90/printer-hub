@@ -14,7 +14,7 @@ void main() {
 
   test('Orca (OctoPrint upload) reaches Printer Hub', () async {
     final got = <OrcaUpload>[];
-    final link = OrcaLink(onUpload: got.add, printers: () => const [], port: 17126);
+    final link = OrcaLink(onUpload: got.add, printers: () => const [], port: 17126, loadPorts: () => {}, savePorts: (_) {});
     await link.start();
     addTearDown(link.stop);
 
@@ -51,7 +51,7 @@ void main() {
   });
 
   test('browser requests and header-less actions are refused', () async {
-    final link = OrcaLink(onUpload: (_) {}, printers: () => const [], port: 17127);
+    final link = OrcaLink(onUpload: (_) {}, printers: () => const [], port: 17127, loadPorts: () => {}, savePorts: (_) {});
     await link.start();
     addTearDown(link.stop);
     final fromPage = await http.get(Uri.parse('http://127.0.0.1:17127/hub/printers'),
@@ -70,6 +70,28 @@ void main() {
       });
     expect(hubFilaments(s).single['material'], '');
     expect(hubFilaments(s).single['color'], '#FF1E1E');
+  });
+
+  test('proxy ports belong to a printer, not a list position', () {
+    var m = assignProxyPorts({}, ['u1:7125', 'k2:7125'], 7130);
+    expect(m, {'u1:7125': 7130, 'k2:7125': 7131});
+    // Reordered list: same ports.
+    m = assignProxyPorts(m, ['k2:7125', 'u1:7125'], 7130);
+    expect(m, {'u1:7125': 7130, 'k2:7125': 7131});
+    // U1 removed, new printer added: it must not get the U1's old port.
+    m = assignProxyPorts(m, ['k2:7125', 'new:7125'], 7130);
+    expect(m['new:7125'], 7132);
+  });
+
+  test('/hub/printers reports each printer its own proxy', () async {
+    var saved = <String, int>{'b:7125': 17140};
+    final list = [const Printer(name: 'A', host: 'a'), const Printer(name: 'B', host: 'b')];
+    final link = OrcaLink(
+        onUpload: (_) {}, printers: () => list, port: 17136, loadPorts: () => saved, savePorts: (m) => saved = m);
+    await link.start();
+    addTearDown(link.stop);
+    final r = jsonDecode((await http.get(Uri.parse('http://127.0.0.1:17136/hub/printers'))).body) as List;
+    expect({for (final p in r) p['name']: p['proxy']}, {'A': '127.0.0.1:17141', 'B': '127.0.0.1:17140'});
   });
 }
 

@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.14.1', [
+    'Fix: Orca could reach the wrong printer (the K2 got the U1\'s colours). Each printer now keeps its own local Orca address for good. Press "Use this printer in Orca" once more for each printer.',
+  ]),
   ('1.14.0', [
     'Orca works with your printers from anywhere: Printer Hub runs a local Moonraker for each printer (127.0.0.1:7130, 7131, …) that reaches it at home or through your home bridge. Orca\'s device page, filament sync and printing go through it.',
     'Orca plugin 1.3: "Use this printer in Orca" points Orca at that local address.',

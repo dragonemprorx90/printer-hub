@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'moonraker.dart';
+import 'settings.dart';
 
 /// Port the Mac app listens on for OrcaSlicer (127.0.0.1 only).
 const kOrcaPort = 7126;
@@ -40,6 +41,22 @@ Map<String, (String?, Uint8List)> parseMultipart(Uint8List body, String boundary
     final file = RegExp(r'filename="([^"]*)"').firstMatch(head)?[1];
     if (name != null) out[name] = (file, Uint8List.fromList(data));
     at = next;
+  }
+  return out;
+}
+
+/// Keeps every printer's existing port; gives new ones the lowest free port
+/// from [base]. Ports of removed printers stay reserved so they are never
+/// handed to a different printer that Orca might still have saved.
+Map<String, int> assignProxyPorts(Map<String, int> saved, List<String> keys, int base) {
+  final out = {...saved};
+  for (final k in keys) {
+    if (out.containsKey(k)) continue;
+    var p = base;
+    while (out.containsValue(p)) {
+      p++;
+    }
+    out[k] = p;
   }
   return out;
 }
@@ -96,9 +113,23 @@ class OrcaLink {
   final List<Printer> Function() printers;
   final int port;
   HttpServer? _server;
-  final _proxies = <HttpServer>[];
+  final _proxies = <String, HttpServer>{}; // printer key -> its local Moonraker
 
-  OrcaLink({required this.onUpload, required this.printers, this.port = kOrcaPort});
+  /// Saved printer -> port map. Orca stores the port in its printer preset, so
+  /// a printer must keep its port for good (never by list position: a port
+  /// that moved to another printer would send prints to the wrong machine).
+  final Map<String, int> Function() loadPorts;
+  final void Function(Map<String, int>) savePorts;
+
+  OrcaLink({
+    required this.onUpload,
+    required this.printers,
+    this.port = kOrcaPort,
+    Map<String, int> Function()? loadPorts,
+    void Function(Map<String, int>)? savePorts,
+  })  : loadPorts = loadPorts ??
+            (() => Map<String, int>.from(jsonDecode(settings.text('orcaProxyPorts', '{}')) as Map)),
+        savePorts = savePorts ?? ((m) => settings.setText('orcaProxyPorts', jsonEncode(m)));
 
   bool get running => _server != null;
 
@@ -106,25 +137,36 @@ class OrcaLink {
     if (_server != null) return;
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     _server!.listen(_handle, onError: (_) {});
-    // One local Moonraker per printer (port + 4 + index), so OrcaSlicer's own
-    // printer agents (device page, filament sync, printing) reach the printer
-    // through Printer Hub, at home or through the relay from anywhere.
-    // ponytail: ports follow the printer list order; "Use this printer" re-reads them.
-    for (final (i, p) in printers().indexed) {
+    await _ensureProxies();
+  }
+
+  /// One local Moonraker per printer, so OrcaSlicer's own printer agents
+  /// (device page, filament sync, printing) reach it through Printer Hub, at
+  /// home or through the relay from anywhere. New printers get one on demand.
+  Future<void> _ensureProxies() async {
+    final ports = assignProxyPorts(loadPorts(), [for (final p in printers()) p.key], port + 4);
+    savePorts(ports);
+    for (final p in printers()) {
+      if (_proxies.containsKey(p.key)) continue;
       try {
-        final s = await HttpServer.bind(InternetAddress.loopbackIPv4, proxyPort(i));
-        s.listen((r) => _proxy(p, r), onError: (_) {});
-        _proxies.add(s);
+        final key = p.key;
+        final s = await HttpServer.bind(InternetAddress.loopbackIPv4, ports[key]!);
+        // Look the printer up per request, so an edited printer is followed.
+        s.listen((r) {
+          final now = printers().where((x) => x.key == key).firstOrNull;
+          now == null ? (r.response..statusCode = 404).close() : _proxy(now, r);
+        }, onError: (_) {});
+        _proxies[key] = s;
       } catch (_) {} // port taken: that printer just has no Orca proxy
     }
   }
 
-  int proxyPort(int index) => port + 4 + index;
+  int? proxyPort(Printer p) => _proxies[p.key]?.port;
 
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
-    for (final s in _proxies) {
+    for (final s in _proxies.values) {
       await s.close(force: true);
     }
     _proxies.clear();
@@ -226,12 +268,13 @@ class OrcaLink {
         }
         json(200, {'ok': true});
       } else if (path == '/hub/printers') {
+        await _ensureProxies();
         json(200, [
           for (final p in printers())
             {
               'name': p.name,
               'slug': printerSlug(p.name),
-              'proxy': '127.0.0.1:${proxyPort(printers().indexOf(p))}',
+              if (proxyPort(p) != null) 'proxy': '127.0.0.1:${proxyPort(p)}',
               'host': p.host,
               'port': p.port,
               ...orcaModel(clientFor(p)),
