@@ -1,6 +1,6 @@
 # Setting up Printer Hub
 
-This takes about 15 minutes. Only part 1 is required. Parts 2–4 add access from away, alerts and OrcaSlicer.
+This takes about 15 minutes. Only part 1 is required. Parts 2–5 add access from away, alerts, OrcaSlicer and slicing from the app.
 
 | Part | What you get | You need |
 |---|---|---|
@@ -8,6 +8,7 @@ This takes about 15 minutes. Only part 1 is required. Parts 2–4 add access fro
 | [2. Relay](#2-relay-once) | The cloud mailbox used for access from away | A free Cloudflare account |
 | [3. Home bridge](#3-home-bridge) | Access from anywhere, alerts with the app closed | Any always-on box with Docker: NAS, Raspberry Pi (64-bit), PC |
 | [4. OrcaSlicer](#4-orcaslicer-mac) | Send prints from Orca, plus a printer panel inside Orca | Mac app + OrcaSlicer 2.5+ |
+| [5. Slicing](#5-slicing-from-the-app) | Slice STL / 3MF / STEP models from your phone, no desktop slicer | The home bridge + ~1 GB of disk |
 
 ```
 Phone ⇄ relay (Cloudflare) ⇄ home bridge (NAS / Pi / PC) ⇄ printer
@@ -52,7 +53,7 @@ The image is published for **amd64** (most NAS units and PCs) and **arm64** (Ras
 curl -fsSL https://raw.githubusercontent.com/dragonemprorx90/printer-hub/main/deploy/install.sh | sh
 ```
 
-It asks for the printer's IP, your relay URL, and whether the printer is a Creality K1/K2, whose camera needs a helper to work from away. It then starts everything in `~/printer-hub-bridge` and prints your **pairing code**. Run it again to change answers; your pairing is kept.
+It asks for the printer's IP, your relay URL, whether the printer is a Creality K1/K2 (its camera needs a helper to work from away), and whether to turn on [slicing](#5-slicing-from-the-app). It then starts everything in `~/printer-hub-bridge` and prints your **pairing code**. Run it again to change answers; your pairing is kept.
 
 Don't have Docker yet? On a Pi or Linux PC: `curl -fsSL https://get.docker.com | sh`, then log out and back in.
 
@@ -117,6 +118,27 @@ Press **Print** or **Send**. Printer Hub uploads the file (at home or through th
 
 **Printer panel** (Orca 2.5+). Download `printer_hub.py` from the release, or save it from Settings → Orca Slicer. Install it from Orca's **Plugins** dialog. A panel opens beside the 3D view with every printer: camera, progress, temperatures, controls, filaments, spools, history and rules.
 
+## 5. Slicing from the app
+
+Pick an **STL, 3MF, STEP or OBJ** model in **Files → Upload** (or drop it on the Mac window). Choose the quality and filament, tap **Slice**, and the G-code lands on the printer with its layer preview and the **Print** button. It works at home and away.
+
+```
+App ─(encrypted relay)─▶ home bridge ─▶ slicer container (OrcaSlicer 2.5) ─▶ G-code to the printer (LAN)
+```
+
+Slicing runs in a second container next to the bridge, using OrcaSlicer's own Creality K2 Plus and Snapmaker U1 profiles (0.4 mm nozzle). On the U1 you pick a filament for each of the 4 toolheads and which one prints the model. A 3MF with painted colours keeps them. Your model never leaves your home except inside the encrypted relay, and nothing is uploaded to a slicing service.
+
+**Turn it on.** Re-run the installer and answer **y** to "Slice models from the app?". Or add `slicer` to `COMPOSE_PROFILES` in `.env` (e.g. `COMPOSE_PROFILES=slicer`, or `creality,slicer` for a K2), then:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+- The image is about 1 GB, for amd64 and arm64. A slice takes 10 s to a few minutes; a NAS or Pi 5 is fine, a Pi 4 is slow.
+- **Two printers on one machine:** each bridge folder runs its own slicer. Give the second one `SLICER_PORT=7071` in its `.env`.
+- **Your own presets:** in desktop Orca, export a process or filament preset and copy the `.json` into `slicer-profiles/process/` or `slicer-profiles/filament/` in the bridge folder. They show up in the app's lists.
+- STEP files are meshed first (fine detail is kept to about 1/36 of a circle), which adds up to a minute for big parts.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -125,6 +147,7 @@ Press **Print** or **Send**. Printer Hub uploads the file (at home or through th
 | K2 camera shows "sent no video" | The camera serves one viewer at a time. Close the Creality app or Creality Print on other devices, wait 30 s, then tap Retry. |
 | Camera from away is black (K1/K2) | `.env` needs both `COMPOSE_PROFILES=creality` and the `CAMERA_URL` line. Check `docker compose logs go2rtc`. |
 | App says the bridge is offline | `docker compose logs bridge`. Check that `RELAY_URL` is your own relay and that the NAS can reach the internet. |
+| "The slicer isn't running on your home bridge" | Update the bridge (`docker compose pull && docker compose up -d`) and add `slicer` to `COMPOSE_PROFILES`. Check `docker compose logs slicer`. |
 | Lost the pairing code | `docker compose run --rm bridge --show-code` |
 | Mac update didn't install | Printer Hub must live in Applications, and your user must be allowed to change it (admin). Otherwise the app opens the download. |
 

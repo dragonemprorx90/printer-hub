@@ -7,7 +7,7 @@ import 'package:test/test.dart';
 import '../bin/bridge.dart';
 
 void main() {
-  test('relayed paths only reach Moonraker, the screen or the printer\'s heater', () async {
+  test('relayed paths only reach Moonraker, the screen, the printer\'s heater or the slicer', () async {
     // Fake Moonraker whose config names a DragonBreath heater.
     final mr = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     mr.listen((req) => req.response
@@ -33,6 +33,10 @@ void main() {
     final (heat, h) = await b.target('/dragonbreath/api/v2/state');
     expect(heat.toString(), 'http://10.0.0.9/api/v2/state');
     expect(h['X-DragonBreath-Auth'], 'web');
+    final (slice, _) = await b.target('/slicer/jobs?printer=u1');
+    expect(slice.toString(), 'http://127.0.0.1:7070/slicer/jobs?printer=u1');
+    final (odd2, _) = await b.target('/slicer/@evil.com/');
+    expect(odd2.host, '127.0.0.1');
     final (odd, _) = await b.target('/dragonbreath/@evil.com/');
     expect(odd.host, '10.0.0.9');
     for (final bad in ['//evil.com/x', 'x']) {

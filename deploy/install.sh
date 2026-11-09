@@ -32,12 +32,21 @@ echo "Printer Hub bridge setup ($DIR)"
 ask HOST "Printer IP address" "$(current PRINTER_HOST)"
 ask RELAY "Relay URL (https://printer-hub-relay.<you>.workers.dev)" "$(current RELAY_URL)"
 ask K2 "Creality K1/K2 camera from away? (y/n)" "n"
+ask SLICE "Slice models from the app? Needs ~1 GB of disk (y/n)" "n"
 set_env PRINTER_HOST "$HOST"
 set_env RELAY_URL "$RELAY"
+PROFILES=
 if [ "$K2" = y ] || [ "$K2" = Y ]; then
-  set_env COMPOSE_PROFILES creality
+  PROFILES=creality
   set_env CAMERA_URL "http://127.0.0.1:1984/api/stream.mjpeg?src=cam_jpeg"
 fi
+if [ "$SLICE" = y ] || [ "$SLICE" = Y ]; then
+  case $(uname -m) in
+    x86_64|amd64|aarch64|arm64) PROFILES=${PROFILES:+$PROFILES,}slicer ;;
+    *) echo "Slicing needs a 64-bit Intel/AMD or ARM system; skipped on $(uname -m)." ;;
+  esac
+fi
+[ -n "$PROFILES" ] && set_env COMPOSE_PROFILES "$PROFILES"
 
 docker compose pull -q
 docker compose up -d

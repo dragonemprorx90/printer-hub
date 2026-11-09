@@ -125,7 +125,9 @@ Future<void> main(List<String> argv) async {
 
   log('Bridging printer $printer:$port through ${pair.relay}');
   if (camera != null) log('Camera from away: $cameraUrl');
-  await Bridge(pair, await LinkCrypto.forPair(pair), printer, port, camera: camera).run();
+  await Bridge(pair, await LinkCrypto.forPair(pair), printer, port,
+          camera: camera, slicerPort: int.tryParse(env['SLICER_PORT'] ?? '') ?? 7070)
+      .run();
 }
 
 /// Reads a home camera (MJPEG stream or JPEG snapshot URL) only while a
@@ -722,13 +724,16 @@ class Bridge {
   final int port;
   final CameraFeed? camera;
 
+  /// The slicer container next to the bridge (COMPOSE_PROFILES=slicer).
+  final int slicerPort;
+
   IOWebSocketChannel? _relay;
   final _sessions = <String, _Session>{};
   final _client = http.Client();
   Future<void> _recvChain = Future.value();
   Future<void> _sendChain = Future.value();
 
-  Bridge(this.pair, this.crypto, this.host, this.port, {this.camera});
+  Bridge(this.pair, this.crypto, this.host, this.port, {this.camera, this.slicerPort = 7070});
 
   Future<void> run() async {
     var backoff = 1;
@@ -887,10 +892,15 @@ class Bridge {
   (String, String)? _heater; // DragonBreath host and token, from the printer
 
   /// Where a relayed path goes: Moonraker, the U1's remote screen on port 80,
-  /// or the DragonBreath heater named in the printer's own [dragonbreath].
-  /// Never anywhere else.
+  /// the DragonBreath heater named in the printer's own [dragonbreath], or
+  /// the slicer container on this machine. Never anywhere else.
   Future<(Uri, Map<String, String>)> target(String path) async {
     if (!path.startsWith('/') || path.startsWith('//')) throw const FormatException('bad path');
+    if (path.startsWith('/slicer/')) {
+      final uri = Uri.parse('http://127.0.0.1:$slicerPort$path');
+      if (uri.host != '127.0.0.1' || uri.port != slicerPort) throw const FormatException('bad path');
+      return (uri, const <String, String>{});
+    }
     if (path.startsWith('/dragonbreath/')) {
       if (_heater == null) {
         final r = await _client.get(

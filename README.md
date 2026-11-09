@@ -26,6 +26,9 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - Files with thumbnails, folders, a print queue, a 2D layer preview and "start later".
 - History with pictures, cost estimates, monthly charts and CSV export. Spool tracking (Spoolman).
 
+**Slice from your phone**
+- Pick an STL, 3MF or STEP model, choose quality and filament (one per toolhead on the U1), and print. OrcaSlicer runs on your home bridge, not in someone's cloud.
+
 **From anywhere: free and end-to-end encrypted**
 - A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.
 - The app switches between home and away by itself.
@@ -43,7 +46,7 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
    ```
    Paste the pairing code it prints into **Edit printer → Remote access code**.
 
-Every option (NAS web UIs, Docker Desktop, without Docker, alerts, OrcaSlicer, troubleshooting) is in **[docs/SETUP.md](docs/SETUP.md)**.
+Every option (NAS web UIs, Docker Desktop, without Docker, alerts, OrcaSlicer, slicing from the app, troubleshooting) is in **[docs/SETUP.md](docs/SETUP.md)**.
 
 ## How it works
 
@@ -68,6 +71,7 @@ The relay only forwards sealed frames. It can't read them or send commands. Only
 | `lib/` | The Flutter app (iOS, iPadOS, macOS) |
 | `bridge/` | Home bridge (Dart) and its Docker image |
 | `deploy/` | Ready-to-run Docker Compose setup and installer for the bridge |
+| `slicer/` | Slicer container for the bridge (OrcaSlicer CLI + a small Python API) |
 | `relay/` | Cloudflare Worker relay |
 | `packages/hub_link/` | Pairing codes and encryption shared by the app and the bridge |
 | `orca-plugin/` | OrcaSlicer 2.5+ panel (`printer_hub.py`) |

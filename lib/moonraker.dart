@@ -514,6 +514,19 @@ class MoonrakerClient {
     return _http.send(req);
   }
 
+  /// An HTTP client for the home bridge's own services (the slicer), and how
+  /// to let it go. Always through the relay: at home the app knows the
+  /// printer's address, not the NAS's.
+  Future<(http.Client, void Function())> bridgeClient() async {
+    final pair = relay;
+    if (pair == null) {
+      throw MoonrakerError('Slicing runs on your home bridge. Pair one first: Edit printer → Remote access code.');
+    }
+    if (viaRelay) return (_http, () {});
+    final link = await RelayLink.connect(pair);
+    return (RelayHttpClient(link) as http.Client, link.close);
+  }
+
   /// A separate Moonraker websocket (for Orca): direct at home, or its own
   /// relay session when away. Returns (messages, send, close).
   Future<(Stream<String>, void Function(String), void Function())> openSocket() async {

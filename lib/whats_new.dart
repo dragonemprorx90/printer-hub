@@ -6,6 +6,10 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.21.0', [
+    'Slice from your phone: pick an STL, 3MF or STEP model in Files → Upload, choose quality and filament (one per toolhead on the Snapmaker U1), and the G-code lands on the printer with its preview and Print button. Works at home and away.',
+    'Slicing runs on your home bridge with OrcaSlicer\'s own K2 Plus and U1 profiles, so your models stay private. Turn it on by re-running the bridge installer, or add slicer to COMPOSE_PROFILES (setup guide, part 5).',
+  ]),
   ('1.20.1', [
     'DragonBreath: if the heater accepts "Dry filament" but doesn\'t start drying, the app now says why (its mode, who controls it, or a safety lock) instead of doing nothing.',
   ]),

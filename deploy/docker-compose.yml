@@ -30,3 +30,15 @@ services:
       ffmpeg: {rtsp: "-fflags nobuffer -flags low_delay -timeout 30000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}"},
       streams: {cam: "webrtc:http://${PRINTER_HOST}:8000/call/webrtc_local#format=creality",
       cam_jpeg: "ffmpeg:cam#video=mjpeg#raw=-vf fps=3,scale=1280:-2 -q:v 5"}}'
+
+  # Slice models (STL / 3MF / STEP) from the app, no desktop slicer needed.
+  # Turned on by adding slicer to COMPOSE_PROFILES in .env. Needs ~1 GB of disk
+  # and a 64-bit NAS / PC / Pi; the G-code goes straight to your printer.
+  slicer:
+    profiles: [slicer]
+    image: ghcr.io/dragonemprorx90/printer-hub-slicer:${BRIDGE_VERSION:-latest}
+    restart: unless-stopped
+    network_mode: host        # 127.0.0.1 only; the bridge forwards /slicer/*
+    env_file: .env
+    volumes:
+      - ./slicer-profiles:/opt/orca-data/user/default   # your own Orca presets (optional)

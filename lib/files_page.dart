@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'gcode.dart';
 import 'moonraker.dart';
 import 'settings.dart';
+import 'slicer.dart';
 import 'u1_panels.dart';
 import 'ui.dart';
 
@@ -166,7 +167,19 @@ class _FilesTabState extends State<FilesTab> {
     return list;
   }
 
+  /// Slices a model on the home bridge, then opens the new G-code (preview, print).
+  Future<void> _slice(String name, Uint8List bytes) async {
+    final files = await showSliceDialog(context, c, name, bytes, folder: _path);
+    if (files == null || files.isEmpty || !mounted) return;
+    _all = null;
+    await _load();
+    if (!mounted) return;
+    final f = _files?.where((f) => f.path == files.first).firstOrNull;
+    if (f != null) _openFile(f);
+  }
+
   Future<void> _upload(String name, Uint8List bytes) async {
+    if (modelExt.contains(name.split('.').last.toLowerCase())) return _slice(name, bytes);
     if (name.toLowerCase().endsWith('.3mf')) {
       // Snapmaker Orca / Orca / Bambu project: take the sliced plate's G-code.
       final Map<int, Uint8List> plates;
@@ -176,9 +189,12 @@ class _FilesTabState extends State<FilesTab> {
         return toast(context, 'Could not read $name: $e', error: true);
       }
       if (plates.isEmpty) {
-        return toast(context,
-            'No sliced plate in $name. In the slicer, slice it and use Export plate sliced file (.gcode.3mf).',
-            error: true);
+        if (c.relay == null) {
+          return toast(context,
+              'No sliced plate in $name. In the slicer, slice it and use Export plate sliced file (.gcode.3mf).',
+              error: true);
+        }
+        return _slice(name, bytes);
       }
       var plate = plates.keys.first;
       if (plates.length > 1) {
@@ -231,7 +247,7 @@ class _FilesTabState extends State<FilesTab> {
 
   Future<void> _pick() async {
     final f = await FilePicker.pickFile(
-        type: FileType.custom, allowedExtensions: _gcodeExt);
+        type: FileType.custom, allowedExtensions: [..._gcodeExt, ...modelExt]);
     if (f == null || !mounted) return;
     await _upload(f.name, await f.readAsBytes());
   }
@@ -240,8 +256,8 @@ class _FilesTabState extends State<FilesTab> {
     setState(() => _dragging = false);
     for (final f in d.files) {
       final ext = f.name.split('.').last.toLowerCase();
-      if (!_gcodeExt.contains(ext)) {
-        toast(context, '${f.name} is not a G-code file', error: true);
+      if (!_gcodeExt.contains(ext) && !modelExt.contains(ext)) {
+        toast(context, '${f.name} is not G-code or a 3D model', error: true);
         continue;
       }
       await _upload(f.name, await f.readAsBytes());
@@ -523,7 +539,7 @@ class _FilesTabState extends State<FilesTab> {
                   Icon(Icons.upload_file_rounded, size: 48, color: C.accent),
                   const SizedBox(height: 8),
                   Text(
-                    'Drop G-code to upload${_path.isEmpty ? '' : ' to $_path'}',
+                    'Drop G-code or a model${_path.isEmpty ? '' : ' into $_path'}',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ]),

@@ -3,7 +3,12 @@
 Every release of Printer Hub (app, home bridge, relay and Orca plugin ship together).
 Downloads: [GitHub releases](https://github.com/dragonemprorx90/printer-hub/releases).
 
-## 1.20.1 — unreleased
+## 1.21.0 — unreleased
+
+- Slice from your phone: pick an STL, 3MF or STEP model in Files → Upload, choose quality and filament (one per toolhead on the Snapmaker U1), and the G-code lands on the printer with its preview and Print button. Works at home and away.
+- Slicing runs on your home bridge with OrcaSlicer's own K2 Plus and U1 profiles, so your models stay private. Turn it on by re-running the bridge installer, or add slicer to COMPOSE_PROFILES (setup guide, part 5).
+
+## 1.20.1 — 2026-11-09
 
 - DragonBreath: if the heater accepts "Dry filament" but doesn't start drying, the app now says why (its mode, who controls it, or a safety lock) instead of doing nothing.
 
