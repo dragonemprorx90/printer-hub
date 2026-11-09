@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'gcode.dart';
+import 'models_page.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 import 'slicer.dart';
@@ -171,11 +172,23 @@ class _FilesTabState extends State<FilesTab> {
   Future<void> _slice(String name, Uint8List bytes) async {
     final files = await showSliceDialog(context, c, name, bytes, folder: _path);
     if (files == null || files.isEmpty || !mounted) return;
+    await _show(files.first);
+  }
+
+  /// Online models: ready G-code or a sliced model lands here, then opens.
+  Future<void> _findModels() async {
+    final path = await Navigator.push<String>(
+        context, MaterialPageRoute(builder: (_) => ModelsPage(client: c, folder: _path)));
+    if (path != null && mounted) await _show(path);
+  }
+
+  /// Reloads the folder and opens [path]'s sheet (preview, print).
+  Future<void> _show(String path) async {
     _all = null;
     // Moonraker reads the new file's time and filament a moment after upload.
-    await Future.wait([_load(), c.metadataWhenReady(files.first)]);
+    await Future.wait([_load(), c.metadataWhenReady(path)]);
     if (!mounted) return;
-    final f = _files?.where((f) => f.path == files.first).firstOrNull;
+    final f = _files?.where((f) => f.path == path).firstOrNull;
     if (f != null) _openFile(f);
   }
 
@@ -552,14 +565,24 @@ class _FilesTabState extends State<FilesTab> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _uploading ? null : _pick,
-        icon: _uploading
-            ? const SizedBox(
-                width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.upload_rounded),
-        label: Text(_uploading ? 'Uploading…' : 'Upload'),
-      ),
+      floatingActionButton: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
+        FloatingActionButton.small(
+          heroTag: 'findModels',
+          tooltip: 'Find models online',
+          onPressed: _findModels,
+          child: const Icon(Icons.travel_explore_rounded),
+        ),
+        const SizedBox(height: 12),
+        FloatingActionButton.extended(
+          heroTag: 'upload',
+          onPressed: _uploading ? null : _pick,
+          icon: _uploading
+              ? const SizedBox(
+                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.upload_rounded),
+          label: Text(_uploading ? 'Uploading…' : 'Upload'),
+        ),
+      ]),
       body: body,
     );
   }

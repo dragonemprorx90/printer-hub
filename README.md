@@ -28,6 +28,7 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 
 **Slice from your phone**
 - Pick an STL, 3MF or STEP model, choose quality and filament (one per toolhead on the U1), and print. OrcaSlicer runs on your home bridge, not in someone's cloud.
+- Find models online: search Printables, Creality Cloud and Thingiverse, or browse MakerWorld, inside the app. Files already sliced for your printer print straight away; the rest are sliced at home.
 
 **From anywhere: free and end-to-end encrypted**
 - A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.

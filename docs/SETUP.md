@@ -137,6 +137,7 @@ docker compose pull && docker compose up -d
 - The image is about 1 GB, for amd64 and arm64. A slice takes 10 s to a few minutes; a NAS or Pi 5 is fine, a Pi 4 is slow.
 - **Two printers on one machine:** each bridge folder runs its own slicer. Give the second one `SLICER_PORT=7071` in its `.env`.
 - **Your own presets:** in desktop Orca, export a process or filament preset and copy the `.json` into `slicer-profiles/process/` or `slicer-profiles/filament/` in the bridge folder. They show up in the app's lists.
+- **Find models online:** in Files, the globe button searches **Printables** (no account), **Creality Cloud** (search is open; downloads ask you to sign in once on Creality's own page inside the app) and **Thingiverse** (paste a free app token from [thingiverse.com/developers](https://www.thingiverse.com/developers)). **MakerWorld** opens as its own website inside the app: sign in there, tap Download on a 3MF, and Printer Hub slices it. G-code or a 3MF already made for your K2 Plus or U1 is sent straight to the printer.
 - STEP files are meshed first (fine detail is kept to about 1/36 of a circle), which adds up to a minute for big parts.
 
 ## Troubleshooting

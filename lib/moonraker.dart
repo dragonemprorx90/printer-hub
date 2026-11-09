@@ -906,7 +906,27 @@ class MoonrakerClient {
         _uri(['server', 'files', 'metadata'], {'filename': path}),
         headers: authHeaders);
     if (r.statusCode >= 300) return const {};
-    return Map<String, dynamic>.from(jsonDecode(r.body)['result'] ?? const {});
+    final m = Map<String, dynamic>.from(jsonDecode(r.body)['result'] ?? const {});
+    // The K2's Creality Moonraker reports every file as slicer "Unknown" with
+    // no details: read them from the file's own header and summary instead.
+    if (m['estimated_time'] == null && m['filament_type'] == null && '${m['slicer'] ?? 'Unknown'}' == 'Unknown') {
+      try {
+        final head = await downloadRange(path, 0, 16383);
+        final tail = await _tail(path, 131072);
+        m.addAll(gcodeMeta(latin1.decode(head, allowInvalid: true) + latin1.decode(tail, allowInvalid: true)));
+      } catch (_) {}
+    }
+    return m;
+  }
+
+  /// The last [n] bytes of a file (an HTTP suffix range).
+  Future<Uint8List> _tail(String path, int n) async {
+    final r = await _http.get(
+      _uri(['server', 'files', 'gcodes', ...path.split('/')]),
+      headers: {...authHeaders, 'Range': 'bytes=-$n'},
+    ).timeout(const Duration(seconds: 20));
+    _check(r);
+    return r.bodyBytes;
   }
 
   String thumbnailUrl(String filePath, String relative) {
@@ -1547,4 +1567,44 @@ class MoonrakerClient {
     _statusCtrl.close();
     _consoleCtrl.close();
   }
+}
+
+/// Moonraker-style metadata read from a G-code's own comments (OrcaSlicer,
+/// Creality Print, PrusaSlicer, Cura), for printers whose Moonraker doesn't.
+Map<String, dynamic> gcodeMeta(String text) {
+  final m = <String, dynamic>{};
+  final gen = RegExp(r'^;\s*generated (?:by|with) (\S+?)[ _]+v?(\d[\w.+-]*)', multiLine: true, caseSensitive: false)
+      .firstMatch(text);
+  if (gen != null) {
+    m['slicer'] = gen[1]!.replaceAll('_', ' ').replaceAll(RegExp(r' ?SteamEngine$'), '');
+    m['slicer_version'] = gen[2];
+  }
+  final kv = <String, String>{
+    for (final x in RegExp(r'^;[ \t]*([^=\n;:]+?)[ \t]*=[ \t]*(.*?)[ \t\r]*$', multiLine: true).allMatches(text)) x[1]!: x[2]!,
+  };
+  List<double> nums(String? s) => [for (final p in (s ?? '').split(RegExp(r'[,;]'))) ?double.tryParse(p.trim())];
+  int? duration(String? s) {
+    if (s == null) return null;
+    const unit = {'d': 86400, 'h': 3600, 'm': 60, 's': 1};
+    final parts = RegExp(r'(\d+)\s*([dhms])').allMatches(s);
+    return parts.isEmpty ? null : parts.fold<int>(0, (t, p) => t + int.parse(p[1]!) * unit[p[2]]!);
+  }
+
+  final time = duration(kv['estimated printing time (normal mode)']) ??
+      int.tryParse(RegExp(r'^;TIME:(\d+)', multiLine: true).firstMatch(text)?[1] ?? '');
+  if (time != null) m['estimated_time'] = time;
+  final mm = nums(kv['filament used [mm]']);
+  final metres = double.tryParse(RegExp(r'^;Filament used: ([\d.]+)m', multiLine: true).firstMatch(text)?[1] ?? '');
+  if (mm.isNotEmpty) m['filament_total'] = mm.fold<double>(0, (a, b) => a + b);
+  if (metres != null) m['filament_total'] = metres * 1000;
+  final grams = nums(kv['filament used [g]']);
+  if (grams.isNotEmpty) m['filament_weight'] = grams;
+  final total = double.tryParse(kv['total filament used [g]'] ?? '');
+  if (total != null || grams.isNotEmpty) m['filament_weight_total'] = total ?? grams.fold<double>(0, (a, b) => a + b);
+  if (kv['filament_type'] case final t?) m['filament_type'] = t;
+  if (kv['filament_colour'] case final c?) m['filament_colour'] = c;
+  final layer = double.tryParse(kv['layer_height'] ??
+      RegExp(r'^;Layer height: ([\d.]+)', multiLine: true).firstMatch(text)?[1] ?? '');
+  if (layer != null) m['layer_height'] = layer;
+  return m;
 }

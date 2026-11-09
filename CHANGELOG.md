@@ -3,7 +3,13 @@
 Every release of Printer Hub (app, home bridge, relay and Orca plugin ship together).
 Downloads: [GitHub releases](https://github.com/dragonemprorx90/printer-hub/releases).
 
-## 1.21.0 — unreleased
+## 1.22.0 — unreleased
+
+- Find models online: Files → the globe button searches Printables, Creality Cloud and Thingiverse, or browses MakerWorld. G-code or a 3MF already sliced for your K2 Plus or U1 goes straight to the printer; anything else is sliced on your home bridge first.
+- Creality Cloud downloads use your account: sign in once on Creality's own page inside the app. Thingiverse needs a free app token from thingiverse.com/developers.
+- K2 Plus files now show print time, filament per slot, colours, layer height and slicer, read from the file itself (the K2 doesn't report them).
+
+## 1.21.0 — 2026-11-09
 
 - Slice from your phone: pick an STL, 3MF or STEP model in Files → Upload, choose quality and filament (one per toolhead on the Snapmaker U1), and the G-code lands on the printer with its preview and Print button. Works at home and away.
 - Slicing runs on your home bridge with OrcaSlicer's own K2 Plus and U1 profiles, so your models stay private. Turn it on by re-running the bridge installer, or add slicer to COMPOSE_PROFILES (setup guide, part 5).
