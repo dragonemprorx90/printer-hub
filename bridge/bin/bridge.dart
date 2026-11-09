@@ -456,7 +456,8 @@ class Alerts {
 /// OrcaSlicer's Moonraker agent reads for "Sync filaments").
 Map<String, Map<String, dynamic>> laneData(Map<String, Map<String, dynamic>> lanes) => {
       for (final e in lanes.entries)
-        'lane${(int.tryParse('${e.value['map'] ?? ''}'.replaceAll(RegExp(r'\D'), '')) ?? 0) + 1}': {
+        // Keyed T0..T3 like HelixScreen writes, so one entry per tool (no stale twins).
+        'T${int.tryParse('${e.value['map'] ?? ''}'.replaceAll(RegExp(r'\D'), '')) ?? 0}': {
           'lane': '${int.tryParse('${e.value['map'] ?? ''}'.replaceAll(RegExp(r'\D'), '')) ?? 0}',
           'name': e.key.substring('AFC_lane '.length),
           'color': e.value['load'] == true ? '${e.value['color'] ?? ''}' : '',
@@ -477,6 +478,12 @@ extension on Alerts {
         await _client.post(Uri.parse('http://$host:$port/server/database/item'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'namespace': 'lane_data', 'key': e.key, 'value': e.value}));
+      }
+      // Bridge 1.12.0 wrote lane1..lane4; remove them so Orca sees each tool once.
+      if (_laneDataSent == null) {
+        for (var i = 1; i <= 8; i++) {
+          await _client.delete(Uri.parse('http://$host:$port/server/database/item?namespace=lane_data&key=lane$i'));
+        }
       }
       _laneDataSent = body;
     } catch (e) {

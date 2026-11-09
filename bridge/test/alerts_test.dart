@@ -60,8 +60,8 @@ void main() {
       'AFC_lane E1': {'map': 'T1', 'load': true, 'color': '#F8F81C', 'material': 'PLA', 'spool_id': 4},
       'AFC_lane E0': {'map': 'T0', 'load': false, 'color': '#000000', 'material': 'PLA', 'spool_id': 0},
     });
-    expect(d['lane2'], {'lane': '1', 'name': 'E1', 'color': '#F8F81C', 'material': 'PLA', 'spool_id': 4});
-    expect(d['lane1'], {'lane': '0', 'name': 'E0', 'color': '', 'material': ''});
+    expect(d['T1'], {'lane': '1', 'name': 'E1', 'color': '#F8F81C', 'material': 'PLA', 'spool_id': 4});
+    expect(d['T0'], {'lane': '0', 'name': 'E0', 'color': '', 'material': ''});
   });
 }
 

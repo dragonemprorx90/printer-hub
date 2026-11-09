@@ -6,6 +6,9 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.12.1', [
+    'Home bridge: the U1 filament data Orca reads now replaces old entries instead of adding duplicates.',
+  ]),
   ('1.12.0', [
     'Orca plugin 1.1: each printer\'s loaded filaments, light / pause / resume / cancel, and "Sync colours to Orca", which sets Orca\'s filament slots to the printer\'s colours and materials.',
     'The home bridge now publishes the U1\'s lanes in the standard format Orca reads, so Orca\'s own device tab and Sync filaments work with the U1 (the K2\'s CFS already works).',
