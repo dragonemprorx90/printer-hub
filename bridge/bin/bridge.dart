@@ -210,6 +210,8 @@ class Alerts {
   var _sent = <String>{}; // once-per-print alerts already sent
   bool _hasFilter = false;
   DateTime? _started;
+  final _lanes = <String, Map<String, dynamic>>{};
+  String? _laneDataSent;
   List<Map> _rules = const [];
   final _ranToday = <String>{};
   Timer? _filterOff;
@@ -294,6 +296,15 @@ class Alerts {
     final ws = await WebSocket.connect('ws://$host:$port/websocket')
         .timeout(const Duration(seconds: 10));
     var id = 0;
+    // U1 AFC lanes, so OrcaSlicer's own filament sync can read them.
+    List<String> lanes = const [];
+    try {
+      final r = await _client.get(Uri.parse('http://$host:$port/printer/objects/list'));
+      lanes = [
+        for (final o in (jsonDecode(r.body)['result']?['objects'] as List?) ?? const [])
+          if ('$o'.startsWith('AFC_lane ')) '$o',
+      ];
+    } catch (_) {}
     void subscribe() => ws.add(jsonEncode({
           'jsonrpc': '2.0',
           'id': ++id,
@@ -305,6 +316,7 @@ class Alerts {
               'box': null,
               'dragonbreath': ['connected', 'fault', 'fault_reason'],
               'output_pin dragonbreath_filter': null,
+              for (final l in lanes) l: ['map', 'load', 'color', 'material', 'spool_id', 'filament_name'],
             },
           },
         }));
@@ -345,6 +357,14 @@ class Alerts {
     if (ps is Map) _stats.addAll(Map<String, dynamic>.from(ps));
     final box = status['box'];
     if (box is Map) _box.addAll(Map<String, dynamic>.from(box));
+    var lanesChanged = false;
+    for (final e in status.entries) {
+      if ('${e.key}'.startsWith('AFC_lane ') && e.value is Map) {
+        (_lanes['${e.key}'] ??= {}).addAll(Map<String, dynamic>.from(e.value as Map));
+        lanesChanged = true;
+      }
+    }
+    if (lanesChanged) unawaited(_publishLaneData());
     final db = status['dragonbreath'];
     if (db is Map) _dragon.addAll(Map<String, dynamic>.from(db));
     if (status['output_pin dragonbreath_filter'] != null) _hasFilter = true;
@@ -432,7 +452,38 @@ class Alerts {
   }
 }
 
+/// AFC_lane status -> Moonraker `lane_data` (the AFC / Happy Hare format
+/// OrcaSlicer's Moonraker agent reads for "Sync filaments").
+Map<String, Map<String, dynamic>> laneData(Map<String, Map<String, dynamic>> lanes) => {
+      for (final e in lanes.entries)
+        'lane${(int.tryParse('${e.value['map'] ?? ''}'.replaceAll(RegExp(r'\D'), '')) ?? 0) + 1}': {
+          'lane': '${int.tryParse('${e.value['map'] ?? ''}'.replaceAll(RegExp(r'\D'), '')) ?? 0}',
+          'name': e.key.substring('AFC_lane '.length),
+          'color': e.value['load'] == true ? '${e.value['color'] ?? ''}' : '',
+          'material': e.value['load'] == true ? '${e.value['material'] ?? ''}' : '',
+          if (e.value['spool_id'] is num && (e.value['spool_id'] as num) > 0) 'spool_id': e.value['spool_id'],
+          if ('${e.value['filament_name'] ?? ''}'.isNotEmpty) 'filament_name': e.value['filament_name'],
+        },
+    };
+
 extension on Alerts {
+  Future<void> _publishLaneData() async {
+    final data = laneData(_lanes);
+    final body = jsonEncode(data);
+    if (body == _laneDataSent) return;
+    try {
+      // Moonraker stores a namespace as items; write each lane, then drop stale ones.
+      for (final e in data.entries) {
+        await _client.post(Uri.parse('http://$host:$port/server/database/item'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'namespace': 'lane_data', 'key': e.key, 'value': e.value}));
+      }
+      _laneDataSent = body;
+    } catch (e) {
+      log('lane_data not written: $e');
+    }
+  }
+
   /// Rules come from Moonraker's database (the app edits them). Reloaded each
   /// minute, when daily ones are due too.
   Future<void> _rulesLoop() async {

@@ -54,5 +54,14 @@ void main() {
     expect(snapshotName('My Part (v2).gcode', DateTime.fromMillisecondsSinceEpoch(1794164593000), 'first'),
         'My_Part_v2___1794164593__first.jpg');
   });
+
+  test('U1 lanes become Moonraker lane_data for OrcaSlicer', () {
+    final d = laneData({
+      'AFC_lane E1': {'map': 'T1', 'load': true, 'color': '#F8F81C', 'material': 'PLA', 'spool_id': 4},
+      'AFC_lane E0': {'map': 'T0', 'load': false, 'color': '#000000', 'material': 'PLA', 'spool_id': 0},
+    });
+    expect(d['lane2'], {'lane': '1', 'name': 'E1', 'color': '#F8F81C', 'material': 'PLA', 'spool_id': 4});
+    expect(d['lane1'], {'lane': '0', 'name': 'E0', 'color': '', 'material': ''});
+  });
 }
 

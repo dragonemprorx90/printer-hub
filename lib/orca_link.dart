@@ -44,6 +44,29 @@ Map<String, (String?, Uint8List)> parseMultipart(Uint8List body, String boundary
   return out;
 }
 
+/// Loaded filaments in Orca's slot order: U1 lanes by tool (T0 -> 1), CFS
+/// slots in box order. `tool` is the 0-based Orca filament index.
+List<Map<String, Object?>> hubFilaments(PrinterStatus s) {
+  final out = <Map<String, Object?>>[];
+  var i = 0;
+  for (final b in s.cfs) {
+    for (final slot in b.slots) {
+      final tool = slot.lane != null ? int.tryParse(slot.label.replaceAll(RegExp(r'\D'), '')) ?? i : i;
+      out.add({
+        'tool': tool,
+        'label': slot.label,
+        'material': slot.empty ? '' : slot.material,
+        'color': slot.color == null
+            ? null
+            : '#${(slot.color! & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+      });
+      i++;
+    }
+  }
+  out.sort((a, b) => (a['tool'] as int).compareTo(b['tool'] as int));
+  return out;
+}
+
 /// "K2 Plus" -> "k2-plus", so Orca can target one printer with
 /// http://127.0.0.1:7126/k2-plus
 String printerSlug(String name) =>
@@ -84,6 +107,9 @@ class OrcaLink {
     }
 
     try {
+      // Browsers send Origin on cross-site requests; Orca and the plugin don't.
+      // Refusing those stops a web page from poking 127.0.0.1.
+      if (req.headers.value('origin') != null) return json(403, {'error': 'browser requests not allowed'});
       // Optional printer slug before /api: /k2-plus/api/files/local
       final seg = req.uri.pathSegments;
       final api = seg.indexOf('api');
@@ -110,6 +136,24 @@ class OrcaLink {
             'local': {'name': name, 'origin': 'local'},
           },
         });
+      } else if (path == '/hub/action' && req.method == 'POST') {
+        if (req.headers.value('x-printer-hub') != '1') return json(403, {'error': 'missing X-Printer-Hub header'});
+        final p = printers().where((p) => printerSlug(p.name) == req.uri.queryParameters['printer']).firstOrNull;
+        if (p == null) return json(404, {'error': 'no such printer'});
+        final c = clientFor(p);
+        switch (req.uri.queryParameters['do']) {
+          case 'pause':
+            await c.pause();
+          case 'resume':
+            await c.resume();
+          case 'cancel':
+            await c.cancel();
+          case 'light':
+            await c.setLed(!(c.status.led ?? false));
+          default:
+            return json(400, {'error': 'unknown action'});
+        }
+        json(200, {'ok': true});
       } else if (path == '/hub/printers') {
         json(200, [
           for (final p in printers())
@@ -133,5 +177,7 @@ class OrcaLink {
         'eta': s.eta,
         'hotend': s.hotend,
         'bed': s.bed,
+        'light': s.led,
+        'filaments': hubFilaments(s),
       };
 }
