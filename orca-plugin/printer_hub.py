@@ -5,7 +5,7 @@
 # name = "Printer Hub"
 # description = "Your printers beside the 3D view: live status, loaded filaments, light / pause / resume / cancel, and Use this printer, which loads its Orca printer preset, connection and filaments. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "1.2.0"
+# version = "1.3.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -17,8 +17,9 @@ is contacted). Orca asks once to allow 127.0.0.1.
   its loaded filaments (U1 lanes, K2 CFS), refreshed every 5 s, also from away.
 - Controls: light, pause, resume, cancel.
 - Use this printer: selects the matching Orca printer preset (bed size, nozzles,
-  extruders), points its connection at the printer with Orca's own agent
-  (Snapmaker for the U1, CrealityPrint for the K2) and sets each filament slot
+  extruders), points its connection at Printer Hub's local Moonraker for that
+  printer (127.0.0.1:7130, 7131, ...; works at home and from away) with Orca's
+  own agent (Snapmaker for the U1, Moonraker for the K2) and sets each filament slot
   to the loaded material. Then Orca's sync button next to "Filament" loads the
   exact colours. Orca 2.5's plugin API can't set slot colours itself.
 - Sending prints: add a physical printer in Orca, host type "Octo/Klipper",
@@ -163,7 +164,9 @@ def use_printer(slug):
     preset = _printer_preset(printer.get("model", ""))
     if preset is None:
         return "Orca has no %s printer preset. Add it in Orca's printer list first." % printer.get("model")
-    host = printer["host"] if printer.get("agent") != "moonraker" else "%s:%s" % (printer["host"], printer["port"])
+    # Printer Hub's local Moonraker for this printer: reaches it at home and,
+    # through the home bridge, from anywhere.
+    host = printer.get("proxy") or "%s:%s" % (printer["host"], printer["port"])
     tx = orca.host.preset.printer.begin_update(preset_name=preset)
     tx.set("print_host", host)
     tx.set("host_type", printer.get("host_type", "moonraker"))

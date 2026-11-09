@@ -51,7 +51,9 @@ Map<String, String> orcaModel(MoonrakerClient c) {
   if (s.raw.containsKey('box') || s.raw.containsKey(PrinterStatus.chamberHeaters.first)) {
     final x = s.axisMax.first;
     final model = x >= 340 ? 'K2 Plus' : x >= 290 ? 'K2 Pro' : 'K2';
-    return {'model': 'Creality $model', 'agent': 'crealityprint', 'host_type': 'crealityprint'};
+    // Through the Printer Hub proxy only Moonraker is reachable (not Creality's
+    // port 9999), and Orca's Moonraker agent reads the CFS from Moonraker itself.
+    return {'model': 'Creality $model', 'agent': 'moonraker', 'host_type': 'moonraker'};
   }
   return {'model': '', 'agent': 'moonraker', 'host_type': 'moonraker'};
 }
@@ -94,6 +96,7 @@ class OrcaLink {
   final List<Printer> Function() printers;
   final int port;
   HttpServer? _server;
+  final _proxies = <HttpServer>[];
 
   OrcaLink({required this.onUpload, required this.printers, this.port = kOrcaPort});
 
@@ -103,11 +106,66 @@ class OrcaLink {
     if (_server != null) return;
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     _server!.listen(_handle, onError: (_) {});
+    // One local Moonraker per printer (port + 4 + index), so OrcaSlicer's own
+    // printer agents (device page, filament sync, printing) reach the printer
+    // through Printer Hub, at home or through the relay from anywhere.
+    // ponytail: ports follow the printer list order; "Use this printer" re-reads them.
+    for (final (i, p) in printers().indexed) {
+      try {
+        final s = await HttpServer.bind(InternetAddress.loopbackIPv4, proxyPort(i));
+        s.listen((r) => _proxy(p, r), onError: (_) {});
+        _proxies.add(s);
+      } catch (_) {} // port taken: that printer just has no Orca proxy
+    }
   }
+
+  int proxyPort(int index) => port + 4 + index;
 
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
+    for (final s in _proxies) {
+      await s.close(force: true);
+    }
+    _proxies.clear();
+  }
+
+  Future<void> _proxy(Printer p, HttpRequest req) async {
+    final res = req.response;
+    try {
+      if (req.headers.value('origin') != null) {
+        res.statusCode = 403;
+        return await res.close();
+      }
+      final c = clientFor(p);
+      if (req.uri.path == '/websocket' && WebSocketTransformer.isUpgradeRequest(req)) {
+        final ws = await WebSocketTransformer.upgrade(req);
+        final (stream, send, close) = await c.openSocket();
+        final sub = stream.listen(ws.add, onDone: () => ws.close());
+        ws.listen((m) => send('$m'), onDone: () {
+          sub.cancel();
+          close();
+        });
+        return;
+      }
+      final body = await req
+          .fold<BytesBuilder>(BytesBuilder(copy: false), (a, c) => a..add(c))
+          .then((x) => x.takeBytes());
+      final headers = <String, String>{};
+      req.headers.forEach((k, v) => headers[k] = v.join(','));
+      final r = await c.forward(req.method, req.uri.toString(), headers, body);
+      res.statusCode = r.statusCode;
+      final ct = r.headers['content-type'];
+      if (ct != null) res.headers.set('content-type', ct);
+      await res.addStream(r.stream);
+      await res.close();
+    } catch (e) {
+      try {
+        res.statusCode = 502;
+        res.write('$e');
+        await res.close();
+      } catch (_) {}
+    }
   }
 
   Future<void> _handle(HttpRequest req) async {
@@ -173,6 +231,7 @@ class OrcaLink {
             {
               'name': p.name,
               'slug': printerSlug(p.name),
+              'proxy': '127.0.0.1:${proxyPort(printers().indexOf(p))}',
               'host': p.host,
               'port': p.port,
               ...orcaModel(clientFor(p)),

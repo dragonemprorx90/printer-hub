@@ -503,6 +503,30 @@ class MoonrakerClient {
   final PairInfo? relay;
   RelayLink? _link;
 
+  /// Raw Moonraker request for the Orca proxy: LAN at home, relay when away.
+  Future<http.StreamedResponse> forward(
+      String method, String pathAndQuery, Map<String, String> headers, List<int> body) {
+    final req = http.Request(method, Uri.parse('http://$host:$port$pathAndQuery'))..bodyBytes = body;
+    for (final k in const ['content-type', 'accept', 'range']) {
+      if (headers[k] != null) req.headers[k] = headers[k]!;
+    }
+    req.headers.addAll(authHeaders);
+    return _http.send(req);
+  }
+
+  /// A separate Moonraker websocket (for Orca): direct at home, or its own
+  /// relay session when away. Returns (messages, send, close).
+  Future<(Stream<String>, void Function(String), void Function())> openSocket() async {
+    if (viaRelay && relay != null) {
+      final link = await RelayLink.connect(relay!);
+      return (link.moonraker, link.sendMoonraker, link.close);
+    }
+    final q = apiKey != null ? '?token=$apiKey' : '';
+    final ch = WebSocketChannel.connect(Uri.parse('ws://$host:$port/websocket$q'));
+    await ch.ready;
+    return (ch.stream.map((e) => '$e'), (String m) => ch.sink.add(m), () => ch.sink.close());
+  }
+
   /// Round trip to the relay when connected from away.
   Duration? get relayDelay => _link?.rtt;
   void Function(String)? _sendRaw;

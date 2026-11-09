@@ -6,6 +6,10 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.14.0', [
+    'Orca works with your printers from anywhere: Printer Hub runs a local Moonraker for each printer (127.0.0.1:7130, 7131, …) that reaches it at home or through your home bridge. Orca\'s device page, filament sync and printing go through it.',
+    'Orca plugin 1.3: "Use this printer in Orca" points Orca at that local address.',
+  ]),
   ('1.13.0', [
     'Orca plugin 1.2: "Use this printer in Orca" loads the matching Orca printer preset (bed size, nozzles), connects it to the printer with Orca\'s own Snapmaker or Creality agent, and sets each filament slot to the loaded material. Then Orca\'s sync button next to Filament loads the colours.',
   ]),
