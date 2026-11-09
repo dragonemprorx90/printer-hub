@@ -6,6 +6,12 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.16.0', [
+    'Orca plugin 3.0: camera picture, layer / finish time, temperatures with targets, heater status, filament mismatch warnings against Orca\'s slots, and an "in Orca" badge on each printer.',
+    'Plugin controls: temperatures and preheat (from Orca\'s filament), home, motors off, E-stop, fans, speed, flow, Z offset, pause at layer, macros, exclude object, DragonBreath drying / filter / fault clear, bed mesh range.',
+    'Plugin History (pictures, success rate, reprint), Spools (grams left, low warning, load into a lane, add a spool) and Rules (on/off).',
+    'Orca notifications when a print finishes, fails or pauses, and when the chamber reaches its temperature; settings for refresh rate, compact cards and problems first.',
+  ]),
   ('1.15.0', [
     'Orca plugin 2.0: opens by itself when Orca starts; after closing it, click "Open Printer Hub" in Orca\'s notification to bring it back.',
     'Removed "Use this printer in Orca". Each printer card shows its Orca connection (127.0.0.1 and port) to enter once; Orca\'s own Filament sync then loads the colours.',

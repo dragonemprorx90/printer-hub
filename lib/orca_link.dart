@@ -45,6 +45,25 @@ Map<String, (String?, Uint8List)> parseMultipart(Uint8List body, String boundary
   return out;
 }
 
+/// A camera picture: through the relay when away, the U1's snapshot URL or a
+/// JPEG camera URL at home. Throws when there is no camera to read.
+Future<List<int>> cameraSnapshot(Printer p, MoonrakerClient c) async {
+  if (c.viaRelay) return c.relayFrame();
+  final urls = [
+    if (c.isSnapmaker) 'http://${p.host}/webcam/snapshot.jpg',
+    if (p.cameraUrl != null && RegExp(r'\.jpe?g|snapshot', caseSensitive: false).hasMatch(p.cameraUrl!)) p.cameraUrl!,
+  ];
+  for (final u in urls) {
+    try {
+      final r = await HttpClient().getUrl(Uri.parse(u)).then((q) => q.close()).timeout(const Duration(seconds: 8));
+      if (r.statusCode == 200) {
+        return await r.fold<List<int>>([], (a, b) => a..addAll(b));
+      }
+    } catch (_) {}
+  }
+  throw 'No camera picture for ${p.name}';
+}
+
 /// Keeps every printer's existing port; gives new ones the lowest free port
 /// from [base]. Ports of removed printers stay reserved so they are never
 /// handed to a different printer that Orca might still have saved.
@@ -254,19 +273,138 @@ class OrcaLink {
         final p = printers().where((p) => printerSlug(p.name) == req.uri.queryParameters['printer']).firstOrNull;
         if (p == null) return json(404, {'error': 'no such printer'});
         final c = clientFor(p);
-        switch (req.uri.queryParameters['do']) {
+        final q = req.uri.queryParameters;
+        double n(String k) => double.tryParse(q[k] ?? '') ?? 0;
+        switch (q['do']) {
           case 'pause':
             await c.pause();
           case 'resume':
             await c.resume();
           case 'cancel':
             await c.cancel();
+          case 'estop':
+            await c.emergencyStop();
           case 'light':
             await c.setLed(!(c.status.led ?? false));
+          case 'nozzle':
+            await c.setHotend(n('value').round());
+          case 'bed':
+            await c.setBed(n('value').round());
+          case 'chamber':
+            await c.setChamber(n('value').round());
+          case 'preheat': // nozzle,bed[,chamber]
+            await c.setHotend(n('nozzle').round());
+            await c.setBed(n('bed').round());
+            if (q['chamber'] != null && c.status.chamberHeatable) await c.setChamber(n('chamber').round());
+          case 'cooldown':
+            await c.gcode('TURN_OFF_HEATERS');
+          case 'home':
+            await c.home();
+          case 'motors_off':
+            await c.gcode('M84');
+          case 'fan':
+            final f = c.status.fans.where((f) => f.object == q['object']).firstOrNull;
+            if (f == null) return json(404, {'error': 'no such fan'});
+            await c.setFan(f, n('value').clamp(0, 1).toDouble());
+          case 'speed':
+            await c.setSpeed(n('value').round());
+          case 'flow':
+            await c.setFlow(n('value').round());
+          case 'zoffset':
+            await c.adjustZOffset(n('value').clamp(-0.1, 0.1).toDouble());
+          case 'pause_at_layer':
+            await c.pauseAtLayer(n('value') <= 0 ? null : n('value').round());
+          case 'macro':
+            final m = q['name'] ?? '';
+            if (!c.macros.contains(m)) return json(404, {'error': 'no such macro'});
+            await c.gcode(m);
+          case 'exclude':
+            final o = q['name'] ?? '';
+            if (!c.status.objects.any((x) => x.name == o)) return json(404, {'error': 'no such object'});
+            await c.excludeObject(o);
+          case 'dry':
+            await c.heaterCommand('drying_start',
+                {'target_c': n('temp').round().clamp(30, 70), 'hours': n('hours').round().clamp(1, 12)});
+          case 'dry_stop':
+            await c.heaterCommand('drying_stop');
+          case 'heater_filter':
+            await c.gcode('SET_PIN PIN=dragonbreath_filter VALUE=${n('value') > 0 ? 1 : 0}');
+          case 'heater_reset':
+            await c.resetHeaterFault();
+          case 'reprint':
+            if (const {'printing', 'paused'}.contains(c.status.state)) return json(409, {'error': 'printer is busy'});
+            await c.startPrint(q['file'] ?? '');
+          case 'link_spool':
+            await c.setLaneSpool(q['lane'] ?? '', n('spool').round());
+          case 'add_spool':
+            final lane = c.status.cfs.expand((b) => b.slots).where((s) => s.lane == q['lane']).firstOrNull;
+            if (lane == null || lane.color == null) return json(404, {'error': 'no such loaded lane'});
+            final id = await c.addSpool(
+                vendor: 'Generic', material: lane.material, color: lane.color!, grams: n('grams') <= 0 ? 1000 : n('grams'));
+            await c.setLaneSpool(lane.lane!, id);
+          case 'rule_toggle':
+            final rules = await c.rules();
+            final i = n('index').round();
+            if (i < 0 || i >= rules.length) return json(404, {'error': 'no such rule'});
+            rules[i] = {...rules[i], 'off': rules[i]['off'] != true};
+            await c.setRules(rules);
           default:
             return json(400, {'error': 'unknown action'});
         }
         json(200, {'ok': true});
+      } else if (path.startsWith('/hub/') && req.method == 'GET' && path != '/hub/printers') {
+        final p = printers().where((p) => printerSlug(p.name) == req.uri.queryParameters['printer']).firstOrNull;
+        if (p == null) return json(404, {'error': 'no such printer'});
+        final c = clientFor(p);
+        void jpeg(List<int> bytes) {
+          res.headers
+            ..contentType = ContentType('image', 'jpeg')
+            ..set('cache-control', 'no-store');
+          res.add(bytes);
+        }
+
+        switch (path) {
+          case '/hub/snapshot':
+            jpeg(await cameraSnapshot(p, c));
+          case '/hub/picture':
+            jpeg(await c.snapshotBytes(req.uri.queryParameters['name'] ?? ''));
+          case '/hub/history':
+            final jobs = await c.history(limit: 10);
+            final files = await c.snapshotFiles().catchError((_) => <String>[]);
+            json(200, [
+              for (final j in jobs)
+                {
+                  'file': j.filename,
+                  'status': j.status,
+                  'start': j.start.millisecondsSinceEpoch,
+                  'duration': j.duration,
+                  'filament': j.filament,
+                  'exists': j.exists,
+                  'pictures': snapshotsFor(j, files),
+                },
+            ]);
+          case '/hub/spools':
+            final on = await c.hasSpoolman();
+            json(200, {
+              'enabled': on,
+              if (on) 'active': await c.activeSpool(),
+              if (on)
+                'spools': [
+                  for (final sp in await c.spools())
+                    {
+                      'id': sp.id,
+                      'name': sp.name,
+                      'material': sp.material,
+                      'color': sp.color == null ? null : '#${(sp.color! & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
+                      'remaining': sp.remaining,
+                    },
+                ],
+            });
+          case '/hub/rules':
+            json(200, await c.rules());
+          default:
+            json(404, {'error': 'not found'});
+        }
       } else if (path == '/hub/printers') {
         await _ensureProxies();
         json(200, [
@@ -278,7 +416,7 @@ class OrcaLink {
               'host': p.host,
               'port': p.port,
               ...orcaModel(clientFor(p)),
-              ..._status(clientFor(p).status),
+              ..._status(clientFor(p)),
             },
         ]);
       } else {
@@ -291,15 +429,49 @@ class OrcaLink {
     }
   }
 
-  static Map<String, Object?> _status(PrinterStatus s) => {
-        'online': s.online,
-        'state': s.state,
-        'file': s.filename,
-        'progress': s.progress,
-        'eta': s.eta,
-        'hotend': s.hotend,
-        'bed': s.bed,
-        'light': s.led,
-        'filaments': hubFilaments(s),
-      };
+  static Map<String, Object?> _status(MoonrakerClient c) {
+    final s = c.status;
+    final mesh = [for (final r in s.mesh) ...r];
+    final dragon = s.dragon;
+    return {
+      'online': s.online,
+      'state': s.state,
+      'message': s.message,
+      'file': s.filename,
+      'progress': s.progress,
+      'eta': s.eta,
+      'layer': s.currentLayer,
+      'layers': s.totalLayers,
+      'hotend': s.hotend,
+      'hotendTarget': s.hotendTarget,
+      'bed': s.bed,
+      'bedTarget': s.bedTarget,
+      if (s.hasChamber) 'chamber': s.chamber,
+      if (s.chamberHeatable) 'chamberTarget': s.chamberTarget,
+      'speed': (s.speedFactor * 100).round(),
+      'flow': (s.flowFactor * 100).round(),
+      'zOffset': s.zOffset,
+      'light': s.led,
+      'fans': [
+        for (final f in s.fans) {'object': f.object, 'label': f.label, 'value': f.value},
+      ],
+      'objects': [for (final o in s.objects) o.name],
+      'macros': c.macros,
+      'canPauseAtLayer': c.canPauseAtLayer,
+      if (mesh.isNotEmpty)
+        'meshRange': mesh.reduce((a, b) => a > b ? a : b) - mesh.reduce((a, b) => a < b ? a : b),
+      if (dragon != null)
+        'heater': {
+          'connected': dragon['connected'],
+          'mode': dragon['mode'],
+          'fault': dragon['fault'],
+          'faultReason': dragon['fault_reason'],
+          'temperature': dragon['temperature'],
+          'target': dragon['target'],
+        },
+      'away': c.viaRelay,
+      if (c.relayDelay != null) 'delayMs': c.relayDelay!.inMilliseconds,
+      'filaments': hubFilaments(s),
+    };
+  }
 }
