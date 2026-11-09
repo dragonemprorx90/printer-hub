@@ -455,13 +455,14 @@ class _FilesTabState extends State<FilesTab> {
                     _favOnly ? 'No favourite files yet' : 'No files here'),
               ])
             : ListView.separated(
+                key: ValueKey(_path), // new folder: rows replay their entrance
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
                 itemCount: dirs.length + files.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (_, i) {
                   if (i < dirs.length) {
                     final d = dirs[i];
-                    return Tile(
+                    return Reveal(index: i, child: Tile(
                       onTap: () => _openDir(_path.isEmpty ? d : '$_path/$d'),
                       child: ListTile(
                         leading: Icon(Icons.folder_rounded, color: C.warn, size: 32),
@@ -472,10 +473,10 @@ class _FilesTabState extends State<FilesTab> {
                           onPressed: () => _folderMenu(d),
                         ),
                       ),
-                    );
+                    ));
                   }
                   final f = files[i - dirs.length];
-                  return _FileTile(
+                  return Reveal(index: i, child: _FileTile(
                     file: f,
                     client: c,
                     favourite: favs.contains(f.path),
@@ -483,7 +484,7 @@ class _FilesTabState extends State<FilesTab> {
                     selected: _sel.contains(f.path),
                     onTap: () => _sel.isEmpty ? _openFile(f) : _toggleSel(f.path),
                     onLongPress: () => _toggleSel(f.path),
-                  );
+                  ));
                 },
               ),
       );
@@ -492,7 +493,13 @@ class _FilesTabState extends State<FilesTab> {
     Widget body = Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 960),
-        child: Column(children: [header, breadcrumb, if (_sel.isNotEmpty) _selectionBar(), queue, Expanded(child: list)]),
+        child: Column(children: [
+          header,
+          breadcrumb,
+          if (_sel.isNotEmpty) _selectionBar(),
+          queue,
+          Expanded(child: AnimatedSwitcher(duration: M.base, child: list)),
+        ]),
       ),
     );
     if (_isDesktop) {

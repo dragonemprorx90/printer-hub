@@ -282,13 +282,13 @@ class _PrinterListPageState extends State<PrinterListPage> {
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (_, i) {
                     final p = _printers[i];
-                    return _PrinterCard(
+                    return Reveal(index: i, child: _PrinterCard(
                       printer: p,
                       onOpen: () => Navigator.push(context,
                           MaterialPageRoute(builder: (_) => PrinterPage(printer: p))),
                       onEdit: () => _edit(existing: p),
                       onDelete: () => _delete(p),
-                    );
+                    ));
                   },
                 ),
               ),

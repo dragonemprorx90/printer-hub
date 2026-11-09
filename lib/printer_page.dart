@@ -40,13 +40,18 @@ class _PrinterPageState extends State<PrinterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final body = IndexedStack(index: _tab, children: [
+    final tabs = [
       OverviewTab(
           printer: widget.printer, client: _client, onBrowseFiles: () => _go(2)),
       ControlTab(client: _client, printer: widget.printer),
       FilesTab(client: _client, printer: widget.printer),
       ToolsTab(client: _client, printer: widget.printer),
       HistoryTab(client: _client),
+    ];
+    // All tabs stay mounted (they load in the background); the shown one
+    // fades in and replays its content stagger.
+    final body = IndexedStack(index: _tab, children: [
+      for (final (i, t) in tabs.indexed) _TabPane(active: i == _tab, child: t),
     ]);
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= 1000;
@@ -132,6 +137,48 @@ class _PrinterPageState extends State<PrinterPage> {
       );
     });
   }
+}
+
+class _TabPane extends StatefulWidget {
+  final bool active;
+  final Widget child;
+  const _TabPane({required this.active, required this.child});
+  @override
+  State<_TabPane> createState() => _TabPaneState();
+}
+
+class _TabPaneState extends State<_TabPane> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: M.base, value: 1);
+  late final _a = CurvedAnimation(parent: _c, curve: M.curve);
+  int _epoch = 0;
+
+  @override
+  void didUpdateWidget(_TabPane old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      _epoch++;
+      if (!M.reduced(context)) _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RevealScope(
+        epoch: _epoch,
+        child: AnimatedBuilder(
+          animation: _a,
+          builder: (_, child) => Opacity(
+            opacity: _a.value,
+            child: Transform.translate(offset: Offset(0, 8 * (1 - _a.value)), child: child),
+          ),
+          child: widget.child,
+        ),
+      );
 }
 
 class OverviewTab extends StatefulWidget {
@@ -234,18 +281,18 @@ class _OverviewTabState extends State<OverviewTab> {
                 children: [
                   Expanded(
                     flex: 3,
-                    child: Column(children: [camera, gap, job, gap, chart]),
+                    child: Column(children: staggered([camera, gap, job, gap, chart])),
                   ),
                   gap,
                   Expanded(
                     flex: 2,
-                    child: Column(children: [temps, gap, cfs, actions]),
+                    child: Column(children: staggered([temps, gap, cfs, actions])),
                   ),
                 ],
               ),
             );
           }
-          return ListView(padding: const EdgeInsets.all(16), children: [
+          return ListView(padding: const EdgeInsets.all(16), children: staggered([
             camera,
             gap,
             job,
@@ -256,7 +303,7 @@ class _OverviewTabState extends State<OverviewTab> {
             gap,
             cfs,
             actions,
-          ]);
+          ]));
         });
       },
     );

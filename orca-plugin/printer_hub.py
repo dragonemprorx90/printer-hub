@@ -5,7 +5,7 @@
 # name = "Printer Hub"
 # description = "Your printers beside the 3D view: camera, progress, temperatures, controls, filaments and spools, history with pictures, rules and print alerts. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "3.2.0"
+# version = "3.3.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -44,7 +44,7 @@ PAGE = r"""
   /* Tokens mirror lib/ui.dart; see docs/designs/ui-style.md */
   :root { --ph-danger: #FF5470; --ph-warn: #F5A524; --ph-border: var(--orca-border, #8884); --ph-muted: var(--orca-muted, #888); --ph-accent: var(--orca-accent, #339cff); }
   @media (prefers-color-scheme: light) { :root { --ph-danger: #C8243F; --ph-warn: #9A6200; } }
-  body { margin: 0; padding: 12px; font-size: 13px; }
+  body { margin: 0; padding: 12px; font-size: 13px; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
   h3 { margin: 0; font-size: 14px; }
   .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
   .top select, .top label { font-size: 12px; }
@@ -65,8 +65,11 @@ PAGE = r"""
   .chip { display: flex; align-items: center; gap: 4px; font-size: 12px; }
   .dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--ph-border); display: inline-block; }
   .actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-  button { font-size: 12px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--ph-border); background: transparent; color: inherit; cursor: pointer; }
+  button { font-size: 12px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--ph-border); background: transparent; color: inherit; cursor: pointer;
+           transition-property: background-color, transform; transition-duration: 150ms; transition-timing-function: ease-out; }
   button:hover { background: rgba(128, 128, 128, .15); }
+  button:active { transform: scale(.96); }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } button:active { transform: none; } }
   button.danger { color: var(--ph-danger); }
   .sec { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ph-border); }
   .sec.err { border-left: 0; padding-left: 0; color: var(--ph-danger); }

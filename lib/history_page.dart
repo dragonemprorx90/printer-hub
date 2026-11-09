@@ -150,7 +150,7 @@ class _HistoryTabState extends State<HistoryTab> {
               if (i > 0) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _JobTile(job: shown[i - 1], client: widget.client),
+                  child: Reveal(index: i, child: _JobTile(job: shown[i - 1], client: widget.client)),
                 );
               }
               return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

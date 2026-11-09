@@ -103,6 +103,25 @@ On the Blue accent, "printing" and "complete" share a hue. The label and the pro
 - The panel defines `--ph-danger: #FF5470` and `--ph-warn: #F5A524`.
 - Under `@media (prefers-color-scheme: light)` these become `#C8243F` and `#9A6200`.
 
+### Motion: `M`
+
+Motion explains change. It doesn't decorate. Every animation is skipped when the OS asks for reduced motion (`M.reduced`).
+
+| Token | Value | Used for |
+|---|---|---|
+| `M.fast` | 150ms | press feedback, small state changes |
+| `M.base` | 260ms | tab switch, colour changes, list state crossfade |
+| `M.enter` | 420ms | content entrance (`Reveal`) |
+| `M.curve` | easeOutCubic | everything except the printing pulse |
+
+- **Tab switch:** the shown tab fades in and rises 8px. Every tab stays mounted, so data keeps loading in the background. Panels inside the tab replay a stagger (`Reveal`, 45ms apart, capped at 8 items).
+- **Entrance:** opacity 0→1 while rising 12px. Used for Home printer cards, History rows, Files rows (replayed per folder) and panels on Overview, Control and Tools. Rows inside a panel don't stagger.
+- **Press:** `Tile` scales to 0.98 while held.
+- **Status:** `StatusPill` animates its colour. The "printing" dot breathes between 40% and 100% opacity every 1.4s.
+- **Numbers:** temperatures, progress and stat values use tabular figures, so digits don't jitter.
+- **Pages:** fade-forward transitions on the Mac, the standard swipe on iPhone.
+- **Orca panel:** buttons transition background and press to 0.96 over 150ms. No entrance animation, because the panel re-renders on every poll.
+
 ## Components
 
 - **Panel:** surface, 1px border, `R.xl`, 16 padding, an optional uppercase `T.label` title with a muted 18px icon.

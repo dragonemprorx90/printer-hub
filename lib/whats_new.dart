@@ -6,6 +6,13 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.19.0', [
+    'Motion: switching tabs fades the page in and its cards arrive one after another; printer cards, files and history rows slide in the same way.',
+    'Cards sink slightly when pressed, status pills change colour smoothly, and the "Printing" dot gently pulses.',
+    'Temperatures and progress numbers no longer jiggle as digits change.',
+    'Respects "Reduce motion" in system settings.',
+    'Orca plugin 3.3: buttons respond to hover and press.',
+  ]),
   ('1.18.1', [
     'iPhone: "Update" asks whether to install with LiveContainer or SideStore and hands the new version straight to it.',
   ]),

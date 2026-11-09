@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 class Palette {
@@ -84,11 +86,86 @@ class T {
   static const caption = TextStyle(fontSize: 11);
   static const label = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
   static const small = TextStyle(fontSize: 13);
-  static const value = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
+  static const value = TextStyle(
+      fontSize: 16, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]);
   static const title = TextStyle(fontSize: 18, fontWeight: FontWeight.w800);
   static const heading = TextStyle(fontSize: 20, fontWeight: FontWeight.w800);
-  static const hero = TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
+  static const hero = TextStyle(
+      fontSize: 26, fontWeight: FontWeight.w800, fontFeatures: [FontFeature.tabularFigures()]);
 }
+
+/// Motion. See docs/designs/ui-style.md. Everything is skipped when the OS
+/// asks for reduced motion.
+class M {
+  static const fast = Duration(milliseconds: 150);
+  static const base = Duration(milliseconds: 260);
+  static const enter = Duration(milliseconds: 420);
+  static const curve = Curves.easeOutCubic;
+  static const stagger = 45; // ms between items, capped at 8 items
+  static bool reduced(BuildContext c) => MediaQuery.maybeDisableAnimationsOf(c) ?? false;
+}
+
+/// Bumped each time a tab is shown so the [Reveal]s inside it replay.
+class RevealScope extends InheritedWidget {
+  final int epoch;
+  const RevealScope({super.key, required this.epoch, required super.child});
+  static int of(BuildContext c) => c.dependOnInheritedWidgetOfExactType<RevealScope>()?.epoch ?? 0;
+  @override
+  bool updateShouldNotify(RevealScope old) => old.epoch != epoch;
+}
+
+/// Fades a child in while it rises 12px, [index] steps later than the first.
+class Reveal extends StatefulWidget {
+  final int index;
+  final Widget child;
+  const Reveal({super.key, this.index = 0, required this.child});
+  @override
+  State<Reveal> createState() => _RevealState();
+}
+
+class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: M.enter);
+  late final _a = CurvedAnimation(parent: _c, curve: M.curve);
+  int? _epoch;
+  Timer? _t;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final e = RevealScope.of(context);
+    if (e == _epoch) return;
+    _epoch = e;
+    _t?.cancel();
+    if (M.reduced(context)) {
+      _c.value = 1;
+      return;
+    }
+    _c.value = 0;
+    _t = Timer(Duration(milliseconds: M.stagger * math.min(widget.index, 8)),
+        () => mounted ? _c.forward() : null);
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _a,
+        builder: (_, child) => Opacity(
+          opacity: _a.value,
+          child: Transform.translate(offset: Offset(0, 12 * (1 - _a.value)), child: child),
+        ),
+        child: widget.child,
+      );
+}
+
+/// Wraps each child in a [Reveal] so they enter one after another.
+List<Widget> staggered(List<Widget> children) =>
+    [for (final (i, w) in children.indexed) Reveal(index: i, child: w)];
 
 const mono = TextStyle(
   fontFamily: 'Menlo',
@@ -157,6 +234,11 @@ ThemeData buildTheme(Palette p, Color accent) {
     ),
     popupMenuTheme: PopupMenuThemeData(color: p.surface),
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+    }),
     dividerTheme: DividerThemeData(color: p.border, space: 1),
     sliderTheme: SliderThemeData(
       activeTrackColor: accent,
@@ -240,8 +322,9 @@ class Panel extends StatelessWidget {
   }
 }
 
-/// Tappable card surface used by list rows and tiles.
-class Tile extends StatelessWidget {
+/// Tappable card surface used by list rows and tiles. Sinks slightly while
+/// pressed.
+class Tile extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap, onLongPress;
   final double radius;
@@ -250,19 +333,39 @@ class Tile extends StatelessWidget {
       {super.key, required this.child, this.onTap, this.onLongPress, this.radius = R.lg, this.selected = false});
 
   @override
-  Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(radius),
-          boxShadow: _softShadow,
-        ),
-        child: Material(
-          color: C.surface,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radius),
-            side: BorderSide(color: selected ? C.accent : C.border, width: selected ? 2 : 1),
+  State<Tile> createState() => _TileState();
+}
+
+class _TileState extends State<Tile> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) => AnimatedScale(
+        scale: _down && !M.reduced(context) ? 0.98 : 1,
+        duration: M.fast,
+        curve: M.curve,
+        child: AnimatedContainer(
+          duration: M.base,
+          curve: M.curve,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.radius),
+            boxShadow: _softShadow,
           ),
-          child: InkWell(onTap: onTap, onLongPress: onLongPress, child: child),
+          child: Material(
+            color: C.surface,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(widget.radius),
+              side: BorderSide(
+                  color: widget.selected ? C.accent : C.border, width: widget.selected ? 2 : 1),
+            ),
+            child: InkWell(
+              onTap: widget.onTap,
+              onLongPress: widget.onLongPress,
+              onHighlightChanged: (v) => setState(() => _down = v),
+              child: widget.child,
+            ),
+          ),
         ),
       );
 }
@@ -318,7 +421,8 @@ class TempGauge extends StatelessWidget {
                         '${t.toStringAsFixed(0)}°',
                         style: TextStyle(
                             fontSize: d > 90 ? 26 : 20,
-                            fontWeight: FontWeight.w800),
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [FontFeature.tabularFigures()]),
                       ),
                       Text(
                         heating ? '→ ${target.toStringAsFixed(0)}°' : 'off',
@@ -422,7 +526,9 @@ class ProgressRing extends StatelessWidget {
               child: center ??
                   Text('${(v * 100).toStringAsFixed(0)}%',
                       style: TextStyle(
-                          fontSize: size / 4.3, fontWeight: FontWeight.w800)),
+                          fontSize: size / 4.3,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: const [FontFeature.tabularFigures()])),
             ),
           ]),
         ),
@@ -450,7 +556,9 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final (color, label) = statusStyle(state, online);
     final live = online && state == 'printing';
-    return Container(
+    return AnimatedContainer(
+      duration: M.base,
+      curve: M.curve,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
@@ -458,15 +566,18 @@ class StatusPill extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            boxShadow: live
-                ? [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 6)]
-                : null,
+        _Breathe(
+          on: live,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: live
+                  ? [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 6)]
+                  : null,
+            ),
           ),
         ),
         const SizedBox(width: 6),
@@ -474,6 +585,51 @@ class StatusPill extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Slow opacity pulse for the "printing" dot.
+class _Breathe extends StatefulWidget {
+  final bool on;
+  final Widget child;
+  const _Breathe({required this.on, required this.child});
+  @override
+  State<_Breathe> createState() => _BreatheState();
+}
+
+class _BreatheState extends State<_Breathe> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+
+  void _sync() {
+    if (widget.on && !M.reduced(context)) {
+      if (!_c.isAnimating) _c.repeat(reverse: true);
+    } else {
+      _c.value = 1;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_Breathe old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: Tween(begin: 0.4, end: 1.0).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut)),
+        child: widget.child,
+      );
 }
 
 class StatTile extends StatelessWidget {

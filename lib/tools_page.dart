@@ -195,7 +195,7 @@ class _ToolsTabState extends State<ToolsTab> {
         ];
         const gap = SizedBox(height: 16, width: 16);
         List<Widget> spaced(List<Widget> w) => [
-          for (final (i, x) in w.indexed) ...[if (i > 0) gap, x],
+          for (final (i, x) in w.indexed) ...[if (i > 0) gap, Reveal(index: i, child: x)],
         ];
         return LayoutBuilder(
           builder: (context, box) {

@@ -49,15 +49,15 @@ class _ControlTabState extends State<ControlTab> {
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(
                     child: Column(
-                        children: [move, gap, extruder, gap, offsets, gap, system])),
+                        children: staggered([move, gap, extruder, gap, offsets, gap, system]))),
                 gap,
-                Expanded(child: Column(children: [tune, gap, macros])),
+                Expanded(child: Column(children: staggered([tune, gap, macros]))),
               ]),
             );
           }
-          return ListView(padding: const EdgeInsets.all(16), children: [
+          return ListView(padding: const EdgeInsets.all(16), children: staggered([
             move, gap, extruder, gap, offsets, gap, tune, gap, macros, gap, system,
-          ]);
+          ]));
         });
       },
     );
