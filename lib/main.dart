@@ -22,6 +22,7 @@ import 'whats_new.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await migrateSandboxPrefs();
   await settings.load();
   runApp(const PrinterHubApp());
   // Not awaited: the system permission prompt must never hold up the UI.

@@ -9,7 +9,7 @@ import 'settings.dart';
 import 'ui.dart';
 
 /// Keep in step with `version:` in pubspec.yaml.
-const kAppVersion = '1.17.0';
+const kAppVersion = '1.18.0';
 
 /// Where releases are published; can be changed in Settings.
 const kUpdateRepo = 'dragonemprorx90/printer-hub';
@@ -97,15 +97,168 @@ Future<UpdateInfo?> checkForUpdate() async {
   );
 }
 
-/// Once a day on launch, silent unless an update exists.
+/// Once a day on launch, silent unless an update exists. On the Mac the
+/// update is downloaded and installed in the background first, then the
+/// user is asked to restart.
 Future<void> autoCheckForUpdate(BuildContext context) async {
   if (!settings.flag('updateAuto') || updateRepo.isEmpty) return;
   final last = settings.number('updateCheckedAt', 0);
   if (DateTime.now().millisecondsSinceEpoch - last < 24 * 3600 * 1000) return;
   try {
     final u = await checkForUpdate();
-    if (u != null && context.mounted) await showUpdate(context, u);
+    if (u == null || !context.mounted) return;
+    if (Platform.isMacOS && u.downloadUrl != null) {
+      try {
+        await installMacUpdate(u.downloadUrl!);
+        if (context.mounted) await askRestart(context, u);
+        return;
+      } catch (_) {} // fall back to the normal dialog
+    }
+    if (context.mounted) await showUpdate(context, u);
   } catch (_) {}
+}
+
+/// 1.18 dropped the Mac app sandbox (so it can update itself). Settings
+/// lived in the sandbox container; copy them over once so printers survive.
+Future<void> migrateSandboxPrefs() async {
+  if (!Platform.isMacOS) return;
+  final home = Platform.environment['HOME'] ?? '';
+  if (home.isEmpty || home.contains('/Library/Containers/')) return; // still sandboxed
+  const id = 'com.matside.printerHub';
+  final mine = File('$home/Library/Preferences/$id.plist');
+  final old = File('$home/Library/Containers/$id/Data/Library/Preferences/$id.plist');
+  if (mine.existsSync() || !old.existsSync()) return;
+  await Process.run('/usr/bin/defaults', ['import', id, old.path]);
+}
+
+/// The running .app bundle (".../Printer Hub.app").
+String get _bundlePath =>
+    File(Platform.resolvedExecutable).parent.parent.parent.path;
+
+/// Downloads the release .dmg, copies the app out of it over the running
+/// bundle, and cleans up. Needs the Mac build to be unsandboxed.
+/// [progress] gets 0..1 while downloading.
+Future<void> installMacUpdate(String url, {void Function(double)? progress}) async {
+  if (!url.toLowerCase().endsWith('.dmg')) throw UpdateError('No .dmg in this release');
+  final tmp = await Directory.systemTemp.createTemp('printerhub-update');
+  final dmg = File('${tmp.path}/update.dmg');
+  final mnt = '${tmp.path}/mnt';
+  final client = http.Client();
+  try {
+    final res = await client.send(http.Request('GET', Uri.parse(url)));
+    if (res.statusCode >= 300) throw UpdateError('Download failed (${res.statusCode})');
+    final total = res.contentLength ?? 0;
+    var got = 0;
+    final sink = dmg.openWrite();
+    await for (final chunk in res.stream) {
+      sink.add(chunk);
+      got += chunk.length;
+      if (total > 0) progress?.call(got / total);
+    }
+    await sink.close();
+
+    Future<void> sh(String exe, List<String> args) async {
+      final r = await Process.run(exe, args);
+      if (r.exitCode != 0) throw UpdateError('${args.first} failed: ${'${r.stderr}'.trim()}');
+    }
+
+    await sh('/usr/bin/hdiutil',
+        ['attach', '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mnt, dmg.path]);
+    try {
+      final app = Directory(mnt).listSync().whereType<Directory>().firstWhere(
+          (d) => d.path.endsWith('.app'),
+          orElse: () => throw UpdateError('No app inside the .dmg'));
+      final dest = _bundlePath;
+      final fresh = '$dest.new', old = '$dest.old';
+      await Process.run('/bin/rm', ['-rf', fresh, old]);
+      await sh('/usr/bin/ditto', [app.path, fresh]);
+      await Process.run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', fresh]);
+      // Swap: the running copy keeps working from memory until restart.
+      await sh('/bin/mv', [dest, old]);
+      try {
+        await sh('/bin/mv', [fresh, dest]);
+      } catch (e) {
+        await Process.run('/bin/mv', [old, dest]);
+        rethrow;
+      }
+      await Process.run('/bin/rm', ['-rf', old]);
+    } finally {
+      await Process.run('/usr/bin/hdiutil', ['detach', mnt, '-force']);
+    }
+  } finally {
+    client.close();
+    tmp.delete(recursive: true).ignore();
+  }
+}
+
+/// Quits and reopens the (already replaced) app.
+Future<Never> restartApp() async {
+  await Process.start('/bin/sh', ['-c', 'sleep 1; open "\$0"', _bundlePath],
+      mode: ProcessStartMode.detached);
+  exit(0);
+}
+
+Future<void> askRestart(BuildContext context, UpdateInfo u) => showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Version ${u.version} is installed'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Text('Restart Printer Hub to start using it.'
+                '${u.notes.isEmpty ? '' : '\n\n${u.notes}'}'),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Later')),
+          FilledButton.icon(
+            onPressed: restartApp,
+            icon: const Icon(Icons.restart_alt_rounded),
+            label: const Text('Restart now'),
+          ),
+        ],
+      ),
+    );
+
+/// Mac: download + install with a progress dialog, then offer a restart.
+/// iPhone: hand the .ipa to SideStore. Otherwise open the download.
+Future<void> _install(BuildContext context, UpdateInfo u) async {
+  final url = u.downloadUrl;
+  if (url != null && Platform.isMacOS) {
+    final p = ValueNotifier<double?>(null);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: Text('Updating to ${u.version}'),
+        content: ValueListenableBuilder<double?>(
+          valueListenable: p,
+          builder: (_, v, _) => Column(mainAxisSize: MainAxisSize.min, children: [
+            LinearProgressIndicator(value: v),
+            const SizedBox(height: 12),
+            Text(v == null || v < 1 ? 'Downloading…' : 'Installing…', style: T.small),
+          ]),
+        ),
+      ),
+    );
+    try {
+      await installMacUpdate(url, progress: (v) => p.value = v);
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      await askRestart(context, u);
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      toast(context, 'Update failed: $e', error: true);
+      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    }
+    return;
+  }
+  if (url != null && Platform.isIOS) {
+    final sidestore = Uri.parse('sidestore://install?url=${Uri.encodeComponent(url)}');
+    if (await launchUrl(sidestore, mode: LaunchMode.externalApplication)) return;
+  }
+  launchUrl(Uri.parse(url ?? u.pageUrl), mode: LaunchMode.externalApplication);
 }
 
 /// "Check for updates" button.
@@ -142,11 +295,10 @@ Future<void> showUpdate(BuildContext context, UpdateInfo u) => showDialog(
           FilledButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              launchUrl(Uri.parse(u.downloadUrl ?? u.pageUrl),
-                  mode: LaunchMode.externalApplication);
+              _install(context, u);
             },
             icon: const Icon(Icons.download_rounded),
-            label: Text(u.downloadUrl == null ? 'Open release' : 'Download'),
+            label: Text(u.downloadUrl == null ? 'Open release' : 'Update'),
           ),
         ],
       ),

@@ -44,6 +44,10 @@ class _FilesTabState extends State<FilesTab> {
   @override
   void initState() {
     super.initState();
+    if (c.lastDir[''] case final d?) {
+      _dirs = d.$1;
+      _files = d.$2;
+    }
     _load();
   }
 
@@ -135,7 +139,8 @@ class _FilesTabState extends State<FilesTab> {
   void _openDir(String dir) {
     setState(() {
       _path = dir;
-      _files = null;
+      _dirs = c.lastDir[dir]?.$1 ?? const [];
+      _files = c.lastDir[dir]?.$2;
     });
     _load();
   }

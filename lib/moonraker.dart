@@ -708,6 +708,7 @@ class MoonrakerClient {
       }
       _emit();
       _loadConsole();
+      _prefetch();
     } catch (_) {
       // Klipper may still be starting. Moonraker also sends
       // notify_klippy_ready, but retry in case that was missed.
@@ -1300,6 +1301,23 @@ class MoonrakerClient {
     ];
   }
 
+  // ponytail: last results kept in memory so a reopened Files/History tab
+  // paints at once and refreshes quietly; dropped with the client.
+  (List<PrintJob>, HistoryTotals)? lastHistory;
+  final lastDir = <String, (List<String>, List<GcodeFile>)>{};
+
+  /// Warm the Files and History tabs once per connection, off the UI path.
+  void _prefetch() {
+    directory('').ignore();
+    historyAndTotals().ignore();
+  }
+
+  /// Jobs and totals fetched together; also refreshes [lastHistory].
+  Future<(List<PrintJob>, HistoryTotals)> historyAndTotals() async {
+    final (jobs, totals) = await (allHistory(), historyTotals()).wait;
+    return lastHistory = (jobs, totals);
+  }
+
   /// Every job, newest first.
   Future<List<PrintJob>> allHistory() async {
     final all = <PrintJob>[];
@@ -1435,7 +1453,7 @@ class MoonrakerClient {
               (((f['modified'] as num?) ?? 0) * 1000).round()),
         ),
     ];
-    return (dirs, files);
+    return lastDir[path] = (dirs, files);
   }
 
   Future<void> moveFile(String from, String to) async => _check(await _http.post(

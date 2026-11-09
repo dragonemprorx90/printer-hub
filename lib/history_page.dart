@@ -89,17 +89,15 @@ class _HistoryTabState extends State<HistoryTab> {
   @override
   void initState() {
     super.initState();
+    _jobs = widget.client.lastHistory?.$1;
+    _totals = widget.client.lastHistory?.$2;
     _load();
   }
 
   Future<void> _load() async {
-    setState(() {
-      _jobs = null;
-      _error = null;
-    });
+    setState(() => _error = null);
     try {
-      final jobs = await widget.client.allHistory();
-      final totals = await widget.client.historyTotals();
+      final (jobs, totals) = await widget.client.historyAndTotals();
       if (!mounted) return;
       setState(() {
         _jobs = jobs;
