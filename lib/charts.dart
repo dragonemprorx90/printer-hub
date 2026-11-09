@@ -74,7 +74,7 @@ class _TempPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
             text: (top * i / 4).toStringAsFixed(0),
-            style: TextStyle(color: label, fontSize: 10)),
+            style: TextStyle(color: label, fontSize: 11)),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(0, y - tp.height / 2));
@@ -135,7 +135,7 @@ class BarChart extends StatelessWidget {
               child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
                 if (values[i] > 0)
                   Text(format?.call(values[i]) ?? values[i].toStringAsFixed(0),
-                      style: TextStyle(fontSize: 10, color: C.muted)),
+                      style: TextStyle(fontSize: 11, color: C.muted)),
                 const SizedBox(height: 4),
                 TweenAnimationBuilder<double>(
                   tween: Tween(end: top == 0 ? 0 : values[i] / top),
@@ -146,13 +146,13 @@ class BarChart extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: (color ?? C.accent)
                           .withValues(alpha: values[i] > 0 ? 0.85 : 0.2),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(R.sm),
                     ),
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(labels[i],
-                    style: TextStyle(fontSize: 10, color: C.muted),
+                    style: TextStyle(fontSize: 11, color: C.muted),
                     overflow: TextOverflow.clip,
                     maxLines: 1),
               ]),
@@ -194,7 +194,7 @@ class MeshView extends StatelessWidget {
                   child: cell > 34
                       ? Text(v.toStringAsFixed(2),
                           style: const TextStyle(
-                              fontSize: 10,
+                              fontSize: 11,
                               color: Colors.black87,
                               fontWeight: FontWeight.w600))
                       : null,
@@ -274,7 +274,7 @@ class _ObjectPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(10)),
+      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(R.md)),
       Paint()..color = C.surfaceHi,
     );
     for (final o in objects) {

@@ -237,7 +237,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
       appBar: AppBar(
         toolbarHeight: 76,
         title: const Text('Printer Hub',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 26)),
+            style: T.hero),
         actions: [
           IconButton(
               tooltip: 'Find printers on this network',
@@ -316,7 +316,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             const Text('No printers yet',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                style: T.heading),
             const SizedBox(height: 8),
             Text(
               'Add any Klipper / Moonraker printer by its IP address,\n'
@@ -418,7 +418,7 @@ class _PrinterCard extends StatelessWidget {
                   return Tooltip(
                     message: 'Printer colour',
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(R.xl),
                       onTap: () async {
                         final c = await pickPrinterColor(context);
                         if (c != null) set(() => settings.setPrinterColor(printer.key, c));
@@ -428,7 +428,7 @@ class _PrinterCard extends StatelessWidget {
                         height: 64,
                         decoration: BoxDecoration(
                           color: tint.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(R.xl),
                         ),
                         child: Icon(Icons.print_rounded, color: tint, size: 30),
                       ),
@@ -442,7 +442,7 @@ class _PrinterCard extends StatelessWidget {
                     Expanded(
                       child: Text(printer.name,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                          style: T.title),
                     ),
                     StatusPill(state: s.state, online: s.online),
                   ]),
@@ -530,7 +530,7 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const Text('Find printers',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                style: T.title),
             const SizedBox(height: 4),
             Text(
               _done

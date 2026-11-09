@@ -6,6 +6,12 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.17.0', [
+    'A tidier, more consistent look: one set of corner sizes and text sizes across every screen, and the same style for "nothing here" and error messages.',
+    'Easier to read in light mode: printer status colours are darker on white, and red buttons use a deeper red.',
+    'History: finished prints show in blue like "Complete" elsewhere, cancelled ones in grey.',
+    'Orca plugin 3.2: matches the app\'s look, with rounded cards and buttons, a red or amber edge on printers that need attention, dimmed offline printers, and colours that suit Orca\'s light theme.',
+  ]),
   ('1.16.1', [
     'Orca plugin 3.1: when Orca starts it opens the Printer Hub panel and also shows a notification with an "Open Printer Hub" link, in case the panel didn\'t open.',
   ]),

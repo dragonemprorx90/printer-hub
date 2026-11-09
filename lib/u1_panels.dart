@@ -1009,7 +1009,7 @@ Future<bool> snapmakerPrintSetup(BuildContext context, MoonrakerClient c, String
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         decoration: BoxDecoration(
                             color: n.color == null ? C.surfaceHi : Color(n.color!),
-                            borderRadius: BorderRadius.circular(8)),
+                            borderRadius: BorderRadius.circular(R.sm)),
                         child: Column(children: [
                           Text(n.type, style: TextStyle(color: _onColor(n.color), fontWeight: FontWeight.w700)),
                           if (n.grams != null)

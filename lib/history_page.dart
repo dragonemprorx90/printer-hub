@@ -128,12 +128,7 @@ class _HistoryTabState extends State<HistoryTab> {
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(_error!, style: const TextStyle(color: C.danger)),
-          TextButton(onPressed: _load, child: const Text('Retry')),
-        ]),
-      );
+      return StateView.error(_error!, onRetry: _load);
     }
     final jobs = _jobs;
     if (jobs == null) {
@@ -371,7 +366,7 @@ class _JobTile extends StatelessWidget {
                     FutureBuilder<Uint8List>(
                       future: client.snapshotBytes(f),
                       builder: (_, s) => s.hasData
-                          ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(s.data!))
+                          ? ClipRRect(borderRadius: BorderRadius.circular(R.md), child: Image.memory(s.data!))
                           : const SizedBox(height: 160, child: Center(child: CircularProgressIndicator())),
                     ),
                     const SizedBox(height: 4),
@@ -395,10 +390,10 @@ class _JobTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color) = switch (job.status) {
-      'completed' => (Icons.check_circle_rounded, C.accent),
-      'cancelled' => (Icons.cancel_rounded, C.warn),
-      'in_progress' => (Icons.timelapse_rounded, C.bed),
-      _ => (Icons.error_rounded, C.danger),
+      'completed' => (Icons.check_circle_rounded, C.ink(C.bed)),
+      'cancelled' => (Icons.cancel_rounded, C.muted),
+      'in_progress' => (Icons.timelapse_rounded, C.ink(C.bed)),
+      _ => (Icons.error_rounded, C.ink(C.danger)),
     };
     final name = job.filename.split('/').last;
     return Tile(

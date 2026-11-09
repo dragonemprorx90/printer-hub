@@ -377,10 +377,10 @@ class _ControlTabState extends State<ControlTab> {
         ),
         const SizedBox(height: 6),
         Text('Tap to run · long-press or right-click for parameters and favourites',
-            style: TextStyle(color: C.muted, fontSize: 11)),
+            style: T.caption.copyWith(color: C.muted)),
         const SizedBox(height: 10),
         if (list.isEmpty)
-          Text('No macros found', style: TextStyle(color: C.muted))
+          const StateView.empty(Icons.code_off_rounded, 'No macros found')
         else
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 340),
@@ -471,7 +471,7 @@ class _PadButton extends StatelessWidget {
                   accent ? C.accent.withValues(alpha: 0.18) : C.surfaceHi,
               foregroundColor: accent ? C.accent : C.text,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(R.lg)),
             ),
           ),
         ),

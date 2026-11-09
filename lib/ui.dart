@@ -61,8 +61,33 @@ class C {
   static const danger = Color(0xFFFF5470);
   static const warn = Color(0xFFF5A524);
 
+  /// Fill for destructive buttons and error snack bars: white text on
+  /// [danger] is only 3.1:1, this is 4.8:1.
+  static const dangerFill = Color(0xFFD6304F);
+
+  /// A status colour made readable as text/icon on light surfaces (same 32%
+  /// darkening the theme uses for `primary`). Unchanged in dark mode.
+  static Color ink(Color c) => dark ? c : Color.lerp(c, Colors.black, 0.32)!;
+
   /// One colour per extruder on multi-tool printers (Snapmaker U1).
   static const tools = [hot, Color(0xFFFFC145), Color(0xFF3DDC97), Color(0xFFFF6FB5)];
+}
+
+/// Corner radii. See docs/designs/ui-style.md.
+class R {
+  static const sm = 8.0, md = 12.0, lg = 16.0, xl = 20.0;
+}
+
+/// Type scale (no colour: add it with `copyWith`, C changes at runtime).
+/// Body text is the Material default (14). See docs/designs/ui-style.md.
+class T {
+  static const caption = TextStyle(fontSize: 11);
+  static const label = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+  static const small = TextStyle(fontSize: 13);
+  static const value = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
+  static const title = TextStyle(fontSize: 18, fontWeight: FontWeight.w800);
+  static const heading = TextStyle(fontSize: 20, fontWeight: FontWeight.w800);
+  static const hero = TextStyle(fontSize: 26, fontWeight: FontWeight.w800);
 }
 
 const mono = TextStyle(
@@ -116,7 +141,7 @@ ThemeData buildTheme(Palette p, Color accent) {
       filled: true,
       fillColor: p.surfaceHi,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(R.md),
         borderSide: BorderSide.none,
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -142,7 +167,7 @@ ThemeData buildTheme(Palette p, Color accent) {
     chipTheme: ChipThemeData(
       backgroundColor: p.surfaceHi,
       side: BorderSide(color: p.border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.sm)),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
@@ -181,7 +206,7 @@ class Panel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: C.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(R.xl),
         border: Border.all(color: C.border),
         boxShadow: _softShadow,
       ),
@@ -200,18 +225,13 @@ class Panel extends StatelessWidget {
                 child: Text(
                   title!.toUpperCase(),
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: C.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.1,
-                  ),
+                  style: T.label.copyWith(color: C.muted, letterSpacing: 1.1),
                 ),
               ),
               const Spacer(),
               ?trailing,
             ]),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
           ],
           child,
         ],
@@ -227,7 +247,7 @@ class Tile extends StatelessWidget {
   final double radius;
   final bool selected;
   const Tile(
-      {super.key, required this.child, this.onTap, this.onLongPress, this.radius = 16, this.selected = false});
+      {super.key, required this.child, this.onTap, this.onLongPress, this.radius = R.lg, this.selected = false});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -270,7 +290,7 @@ class TempGauge extends StatelessWidget {
   Widget build(BuildContext context) {
     final heating = target > 0;
     return Tile(
-      radius: 20,
+      radius: R.xl,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 16, 10, 14),
@@ -412,10 +432,10 @@ class ProgressRing extends StatelessWidget {
 (Color, String) statusStyle(String state, bool online) {
   if (!online) return (C.muted, 'Connecting');
   return switch (state) {
-    'printing' => (C.accent, 'Printing'),
-    'paused' => (C.warn, 'Paused'),
-    'error' => (C.danger, 'Error'),
-    'complete' => (C.bed, 'Complete'),
+    'printing' => (C.ink(C.accent), 'Printing'),
+    'paused' => (C.ink(C.warn), 'Paused'),
+    'error' => (C.ink(C.danger), 'Error'),
+    'complete' => (C.ink(C.bed), 'Complete'),
     'cancelled' => (C.muted, 'Cancelled'),
     _ => (C.text, 'Ready'),
   };
@@ -450,9 +470,7 @@ class StatusPill extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(label,
-            style: TextStyle(
-                color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+        Text(label, style: T.label.copyWith(color: color)),
       ]),
     );
   }
@@ -469,9 +487,7 @@ class StatTile extends StatelessWidget {
         children: [
           Text(label, style: TextStyle(color: C.muted, fontSize: 12)),
           const SizedBox(height: 2),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(value, style: T.value),
         ],
       );
 }
@@ -484,18 +500,18 @@ class Hint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? C.warn;
+    final c = C.ink(color ?? C.warn);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: c.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(R.md),
       ),
       child: Row(children: [
         Icon(Icons.info_outline_rounded, size: 18, color: c),
         const SizedBox(width: 8),
-        Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        Expanded(child: Text(text, style: T.small)),
       ]),
     );
   }
@@ -508,8 +524,42 @@ class Heading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
-        child: Text(text,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+        child: Text(text, style: T.heading),
+      );
+}
+
+/// Shared empty and error states (loading stays a plain spinner). Doesn't
+/// scroll: wrap in a ListView to keep pull-to-refresh working.
+class StateView extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final bool error;
+  final Widget? action;
+
+  const StateView.empty(this.icon, this.text, {super.key, this.action}) : error = false;
+
+  StateView.error(this.text, {super.key, VoidCallback? onRetry})
+      : icon = Icons.error_outline_rounded,
+        error = true,
+        action = onRetry == null
+            ? null
+            : FilledButton.tonal(onPressed: onRetry, child: const Text('Retry'));
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 40, color: error ? C.ink(C.danger) : C.muted),
+            const SizedBox(height: 12),
+            Text(text,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: T.small.copyWith(color: error ? C.text : C.muted)),
+            if (action != null) ...[const SizedBox(height: 16), action!],
+          ]),
+        ),
       );
 }
 
@@ -562,7 +612,7 @@ String fmtFilament(num mm) {
 
 void toast(BuildContext context, String text, {bool error = false}) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    backgroundColor: error ? C.danger : null,
+    backgroundColor: error ? C.dangerFill : null,
     content: Text(text, style: error ? const TextStyle(color: Colors.white) : null),
   ));
 }
@@ -576,7 +626,7 @@ Future<void> run(BuildContext context, Future<void> Function() action,
     if (done != null) messenger.showSnackBar(SnackBar(content: Text(done)));
   } catch (e) {
     messenger.showSnackBar(SnackBar(
-      backgroundColor: C.danger,
+      backgroundColor: C.dangerFill,
       content: Text('$e', style: const TextStyle(color: Colors.white)),
     ));
   }
@@ -596,7 +646,7 @@ Future<bool> confirm(BuildContext context, String title,
         FilledButton(
           style: danger
               ? FilledButton.styleFrom(
-                  backgroundColor: C.danger, foregroundColor: Colors.white)
+                  backgroundColor: C.dangerFill, foregroundColor: Colors.white)
               : null,
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(action),

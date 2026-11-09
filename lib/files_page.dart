@@ -431,12 +431,7 @@ class _FilesTabState extends State<FilesTab> {
 
     Widget list;
     if (_error != null) {
-      list = Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(_error!, style: const TextStyle(color: C.danger)),
-          TextButton(onPressed: _load, child: const Text('Retry')),
-        ]),
-      );
+      list = StateView.error(_error!, onRetry: _load);
     } else if (_files == null || (!browsing && _all == null)) {
       list = const Center(child: CircularProgressIndicator());
     } else {
@@ -449,11 +444,10 @@ class _FilesTabState extends State<FilesTab> {
         },
         child: dirs.isEmpty && files.isEmpty
             ? ListView(children: [
-                const SizedBox(height: 80),
-                Center(
-                  child: Text(_favOnly ? 'No favourite files yet' : 'No files here',
-                      style: TextStyle(color: C.muted)),
-                ),
+                const SizedBox(height: 56),
+                StateView.empty(
+                    _favOnly ? Icons.star_outline_rounded : Icons.folder_open_rounded,
+                    _favOnly ? 'No favourite files yet' : 'No files here'),
               ])
             : ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
@@ -550,7 +544,7 @@ class _Thumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(R.sm),
         child: Container(
           width: size,
           height: size,
@@ -792,7 +786,7 @@ class _FileSheetState extends State<_FileSheet> {
           Row(children: [
             Expanded(
               child: Text(f.name,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  style: T.title),
             ),
             IconButton(
               tooltip: fav ? 'Remove from favourites' : 'Add to favourites',
@@ -808,7 +802,7 @@ class _FileSheetState extends State<_FileSheet> {
               style: TextStyle(color: C.muted)),
           const SizedBox(height: 16),
           ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(R.md),
             child: Container(
               height: 200,
               color: C.surfaceHi,

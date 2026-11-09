@@ -64,13 +64,11 @@ class _ConsoleTabState extends State<ConsoleTab> {
                   margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   decoration: BoxDecoration(
                     color: C.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(R.lg),
                     border: Border.all(color: C.border),
                   ),
                   child: lines.isEmpty
-                      ? Center(
-                          child: Text('No console output yet',
-                              style: TextStyle(color: C.muted)))
+                      ? const StateView.empty(Icons.terminal_rounded, 'No console output yet')
                       : ListView.builder(
                           reverse: true,
                           padding: const EdgeInsets.all(12),

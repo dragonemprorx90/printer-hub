@@ -77,11 +77,7 @@ class _ScreenPageState extends State<ScreenPage> {
         child: f == null
             ? (_error == null
                 ? const CircularProgressIndicator()
-                : Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(_error!,
-                        textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
-                  ))
+                : StateView.error(_error!))
             : AspectRatio(
                 aspectRatio: _size.$1 / _size.$2,
                 child: LayoutBuilder(builder: (_, c) {

@@ -314,7 +314,7 @@ class _CameraOverlay extends StatelessWidget {
           right: 0,
           bottom: 0,
           child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(R.lg)),
             child: Container(
               padding: const EdgeInsets.fromLTRB(14, 32, 14, 12),
               decoration: const BoxDecoration(
@@ -392,7 +392,7 @@ class _JobPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
             decoration: BoxDecoration(
               color: C.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(R.md),
             ),
             child: Row(children: [
               Icon(Icons.schedule_rounded, color: C.accent, size: 18),
@@ -421,7 +421,7 @@ class _JobPanel extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 color: (s.online ? C.accent : C.muted).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(R.md),
               ),
               child: Icon(
                 s.online ? Icons.check_circle_rounded : Icons.wifi_off_rounded,
@@ -532,7 +532,7 @@ class _ObjectsSheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 const Text('Objects on the plate',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    style: T.title),
                 const SizedBox(height: 4),
                 Text('Tap an object to stop printing it (for example a part that came loose).',
                     style: TextStyle(color: C.muted)),
@@ -809,7 +809,7 @@ class _SlotDot extends StatelessWidget {
               : null,
         ),
         const SizedBox(height: 4),
-        Text(slot.label, style: TextStyle(fontSize: 11, color: C.muted)),
+        Text(slot.label, style: T.caption.copyWith(color: C.muted)),
       ]),
     );
   }
@@ -889,7 +889,7 @@ class _Actions extends StatelessWidget {
           ),
           FilledButton.icon(
             style: FilledButton.styleFrom(
-                backgroundColor: C.danger, foregroundColor: Colors.white),
+                backgroundColor: C.dangerFill, foregroundColor: Colors.white),
             onPressed: () async {
               if (await confirm(context, 'Emergency stop?',
                       message:

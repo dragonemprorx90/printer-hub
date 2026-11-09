@@ -411,7 +411,7 @@ class PrinterCameraState extends State<PrinterCamera> {
     };
     final turns = settings.number(_turnsKey, 0).toInt(), flip = settings.flag(_flipKey, false);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(R.lg),
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: ColoredBox(

@@ -5,7 +5,7 @@
 # name = "Printer Hub"
 # description = "Your printers beside the 3D view: camera, progress, temperatures, controls, filaments and spools, history with pictures, rules and print alerts. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "3.1.0"
+# version = "3.2.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -41,36 +41,45 @@ HUB = "http://127.0.0.1:7126"
 
 PAGE = r"""
 <style>
-  body { margin: 0; padding: 10px; font-size: 13px; }
+  /* Tokens mirror lib/ui.dart; see docs/designs/ui-style.md */
+  :root { --ph-danger: #FF5470; --ph-warn: #F5A524; --ph-border: var(--orca-border, #8884); --ph-muted: var(--orca-muted, #888); --ph-accent: var(--orca-accent, #339cff); }
+  @media (prefers-color-scheme: light) { :root { --ph-danger: #C8243F; --ph-warn: #9A6200; } }
+  body { margin: 0; padding: 12px; font-size: 13px; }
   h3 { margin: 0; font-size: 14px; }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-  .top select, .top label { font-size: 11px; }
-  .p { border: 1px solid var(--orca-border); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
-  .p.problem { border-color: #e5484d; }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+  .top select, .top label { font-size: 12px; }
+  .p { border: 1px solid var(--ph-border); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+  .p.is-err { border-left: 2px solid var(--ph-danger); }
+  .p.is-paused { border-left: 2px solid var(--ph-warn); }
+  .p.is-off { opacity: .6; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .name { font-weight: 700; }
-  .muted { color: var(--orca-muted); font-size: 12px; }
-  .warn { color: #f3883b; font-size: 12px; }
-  .pill { font-size: 11px; padding: 1px 6px; border-radius: 9px; border: 1px solid var(--orca-border); }
-  .badge { font-size: 10px; padding: 1px 5px; border-radius: 9px; background: var(--orca-accent, #339cff); color: #fff; }
-  .bar { height: 5px; border-radius: 3px; background: var(--orca-border); margin-top: 6px; overflow: hidden; }
-  .bar > div { height: 100%; background: var(--orca-accent, #339cff); }
-  .fil { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .chip { display: flex; align-items: center; gap: 4px; font-size: 11px; }
-  .dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--orca-border); display: inline-block; }
+  .name { font-weight: 700; font-size: 14px; }
+  .muted { color: var(--ph-muted); font-size: 12px; }
+  .warn { color: var(--ph-warn); font-size: 12px; }
+  .err { font-size: 12px; border-left: 2px solid var(--ph-danger); padding-left: 6px; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--ph-border); }
+  .badge { font-size: 11px; padding: 1px 6px; border-radius: 99px; background: var(--ph-accent); color: #fff; }
+  .bar { height: 6px; border-radius: 99px; background: var(--ph-border); margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--ph-accent); border-radius: 99px; }
+  .fil { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .chip { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--ph-border); display: inline-block; }
   .actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-  button { font-size: 11px; padding: 2px 8px; }
-  button.danger { color: #e5484d; }
-  .sec { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--orca-border); }
-  .sec input[type=number] { width: 52px; font-size: 11px; }
+  button { font-size: 12px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--ph-border); background: transparent; color: inherit; cursor: pointer; }
+  button:hover { background: rgba(128, 128, 128, .15); }
+  button.danger { color: var(--ph-danger); }
+  .sec { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ph-border); }
+  .sec.err { border-left: 0; padding-left: 0; color: var(--ph-danger); }
+  .sec input[type=number] { width: 52px; font-size: 12px; }
   .sec input[type=range] { width: 120px; vertical-align: middle; }
-  .sec select { font-size: 11px; max-width: 150px; }
-  .line { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 3px 0; }
+  .sec select { font-size: 12px; max-width: 150px; }
+  .line { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
   .lbl { min-width: 62px; font-size: 12px; }
-  img.cam { width: 100%; border-radius: 6px; margin-top: 6px; background: #000; min-height: 40px; }
-  img.thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 4px; margin-right: 4px; }
+  img.cam { width: 100%; border-radius: 8px; margin-top: 8px; background: #000; min-height: 40px; }
+  img.thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; margin-right: 4px; }
   .compact .detail { display: none; }
-  #status { color: var(--orca-muted); font-size: 12px; }
+  #status { color: var(--ph-muted); font-size: 12px; }
+  #status.err { color: inherit; }
 </style>
 <div class="top">
   <h3>Printer Hub</h3>
@@ -171,7 +180,7 @@ PAGE = r"""
   function history(p) {
     var h = (extra[p.slug] || {}).history;
     if (!h) return '<div class="sec muted">Loading history…</div>';
-    if (h.error) return '<div class="sec warn">' + esc(h.error) + '</div>';
+    if (h.error) return '<div class="sec err">' + esc(h.error) + '</div>';
     var done = h.filter(function (j) { return j.status === "completed"; }).length, fin = h.filter(function (j) { return j.status !== "in_progress"; }).length;
     var busy = p.state === "printing" || p.state === "paused";
     var out = '<div class="sec"><div class="muted">Last ' + h.length + ' prints · ' + (fin ? Math.round(done * 100 / fin) : 0) + '% succeeded</div>';
@@ -190,7 +199,7 @@ PAGE = r"""
   function spools(p) {
     var d = (extra[p.slug] || {}).spools;
     if (!d) return '<div class="sec muted">Loading spools…</div>';
-    if (d.error) return '<div class="sec warn">' + esc(d.error) + '</div>';
+    if (d.error) return '<div class="sec err">' + esc(d.error) + '</div>';
     if (!d.enabled) return '<div class="sec muted">Spoolman isn\'t set up on this printer.</div>';
     var lanes = (p.filaments || []).filter(function (f) { return f.label && /^T\d/.test(f.label); });
     var s = esc(p.slug), out = '<div class="sec">';
@@ -213,7 +222,7 @@ PAGE = r"""
   function rules(p) {
     var r = (extra[p.slug] || {}).rules;
     if (!r) return '<div class="sec muted">Loading rules…</div>';
-    if (r.error) return '<div class="sec warn">' + esc(r.error) + '</div>';
+    if (r.error) return '<div class="sec err">' + esc(r.error) + '</div>';
     if (!r.length) return '<div class="sec muted">No rules. Add them in the Printer Hub app (Tools → Rules).</div>';
     return '<div class="sec">' + r.map(function (x, i) {
       return '<div class="line"><input type="checkbox" ' + (x.off ? "" : "checked") + ' onchange="ph.act(' + q(p.slug) + ',\'rule_toggle\',{index:' + i + '})"> ' +
@@ -223,7 +232,7 @@ PAGE = r"""
 
   function card(p) {
     var active = p.state === "printing" || p.state === "paused";
-    var problem = !p.online || p.state === "error" || p.state === "paused" || (p.heater && p.heater.fault);
+    var look = !p.online ? " is-off" : p.state === "error" || (p.heater && p.heater.fault) ? " is-err" : p.state === "paused" ? " is-paused" : "";
     var o = open[p.slug] || {}, slug = q(p.slug), orca = last.orca || {};
     var inOrca = p.proxy && orca.port && p.proxy.split(":")[1] === String(orca.port);
     var fil = (p.filaments || []).map(function (f) {
@@ -235,13 +244,13 @@ PAGE = r"""
         var f = (p.filaments || []).filter(function (x) { return x.tool === i; })[0];
         if (f && f.material && m && f.material.toUpperCase() !== m.toUpperCase()) mismatch.push("Orca slot " + (i + 1) + " is " + m + ", " + f.label + " has " + f.material);
       });
-    var h = '<div class="p' + (problem ? " problem" : "") + '"><div class="row"><span class="name">' + esc(p.name) +
+    var h = '<div class="p' + look + '"><div class="row"><span class="name">' + esc(p.name) +
       (inOrca ? ' <span class="badge">in Orca</span>' : '') + '</span><span>' +
       (p.away ? '<span class="muted">away' + (p.delayMs ? " " + p.delayMs + " ms" : "") + '</span> ' : '') +
       '<span class="pill">' + (p.online ? esc(p.state) : "offline") + '</span></span></div>';
     h += '<div class="muted">Nozzle ' + t(p.hotend, p.hotendTarget) + ' · Bed ' + t(p.bed, p.bedTarget) +
       (p.chamber != null ? ' · Chamber ' + t(p.chamber, p.chamberTarget) : '') + '</div>';
-    if (p.heater) h += '<div class="' + (p.heater.fault ? "warn" : "muted") + ' detail">Heater: ' + (p.heater.fault ? "fault " + esc(p.heater.faultReason || "") : esc(p.heater.mode || "off")) + '</div>';
+    if (p.heater) h += '<div class="' + (p.heater.fault ? "err" : "muted") + ' detail">Heater: ' + (p.heater.fault ? "fault " + esc(p.heater.faultReason || "") : esc(p.heater.mode || "off")) + '</div>';
     if (active) h += '<div class="muted">' + esc((p.file || "").split("/").pop()) + '</div><div class="muted">' +
       (p.layer ? "Layer " + p.layer + (p.layers ? "/" + p.layers : "") + " · " : "") + Math.round(p.progress * 100) + "%" +
       (p.eta ? " · " + dur(p.eta) + " left, done " + clock(p.eta) : "") + '</div><div class="bar"><div style="width:' + Math.round(p.progress * 100) + '%"></div></div>';
@@ -287,7 +296,8 @@ PAGE = r"""
     if (m.command === "note") { st.textContent = m.text; return; }
     if (m.command === "extra") { extra[m.printer] = extra[m.printer] || {}; extra[m.printer][m.kind] = m.data; render(true); return; }
     if (m.command !== "printers") return;
-    if (m.error) { document.getElementById("list").innerHTML = ""; st.textContent = m.error; return; }
+    if (m.error) { document.getElementById("list").innerHTML = ""; st.textContent = m.error; st.className = "err"; return; }
+    st.className = "";
     last = m; render(false);
     st.textContent = "Updated " + new Date().toLocaleTimeString();
   });

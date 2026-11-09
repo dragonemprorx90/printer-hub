@@ -581,7 +581,7 @@ class _ToolsTabState extends State<ToolsTab> {
                       trailing: a.picture == null
                           ? null
                           : ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(R.sm),
                               child: Image.network(a.picture!, width: 64, height: 48, fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => const Icon(Icons.image_not_supported_outlined)),
                             ),
@@ -636,7 +636,7 @@ class _ToolsTabState extends State<ToolsTab> {
                 padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
                 decoration: BoxDecoration(
                   color: C.surfaceHi,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(R.md),
                 ),
                 child: Row(
                   children: [
