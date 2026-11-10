@@ -134,7 +134,7 @@ const sliceGroups = <(String, IconData, List<SliceOption>)>[
       ('zig-zag', 'Rectilinear'), ('adaptivecubic', 'Adaptive cubic'), ('lightning', 'Lightning'),
     ]),
   ]),
-  ('Supports and adhesion', Icons.foundation_rounded, [
+  ('Supports', Icons.foundation_rounded, [
     SliceOption('support', 'Supports', choices: [('off', 'Off'), ('normal(auto)', 'Normal'), ('tree(auto)', 'Tree')]),
     SliceOption('support_threshold_angle', 'Overhang angle', unit: '°'),
     SliceOption('support_on_build_plate_only', 'Supports from', choices: [('1', 'Plate only'), ('0', 'Everywhere')]),
@@ -143,8 +143,8 @@ const sliceGroups = <(String, IconData, List<SliceOption>)>[
     ]),
   ]),
   ('Speed and flow', Icons.speed_rounded, [
-    SliceOption('outer_wall_speed', 'Outer wall speed', unit: 'mm/s'),
-    SliceOption('inner_speed', 'Inner walls and infill', unit: 'mm/s'),
+    SliceOption('outer_wall_speed', 'Outer wall', unit: 'mm/s'),
+    SliceOption('inner_speed', 'Inner + infill', unit: 'mm/s'),
     SliceOption('filament_flow_ratio', 'Flow ratio', filament: true),
   ]),
   ('Temperature', Icons.thermostat_rounded, [
@@ -213,7 +213,11 @@ class SliceEditor extends StatefulWidget {
   final MoonrakerClient client;
   final String name, folder;
   final Uint8List model;
-  const SliceEditor({super.key, required this.client, required this.name, required this.model, this.folder = ''});
+
+  /// The slicer to use instead of the one on the client's home bridge (tests).
+  final SlicerApi? api;
+  const SliceEditor(
+      {super.key, required this.client, required this.name, required this.model, this.folder = '', this.api});
   @override
   State<SliceEditor> createState() => _SliceEditorState();
 }
@@ -265,10 +269,14 @@ class _SliceEditorState extends State<SliceEditor> {
 
   Future<void> _open() async {
     try {
-      final (h, release) = await widget.client.bridgeClient();
-      if (_closed) return release();
-      _release = release;
-      _api = SlicerApi(h);
+      if (widget.api != null) {
+        _api = widget.api;
+      } else {
+        final (h, release) = await widget.client.bridgeClient();
+        if (_closed) return release();
+        _release = release;
+        _api = SlicerApi(h);
+      }
       final printers = await _api!.presets();
       if (!mounted) return;
       final want = settings.text('slice.printer', widget.client.isSnapmaker ? 'u1' : 'k2plus');
@@ -491,7 +499,12 @@ class _SliceEditorState extends State<SliceEditor> {
       enabled: !_running,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       autovalidateMode: AutovalidateMode.onUserInteraction,
-      decoration: InputDecoration(labelText: o.label, hintText: 'Preset', suffixText: o.unit),
+      decoration: InputDecoration(
+          labelText: o.label,
+          hintText: 'Preset',
+          suffixText: o.unit,
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+        ),
       validator: (v) => v == null || v.trim().isEmpty || _number.hasMatch(v.trim()) ? null : 'A number',
       onChanged: (v) {
         v = v.trim();

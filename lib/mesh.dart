@@ -175,7 +175,7 @@ class Camera {
   double yaw, pitch, dist, tx, ty, tz;
   Camera(this.yaw, this.pitch, this.dist, this.tx, this.ty, this.tz);
   factory Camera.forBed(List<double> bed) =>
-      Camera(-math.pi / 2 - 0.55, 0.6, bed.reduce(math.max) * 1.9, bed[0] / 2, bed[1] / 2, 0);
+      Camera(-math.pi / 2 - 0.55, 0.55, bed.reduce(math.max) * 2.6, bed[0] / 2, bed[1] / 2, bed[2] * 0.25);
 }
 
 /// One frame's projection: plate point -> screen point and depth.

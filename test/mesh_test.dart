@@ -7,7 +7,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:printer_hub/mesh.dart';
+import 'package:printer_hub/moonraker.dart';
+import 'package:printer_hub/settings.dart';
 import 'package:printer_hub/slicer.dart';
 
 /// A w × d × h box from (0,0,0), outward winding.
@@ -109,8 +112,8 @@ void main() {
     final back = view.onPlate(Offset(s[0], s[1]))!;
     expect(back.dx, closeTo(120, 1e-3));
     expect(back.dy, closeTo(80, 1e-3));
-    // The plate centre is the middle of the screen.
-    view.project(175, 175, 0, s, 0);
+    // The orbit target is the middle of the screen.
+    view.project(cam.tx, cam.ty, cam.tz, s, 0);
     expect([s[0], s[1]], [closeTo(400, 1e-6), closeTo(300, 1e-6)]);
 
     final v = place(box(40, 40, 40), const Placement(x: 175, y: 175), turnedBounds(box(40, 40, 40), identity, 1));
@@ -195,5 +198,58 @@ void main() {
     moves.clear();
     await tester.dragFrom(const Offset(30, 30), const Offset(60, 0));
     expect(moves, isEmpty);
+  });
+
+  testWidgets('the editor turns the model, changes a setting and slices it as placed', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await settings.load();
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final jobs = <http.Request>[];
+    final api = SlicerApi(MockClient((req) async => switch (req.url.path) {
+          '/slicer/presets' => http.Response(
+              jsonEncode({
+                'printers': [
+                  {'id': 'k2plus', 'name': 'Creality K2 Plus', 'tools': 1, 'process': '0.20mm Standard',
+                   'bed': [350, 350, 350], 'processes': ['0.20mm Standard'], 'filaments': ['Generic PLA']},
+                ]
+              }),
+              200),
+          '/slicer/jobs' => (jobs..add(req), http.Response('{"id":"j1"}', 200)).$2,
+          _ => http.Response('{"state":"done","files":["tall.gcode"],"time":600,"weight":12.3}', 200),
+        }));
+    await tester.pumpWidget(MaterialApp(
+      home: SliceEditor(client: MoonrakerClient(host: '127.0.0.1', port: 1), name: 'tall.stl',
+          model: toStl(box(20, 20, 60)), api: api),
+    ));
+    for (var i = 0; i < 20 && find.byType(MeshView).evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+    }
+    expect(find.textContaining('20.0 × 20.0 × 60.0 mm'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, '90°').first); // lay it on its side about X
+    await tester.pump();
+    expect(find.textContaining('20.0 × 60.0 × 20.0 mm'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Layer height'), '0.28');
+    await tester.tap(find.widgetWithText(FilledButton, 'Slice'));
+    for (var i = 0; i < 20 && find.text('Continue to print').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+    }
+    expect(find.text('10m 0s'), findsOneWidget);
+    expect(find.text('12.3 g'), findsOneWidget);
+
+    final q = jobs.single.url.queryParameters;
+    expect(q['arrange'], '0');
+    expect(q['name'], 'tall.stl');
+    expect(jsonDecode(q['settings']!)['process'], {'layer_height': '0.28'});
+    final sent = parseStl(jobs.single.bodyBytes).v;
+    final (lo, hi) = turnedBounds(sent, identity, 1);
+    expect([hi[1] - lo[1], hi[2] - lo[2], lo[2]], [closeTo(60, 1e-3), closeTo(20, 1e-3), closeTo(0, 1e-3)]);
+    expect((lo[0] + hi[0]) / 2, closeTo(175, 1e-3));
+    expect(settings.text('slice.k2plus.overrides'), '{"layer_height":"0.28"}');
   });
 }
