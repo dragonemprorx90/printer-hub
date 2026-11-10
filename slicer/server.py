@@ -6,8 +6,14 @@ bridge's end-to-end encrypted relay at /slicer/*:
 
   GET  /slicer/presets                       printers, processes, filaments
   POST /slicer/jobs?printer=&process=&filaments=a;b&tool=&name=&folder=
+                  [&arrange=0][&settings={"process": {...}, "filaments": [{...}, null]}]
        body: the model (STL / 3MF / STEP / OBJ)  -> {"id": ...}
+       arrange=0 slices the model where it is (the app placed it on the plate).
+       settings overrides keys of the chosen presets (see SETTINGS).
   GET  /slicer/jobs/<id>                     {"state", "error", "files", "time", "weight"}
+  POST /slicer/mesh?printer=&name=[&orient=1]
+       body: a model -> binary STL centred on the plate (STEP meshed, 3MF
+       objects merged; orient=1 lets Orca pick the orientation)
 
 Finished G-code goes straight to the printer (PRINTER_HOST) over the LAN.
 Standard library only.
@@ -39,6 +45,7 @@ MODEL_EXT = ('.stl', '.3mf', '.step', '.stp', '.obj')
 PRINTERS = {
     'k2plus': {
         'name': 'Creality K2 Plus',
+        'bed': [350, 350, 350],
         'machine': 'Creality K2 Plus 0.4 nozzle',
         'tools': 1,
         'process': '0.20mm Standard',
@@ -51,6 +58,7 @@ PRINTERS = {
     },
     'u1': {
         'name': 'Snapmaker U1',
+        'bed': [270, 270, 270],
         'machine': 'Snapmaker U1 (0.4 nozzle)',
         'tools': 4,
         'process': '0.20 Standard',
@@ -62,6 +70,23 @@ PRINTERS = {
             'Generic PETG', 'Generic PETG-CF', 'Generic TPU')},
     },
 }
+
+# Preset keys the app may override, and which preset each lives in. Two are
+# shorthands: nozzle_temperature sets the first layer too, bed_temperature
+# every plate type (the presets differ in which plate they use).
+PLATES = ('cool_plate_temp', 'eng_plate_temp', 'hot_plate_temp', 'textured_plate_temp',
+          'supertack_plate_temp', 'textured_cool_plate_temp')
+SETTINGS = {
+    'process': {'layer_height', 'initial_layer_print_height', 'wall_loops', 'top_shell_layers',
+                'bottom_shell_layers', 'sparse_infill_density', 'sparse_infill_pattern',
+                'enable_support', 'support_type', 'support_threshold_angle',
+                'support_on_build_plate_only', 'brim_type', 'brim_width', 'outer_wall_speed',
+                'inner_wall_speed', 'sparse_infill_speed', 'internal_solid_infill_speed',
+                'top_surface_speed', 'print_flow_ratio', 'seam_position', 'ironing_type'},
+    'filament': {'nozzle_temperature', 'bed_temperature', 'filament_flow_ratio',
+                 'fan_max_speed', 'fan_min_speed'},
+}
+VALUE = re.compile(r'[\w.%()\-]{1,32}')
 
 jobs = {}
 lock = threading.Lock()  # ponytail: one slice at a time; a NAS core is busy enough
@@ -78,7 +103,7 @@ def own_presets(kind):
 def presets():
     mine_p, mine_f = own_presets('process'), own_presets('filament')
     return {'printers': [
-        {'id': k, 'name': p['name'], 'tools': p['tools'], 'process': p['process'],
+        {'id': k, 'name': p['name'], 'tools': p['tools'], 'process': p['process'], 'bed': p['bed'],
          'processes': list(p['processes']) + mine_p,
          'filaments': list(p['filaments']) + mine_f}
         for k, p in PRINTERS.items()]}
@@ -92,19 +117,62 @@ def safe_name(name):
     return base
 
 
-def preset_file(job, kind, name, system, idx=0):
+def overrides(raw):
+    """The app's settings JSON as {'process': {key: value}, 'filaments': [{...}]},
+    in Orca's own form. Raises ValueError on anything outside SETTINGS."""
+    try:
+        d = json.loads(raw) if raw else {}
+    except ValueError:
+        raise ValueError('settings is not JSON')
+    if not isinstance(d, dict):
+        raise ValueError('settings must be an object')
+
+    def clean(kind, m):
+        if m is None:
+            return {}
+        if not isinstance(m, dict):
+            raise ValueError(f'{kind} settings must be an object')
+        out = {}
+        for k, v in m.items():
+            if k not in SETTINGS[kind]:
+                raise ValueError(f'Can\'t change {k}')
+            v = ('1' if v else '0') if isinstance(v, bool) else str(v)
+            if not VALUE.fullmatch(v):
+                raise ValueError(f'Bad value for {k}')
+            keys = {'nozzle_temperature': ('nozzle_temperature', 'nozzle_temperature_initial_layer'),
+                    'bed_temperature': PLATES + tuple(p + '_initial_layer' for p in PLATES)}.get(k, (k,))
+            out.update({key: [v] if kind == 'filament' else v for key in keys})
+        return out
+
+    fils = d.get('filaments') or []
+    if not isinstance(fils, list):
+        raise ValueError('filaments settings must be a list')
+    return {'process': clean('process', d.get('process')), 'filaments': [clean('filament', f) for f in fils]}
+
+
+def preset_file(job, kind, name, system, idx=0, extra=None):
     """Path of a preset the CLI can load. Orca only resolves 'inherits' for
-    presets inside its user folder, so system presets get a small stub there."""
+    presets inside its user folder, so system presets get a small stub there,
+    with the app's [extra] overrides on top."""
+    stub = f'hub-{job}-{idx}'
+    path = os.path.join(USER, kind, stub + '.json')
     if name in own_presets(kind):
-        return os.path.join(USER, kind, name + '.json')
+        own = os.path.join(USER, kind, name + '.json')
+        if not extra:
+            return own
+        with open(own) as f:  # a copy of your own preset, changed
+            d = json.load(f)
+        d.update(extra, name=stub)
+        with open(path, 'w') as f:
+            json.dump(d, f)
+        return path
     if name not in system:
         raise ValueError(f'Unknown {kind} preset: {name}')
     os.makedirs(os.path.join(USER, kind), exist_ok=True)
-    stub = f'hub-{job}-{idx}'
     d = {'type': kind, 'from': 'User', 'inherits': system[name], 'name': stub, 'version': '2.5.0.0'}
     d[{'machine': 'printer_settings_id', 'process': 'print_settings_id'}.get(kind, 'filament_settings_id')] = \
         [stub] if kind == 'filament' else stub
-    path = os.path.join(USER, kind, stub + '.json')
+    d.update(extra or {})
     with open(path, 'w') as f:
         json.dump(d, f)
     return path
@@ -115,17 +183,19 @@ def plan(job, q, name):
     p = PRINTERS.get(q.get('printer', ''))
     if not p:
         raise ValueError('Unknown printer')
+    extra = overrides(q.get('settings'))
     machine = preset_file(job, 'machine', p['machine'], {p['machine']: p['machine']})
-    process = preset_file(job, 'process', q.get('process') or p['process'], p['processes'])
+    process = preset_file(job, 'process', q.get('process') or p['process'], p['processes'], 0, extra['process'])
     fils = [f for f in (q.get('filaments') or 'Generic PLA').split(';') if f][:p['tools']]
-    fil_paths = [preset_file(job, 'filament', f, p['filaments'], i) for i, f in enumerate(fils)]
+    fx = extra['filaments'] + [{}] * len(fils)
+    fil_paths = [preset_file(job, 'filament', f, p['filaments'], i, fx[i]) for i, f in enumerate(fils)]
     args = ['--slice', '0', '--export-statistics',
             '--load-settings', f'{machine};{process}', '--load-filaments', ';'.join(fil_paths)]
     if not name.lower().endswith('.3mf'):
         tool = int(q.get('tool') or 0)
         if not 0 <= tool < len(fils):
             raise ValueError('That toolhead has no filament')
-        args += ['--arrange', '1', '--load-filament-ids', str(tool + 1)]
+        args += ['--arrange', '0' if q.get('arrange') == '0' else '1', '--load-filament-ids', str(tool + 1)]
     return args
 
 
@@ -167,6 +237,45 @@ def mesh_step(src, dst):
     gmsh.model.mesh.generate(2)
     gmsh.write(dst)
     gmsh.finalize()
+
+
+def mesh(q, body):
+    """The model as one binary STL in plate coordinates, centred by Orca's
+    arrange (and turned by its auto-orient when q has orient=1)."""
+    p = PRINTERS.get(q.get('printer') or 'k2plus')
+    if not p:
+        raise ValueError('Unknown printer')
+    name = safe_name(q.get('name', ''))
+    job = uuid.uuid4().hex[:12]
+    work = tempfile.mkdtemp(prefix='mesh-')
+    try:
+        model = os.path.join(work, name)
+        with open(model, 'wb') as f:
+            f.write(body)
+        if name.lower().endswith(('.step', '.stp')):
+            model = step_to_stl(model)
+        machine = preset_file(job, 'machine', p['machine'], {p['machine']: p['machine']})
+        out = os.path.join(work, 'out')
+        # ponytail: no lock, so editing isn't stuck behind a long slice; Orca
+        # instances only read the data dir.
+        r = subprocess.run(ORCA + ['--datadir', DATA, '--load-settings', machine,
+                                   *(['--orient', '1'] if q.get('orient') == '1' else []),
+                                   '--arrange', '1', '--export-stl', '--outputdir', out, model],
+                           capture_output=True, text=True, timeout=600)
+        tris = []
+        for root, _, names in os.walk(out):
+            for n in sorted(names):
+                if n.lower().endswith('.stl'):
+                    with open(os.path.join(root, n), 'rb') as f:
+                        b = f.read()
+                    tris.append(b[84:84 + 50 * int.from_bytes(b[80:84], 'little')])
+        if not tris:
+            raise RuntimeError(why(r.stdout + r.stderr) if r.returncode else 'No mesh in this model')
+        data = b''.join(tris)
+        return b'Printer Hub'.ljust(80, b' ') + (len(data) // 50).to_bytes(4, 'little') + data
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+        forget(job)
 
 
 def why(out):
@@ -268,15 +377,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path, q = self.route()
-        if path != '/slicer/jobs':
+        if path not in ('/slicer/jobs', '/slicer/mesh'):
             return self.reply(404, {'error': 'Not found'})
         n = int(self.headers.get('Content-Length') or 0)
         if not 0 < n <= MAX_MODEL:
             return self.reply(413, {'error': 'Models up to 200 MB'})
         try:
-            self.reply(200, {'id': new_job(q, self.rfile.read(n))})
+            if path == '/slicer/jobs':
+                return self.reply(200, {'id': new_job(q, self.rfile.read(n))})
+            stl = mesh(q, self.rfile.read(n))
         except ValueError as e:
-            self.reply(400, {'error': str(e)})
+            return self.reply(400, {'error': str(e)})
+        except Exception as e:  # reported to the app, never crashes the server
+            return self.reply(500, {'error': str(e) or type(e).__name__})
+        self.send_response(200)
+        self.send_header('Content-Type', 'model/stl')
+        self.send_header('Content-Length', str(len(stl)))
+        self.end_headers()
+        self.wfile.write(stl)
 
     def log_message(self, fmt, *args):
         pass

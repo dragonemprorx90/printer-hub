@@ -5,6 +5,7 @@ OrcaSlicer installed:  python3 slicer/test_server.py
 import glob
 import json
 import os
+import re
 import shutil
 import struct
 import sys
@@ -12,6 +13,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -40,8 +42,9 @@ class FakeMoonraker(BaseHTTPRequestHandler):
         pass
 
 
-def cube():
-    v = [(0, 0, 0), (20, 0, 0), (20, 20, 0), (0, 20, 0), (0, 0, 20), (20, 0, 20), (20, 20, 20), (0, 20, 20)]
+def cube(x=0, y=0, h=20):
+    v = [(x + a, y + b, c * h) for a, b, c in
+         ((0, 0, 0), (20, 0, 0), (20, 20, 0), (0, 20, 0), (0, 0, 1), (20, 0, 1), (20, 20, 1), (0, 20, 1))]
     f = [(0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4),
          (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7)]
     out = b'\0' * 80 + struct.pack('<I', len(f))
@@ -59,8 +62,8 @@ def call(method, path, body=None):
         return e.code, json.load(e)
 
 
-def slice_job(query):
-    status, j = call('POST', f'/slicer/jobs?{query}', cube())
+def slice_job(query, model=None):
+    status, j = call('POST', f'/slicer/jobs?{query}', model or cube())
     assert status == 200, j
     for _ in range(600):
         _, s = call('GET', f'/slicer/jobs/{j["id"]}')
@@ -75,7 +78,7 @@ if __name__ == '__main__':
         threading.Thread(target=ThreadingHTTPServer(('127.0.0.1', port), h).serve_forever, daemon=True).start()
 
     _, p = call('GET', '/slicer/presets')
-    assert [x['id'] for x in p['printers']] == ['k2plus', 'u1'], p
+    assert [(x['id'], x['bed'][0]) for x in p['printers']] == [('k2plus', 350), ('u1', 270)], p
 
     # Bad input is refused before anything runs.
     assert call('POST', '/slicer/jobs?printer=k2plus&name=x.exe', b'1')[0] == 400
@@ -93,6 +96,43 @@ if __name__ == '__main__':
     body = uploads[-1][1]
     assert b'printer_model = Snapmaker U1' in body and b'filament_type = PLA;PETG;PLA;TPU' in body
     assert b'\nT1\n' in body, 'object should print on toolhead 2'
+
+    # Overrides from the app's print settings end up in the G-code.
+    settings = json.dumps({
+        'process': {'layer_height': '0.28', 'enable_support': True, 'support_type': 'tree(auto)',
+                    'sparse_infill_density': '35%', 'sparse_infill_pattern': 'gyroid', 'wall_loops': 4},
+        'filaments': [{'nozzle_temperature': 225, 'bed_temperature': 65, 'filament_flow_ratio': '0.95'}]})
+    s = slice_job('printer=k2plus&name=cube.stl&settings=' + urllib.parse.quote(settings))
+    assert s['state'] == 'done', s
+    body = uploads[-1][1]
+    for line in (b'; layer_height = 0.28', b'; enable_support = 1', b'; support_type = tree(auto)',
+                 b'; sparse_infill_density = 35%', b'; sparse_infill_pattern = gyroid', b'; wall_loops = 4',
+                 b'; nozzle_temperature = 225', b'; nozzle_temperature_initial_layer = 225',
+                 b'; filament_flow_ratio = 0.95', b'; textured_plate_temp = 65'):
+        assert line + b'\n' in body, line
+    bad = urllib.parse.quote(json.dumps({'process': {'machine_start_gcode': 'G28'}}))
+    assert call('POST', f'/slicer/jobs?printer=k2plus&name=a.stl&settings={bad}', b'1')[0] == 400
+    assert call('POST', '/slicer/jobs?printer=k2plus&name=a.stl&settings=%7B', b'1')[0] == 400
+
+    # arrange=0 keeps the app's placement (a cube at X 200-220, Y 50-70).
+    def xy(body):
+        return [(float(a), float(b)) for a, b in re.findall(rb'\nG1 X([\d.]+) Y([\d.]+) E[\d.]', body)]
+    s = slice_job('printer=k2plus&name=cube.stl&arrange=0', cube(200, 50))
+    assert s['state'] == 'done', s
+    assert any(200 <= x <= 220 and 50 <= y <= 70 for x, y in xy(uploads[-1][1]))
+    s = slice_job('printer=k2plus&name=cube.stl', cube(200, 50))
+    assert not any(200 <= x <= 220 and 50 <= y <= 70 for x, y in xy(uploads[-1][1])), 'arranged by default'
+
+    # The editor's mesh: centred on the plate, auto-orient lays a tall box down.
+    req = urllib.request.Request('http://127.0.0.1:7198/slicer/mesh?printer=k2plus&name=box.stl&orient=1',
+                                 data=cube(h=60), method='POST')
+    with urllib.request.urlopen(req, timeout=120) as r:
+        stl = r.read()
+    n = struct.unpack_from('<I', stl, 80)[0]
+    pts = [struct.unpack_from('<3f', stl, 84 + i * 50 + 12 + k * 12) for i in range(n) for k in range(3)]
+    lo, hi = [min(p[a] for p in pts) for a in range(3)], [max(p[a] for p in pts) for a in range(3)]
+    assert n == 12 and abs(lo[2]) < 0.01 and hi[2] < 21, (n, lo, hi)
+    assert abs((lo[0] + hi[0]) / 2 - 175) < 1 and abs((lo[1] + hi[1]) / 2 - 175) < 1, (lo, hi)
 
     try:
         import gmsh
