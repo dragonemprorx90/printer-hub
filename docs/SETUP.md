@@ -90,6 +90,23 @@ In the app, open **Edit printer → Remote access code**. Paste the `PHB1:…` c
 docker compose down && docker compose run --rm bridge --reset --show-code && docker compose up -d
 ```
 
+### Choose how the app connects
+
+**Edit printer → Connection** picks the way in, per printer:
+
+| Choice | What it does |
+|---|---|
+| **Direct first, then remote access** (default) | Talks to the printer's own address when it answers (at home, or over a Tailscale route to your home network). Otherwise it uses the relay, and checks once a minute whether the direct way works again. |
+| **Direct only** | Never uses the relay: home network or Tailscale only. |
+| **Remote access only** | Always uses the relay, even at home. |
+
+**Some networks block the relay** (some school, office and hotel Wi-Fi block `workers.dev`). If you use Tailscale, share your home network through it instead:
+1. On the machine that runs the bridge: `sudo tailscale set --advertise-routes=192.168.68.0/22`. Use your own home network's range.
+2. In the Tailscale admin console, open that machine → **Edit route settings** and approve the route.
+3. On your phone or Mac: turn on **Use Tailscale subnets** (CLI: `tailscale set --accept-routes`).
+
+The printer's own address then works from anywhere Tailscale does.
+
 At home the app talks to the printer directly. Away, it goes through the bridge, and it switches back by itself when you return.
 
 ### More than one printer
@@ -143,6 +160,7 @@ docker compose pull && docker compose up -d
 
 - The image is about 1 GB, for amd64 and arm64. A slice takes 10 s to a few minutes; a NAS or Pi 5 is fine, a Pi 4 is slow.
 - **Two printers on one machine:** each bridge folder runs its own slicer. Give the second one `SLICER_PORT=7071` in its `.env`.
+- **Slice without the relay:** the slicer only listens on `127.0.0.1` (for the bridge). To reach it straight from the app, for example over Tailscale, add the machine's Tailscale address in `.env`: `SLICER_BIND=127.0.0.1,100.x.y.z`. Then restart with `docker compose up -d`, and in the app set **Edit printer → Slicer address** to `100.x.y.z:7070` (or `:7071`). The app uses that address when it answers and falls back to the relay, following the printer's **Connection** choice. Anyone who can reach that address can slice and send G-code to the printer, so don't use `0.0.0.0` or a public address.
 - **Your own presets:** in desktop Orca, export a process or filament preset and copy the `.json` into `slicer-profiles/process/` or `slicer-profiles/filament/` in the bridge folder. They show up in the app's lists.
 - **Find models online:** in Files, the globe button searches **Printables** (no account), **Creality Cloud** (search is open; downloads ask you to sign in once on Creality's own page inside the app) and **Thingiverse** (paste a free app token from [thingiverse.com/developers](https://www.thingiverse.com/developers)). **MakerWorld** opens as its own website inside the app: sign in there, tap Download on a 3MF, and Printer Hub slices it. G-code or a 3MF already made for your K2 Plus or U1 is sent straight to the printer.
 - STEP files are meshed first (fine detail is kept to about 1/36 of a circle), which adds up to a minute for big parts.

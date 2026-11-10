@@ -3,7 +3,13 @@
 Every release of Printer Hub (app, home bridge, relay and Orca plugin ship together).
 Downloads: [GitHub releases](https://github.com/dragonemprorx90/printer-hub/releases).
 
-## 1.24.0 — unreleased
+## 1.25.0 — unreleased
+
+- Choose how each printer connects (Edit printer → Connection): direct first then remote access (as before), direct only (home network or Tailscale), or remote access only.
+- Slice without the relay: set Edit printer → Slicer address (e.g. your NAS's Tailscale address and port) and the editor talks to the slicer directly, falling back to the relay. The slicer needs SLICER_BIND (setup guide, "Slicing").
+- Networks that block the relay: the setup guide shows how to reach your printers through a Tailscale route to your home network instead.
+
+## 1.24.0 — 2026-11-10
 
 - Slice editor: opening an STL, 3MF or STEP model now shows it in 3D on your printer's plate. Drag to turn the view, pinch or scroll to zoom, two fingers to pan.
 - Place it: drag the model to move it, turn it about X, Y or Z, scale it, lay it on a face you tap, or let Orca auto-orient it. It's sliced exactly where you put it, and turns red if it doesn't fit.

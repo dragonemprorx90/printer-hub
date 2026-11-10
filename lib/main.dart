@@ -576,6 +576,8 @@ class _PrinterDialogState extends State<PrinterDialog> {
   late final _key = TextEditingController(text: widget.initial?.apiKey ?? '');
   late final _cam = TextEditingController(text: widget.initial?.cameraUrl ?? '');
   late final _relay = TextEditingController(text: widget.initial?.relayCode ?? '');
+  late final _slicer = TextEditingController(text: widget.initial?.slicerUrl ?? '');
+  late Connection _connection = widget.initial?.connection ?? Connection.auto;
   String? _error;
 
   void _save() {
@@ -594,6 +596,10 @@ class _PrinterDialogState extends State<PrinterDialog> {
         return;
       }
     }
+    if (_slicer.text.trim().isNotEmpty && slicerBase(_slicer.text) == null) {
+      setState(() => _error = 'Enter the slicer as address:port, e.g. 100.85.247.10:7070');
+      return;
+    }
     String? opt(TextEditingController c) => c.text.trim().isEmpty ? null : c.text.trim();
     Navigator.pop(
       context,
@@ -604,6 +610,8 @@ class _PrinterDialogState extends State<PrinterDialog> {
         apiKey: opt(_key),
         cameraUrl: opt(_cam),
         relayCode: opt(_relay),
+        connection: _connection,
+        slicerUrl: opt(_slicer),
       ),
     );
   }
@@ -630,6 +638,21 @@ class _PrinterDialogState extends State<PrinterDialog> {
                         onPressed: _scanRelay,
                       )
                     : null),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: DropdownButtonFormField<Connection>(
+                initialValue: _connection,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Connection'),
+                items: [
+                  for (final c in Connection.values)
+                    DropdownMenuItem(value: c, child: Text(c.label, overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: (c) => setState(() => _connection = c ?? Connection.auto),
+              ),
+            ),
+            _field(_slicer, 'Slicer address (optional)',
+                hint: 'e.g. 100.85.247.10:7070, to slice without the relay'),
             if (_error != null) Text(_error!, style: const TextStyle(color: C.danger)),
           ]),
         ),

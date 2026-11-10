@@ -17,6 +17,13 @@ class Printer {
   /// Pairing code from the home bridge ("PHB1:…"), for access from anywhere.
   final String? relayCode;
 
+  /// Which way to reach the printer, see [Connection].
+  final Connection connection;
+
+  /// The slicer container's own address ("100.85.247.10:7070"), reached
+  /// directly (LAN, Tailscale) instead of through the relay. Optional.
+  final String? slicerUrl;
+
   const Printer({
     required this.name,
     required this.host,
@@ -24,6 +31,8 @@ class Printer {
     this.apiKey,
     this.cameraUrl,
     this.relayCode,
+    this.connection = Connection.auto,
+    this.slicerUrl,
   });
 
   String get key => '$host:$port';
@@ -35,6 +44,8 @@ class Printer {
         'apiKey': apiKey,
         'cameraUrl': cameraUrl,
         'relayCode': relayCode,
+        'connection': connection.name,
+        'slicerUrl': slicerUrl,
       };
 
   factory Printer.fromJson(Map<String, dynamic> j) => Printer(
@@ -44,7 +55,53 @@ class Printer {
         apiKey: j['apiKey'],
         cameraUrl: j['cameraUrl'],
         relayCode: j['relayCode'],
+        connection: Connection.values.asNameMap()[j['connection']] ?? Connection.auto,
+        slicerUrl: j['slicerUrl'],
       );
+}
+
+/// How the app reaches a printer (and its slicer).
+enum Connection {
+  /// The printer's own address first (home network, or a Tailscale route to
+  /// it); the home bridge's relay when that doesn't answer.
+  auto('Direct first, then remote access'),
+
+  /// Only the printer's own address: never the relay.
+  direct('Direct only (home network or Tailscale)'),
+
+  /// Always through the home bridge's relay, even at home.
+  relay('Remote access only');
+
+  final String label;
+  const Connection(this.label);
+}
+
+/// "host:port" (or a URL) of a slicer as an http base URI; null if empty.
+Uri? slicerBase(String? s) {
+  s = s?.trim();
+  if (s == null || s.isEmpty) return null;
+  final u = Uri.tryParse(s.contains('://') ? s : 'http://$s');
+  if (u == null || u.host.isEmpty) return null;
+  return Uri(scheme: u.scheme, host: u.host, port: u.hasPort ? u.port : 7070);
+}
+
+/// Sends the slicer API's requests (any host) to the slicer at [base].
+class DirectSlicerClient extends http.BaseClient {
+  final Uri base;
+  final _c = http.Client();
+  DirectSlicerClient(this.base);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest r) {
+    final req = http.Request(r.method, r.url.replace(scheme: base.scheme, host: base.host, port: base.port))
+      ..headers.addAll(r.headers)
+      ..followRedirects = r.followRedirects;
+    if (r is http.Request) req.bodyBytes = r.bodyBytes;
+    return _c.send(req);
+  }
+
+  @override
+  void close() => _c.close();
 }
 
 /// ponytail: one long-lived client per printer, shared by the printer list
@@ -54,7 +111,12 @@ final _clients = <String, MoonrakerClient>{};
 MoonrakerClient clientFor(Printer p) => _clients.putIfAbsent(
       p.key,
       () => MoonrakerClient(
-          host: p.host, port: p.port, apiKey: p.apiKey, relayCode: p.relayCode)
+          host: p.host,
+          port: p.port,
+          apiKey: p.apiKey,
+          relayCode: p.relayCode,
+          connection: p.connection,
+          slicerUrl: p.slicerUrl)
         ..connect(),
     );
 
@@ -515,12 +577,27 @@ class MoonrakerClient {
   }
 
   /// An HTTP client for the home bridge's own services (the slicer), and how
-  /// to let it go. Always through the relay: at home the app knows the
-  /// printer's address, not the NAS's.
+  /// to let it go. Straight to [slicerUrl] when it's set and answers (unless
+  /// [connection] is relay only); otherwise through the relay, since the app
+  /// knows the printer's address, not the NAS's.
   Future<(http.Client, void Function())> bridgeClient() async {
+    final direct = connection == Connection.relay ? null : slicerBase(slicerUrl);
+    if (direct != null) {
+      final c = DirectSlicerClient(direct);
+      try {
+        final r = await c.get(direct.replace(path: '/slicer/presets')).timeout(const Duration(seconds: 3));
+        if (r.statusCode == 200) return (c as http.Client, c.close);
+      } catch (_) {}
+      c.close();
+      if (connection == Connection.direct || relay == null) {
+        throw MoonrakerError('The slicer at $slicerUrl doesn\'t answer. Check the address (Edit printer) '
+            'and that the slicer listens on it (SLICER_BIND, setup guide "Slicing").');
+      }
+    }
     final pair = relay;
-    if (pair == null) {
-      throw MoonrakerError('Slicing runs on your home bridge. Pair one first: Edit printer → Remote access code.');
+    if (pair == null || connection == Connection.direct) {
+      throw MoonrakerError('Slicing runs on your home bridge. Pair one first (Edit printer → Remote access code), '
+          'or set the slicer\'s address for a direct connection.');
     }
     if (viaRelay) return (_http, () {});
     final link = await RelayLink.connect(pair);
@@ -553,8 +630,17 @@ class MoonrakerClient {
   /// Why the last connection attempt failed, for the UI.
   String? linkError;
 
+  /// Which way to connect, and the slicer's direct address (see [Printer]).
+  final Connection connection;
+  final String? slicerUrl;
+
   MoonrakerClient(
-      {required this.host, this.port = 7125, this.apiKey, String? relayCode})
+      {required this.host,
+      this.port = 7125,
+      this.apiKey,
+      String? relayCode,
+      this.connection = Connection.auto,
+      this.slicerUrl})
       : relay = _pairOrNull(relayCode);
 
   static PairInfo? _pairOrNull(String? code) {
@@ -593,7 +679,13 @@ class MoonrakerClient {
     final gen = ++_gen;
     _closeTransport();
     try {
-      if (relay != null && !await _lanReachable()) {
+      final useRelay = relay != null &&
+          switch (connection) {
+            Connection.relay => true,
+            Connection.direct => false,
+            Connection.auto => !await _lanReachable(),
+          };
+      if (useRelay) {
         final link = await RelayLink.connect(relay!);
         if (gen != _gen || _closed) {
           link.close();
@@ -609,9 +701,11 @@ class MoonrakerClient {
           linkError = why;
           _scheduleReconnect();
         });
-        _homeCheck = Timer.periodic(const Duration(minutes: 1), (_) async {
-          if (gen == _gen && await _lanReachable()) _open();
-        });
+        if (connection == Connection.auto) {
+          _homeCheck = Timer.periodic(const Duration(minutes: 1), (_) async {
+            if (gen == _gen && await _lanReachable()) _open();
+          });
+        }
       } else {
         viaRelay = false;
         _http = http.Client();

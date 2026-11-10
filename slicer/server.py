@@ -38,6 +38,11 @@ USER = os.path.join(DATA, 'user', 'default')  # your own presets live here too
 PRINTER = os.environ.get('PRINTER_HOST', '')
 MOONRAKER = os.environ.get('MOONRAKER_PORT', '7125')
 PORT = int(os.environ.get('SLICER_PORT', '7070'))
+# Where to listen. The bridge reaches it on 127.0.0.1; add e.g. the NAS's
+# Tailscale address (SLICER_BIND=127.0.0.1,100.x.y.z) to slice from the app
+# without the relay. Anyone who can reach that address can slice and send
+# G-code to the printer, so only add addresses you trust (not 0.0.0.0).
+BIND = [a.strip() for a in os.environ.get('SLICER_BIND', '127.0.0.1').split(',') if a.strip()]
 MAX_MODEL = 200 * 1024 * 1024
 MODEL_EXT = ('.stl', '.3mf', '.step', '.stp', '.obj')
 
@@ -405,5 +410,8 @@ if __name__ == '__main__':
         raise SystemExit(mesh_step(*sys.argv[2:4]))
     if not PRINTER:
         raise SystemExit('Set PRINTER_HOST (the same .env as the bridge)')
-    print(f'Printer Hub slicer on 127.0.0.1:{PORT}, printer {PRINTER}:{MOONRAKER}', flush=True)
-    ThreadingHTTPServer(('127.0.0.1', PORT), Handler).serve_forever()
+    print(f'Printer Hub slicer on {", ".join(f"{a}:{PORT}" for a in BIND)}, printer {PRINTER}:{MOONRAKER}', flush=True)
+    servers = [ThreadingHTTPServer((a, PORT), Handler) for a in BIND]
+    for s in servers[1:]:
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+    servers[0].serve_forever()
