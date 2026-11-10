@@ -134,14 +134,18 @@ Future<void> main(List<String> argv) async {
   await Bridge(pair, await LinkCrypto.forPair(pair), printer, port, camera: camera, slicerPort: slicerPort).run();
 }
 
-/// Says once at start whether slicing from the app will work.
+/// Says once at start whether slicing from the app will work. Tries for a
+/// minute: the slicer container often starts alongside the bridge.
 Future<void> _logSlicer(int port) async {
-  try {
-    final r = await http.get(Uri.parse('http://127.0.0.1:$port/slicer/presets')).timeout(const Duration(seconds: 3));
-    log(r.statusCode == 200 ? 'Slicer: ready on port $port' : 'Slicer: answered HTTP ${r.statusCode} on port $port');
-  } catch (_) {
-    log('Slicer: not running (optional; add slicer to COMPOSE_PROFILES to slice from the app)');
+  for (var i = 0; i < 12; i++) {
+    try {
+      final r = await http.get(Uri.parse('http://127.0.0.1:$port/slicer/presets')).timeout(const Duration(seconds: 3));
+      return log(r.statusCode == 200 ? 'Slicer: ready on port $port' : 'Slicer: answered HTTP ${r.statusCode} on port $port');
+    } catch (_) {
+      await Future.delayed(const Duration(seconds: 5));
+    }
   }
+  log('Slicer: not running (optional; add slicer to COMPOSE_PROFILES to slice from the app)');
 }
 
 /// Reads a home camera (MJPEG stream or JPEG snapshot URL) only while a
