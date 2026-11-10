@@ -6,6 +6,13 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.24.0', [
+    'Slice editor: opening an STL, 3MF or STEP model now shows it in 3D on your printer\'s plate. Drag to turn the view, pinch or scroll to zoom, two fingers to pan.',
+    'Place it: drag the model to move it, turn it about X, Y or Z, scale it, lay it on a face you tap, or let Orca auto-orient it. It\'s sliced exactly where you put it, and turns red if it doesn\'t fit.',
+    'Print settings on top of the preset: layer height, walls, infill and pattern, supports (normal or tree, angle, from the plate only), brim, speeds, flow ratio, and nozzle and bed temperature (per toolhead on the U1). Your changes are remembered per printer.',
+    'After slicing you see the print time, filament and every layer before you print.',
+    'Update your home bridge (docker compose pull && docker compose up -d) to place models and change settings; an older bridge still slices the old way.',
+  ]),
   ('1.23.0', [
     'New alerts: "first layer done" (check it before walking away) and "almost done" (about 10 minutes left). Both are in Settings → Notifications.',
     'Console: ↑/↓ recall earlier commands (with a Recent list on iPhone), and a button copies the whole output.',
