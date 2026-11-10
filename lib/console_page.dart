@@ -91,7 +91,8 @@ class _ConsoleTabState extends State<ConsoleTab> {
       settings.setStrings('console.history', _history.items);
     }
     try {
-      await widget.client.gcode(text);
+      // The G28 chip goes through home(): it lifts the nozzle clear first.
+      await (preset == 'G28' ? widget.client.home() : widget.client.gcode(text));
     } catch (_) {
       // The error is already printed in the console.
     }

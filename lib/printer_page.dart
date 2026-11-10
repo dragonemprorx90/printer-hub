@@ -988,7 +988,7 @@ class _Actions extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: busy
                 ? null
-                : () => run(context, () => client.gcode('M84'),
+                : () => run(context, client.motorsOff,
                     done: 'Motors disabled'),
             icon: const Icon(Icons.power_settings_new_rounded),
             label: const Text('Motors off'),

@@ -959,19 +959,87 @@ class MoonrakerClient {
   Future<void> pauseAtLayer(int? layer) => gcode(
       layer == null ? 'SET_PAUSE_AT_LAYER ENABLE=0' : 'SET_PAUSE_AT_LAYER ENABLE=1 LAYER=$layer');
 
-  Future<void> home([String axes = '']) => gcode('G28 $axes'.trim());
-  Future<void> jog(String axis, double mm) {
-    final feed = axis == 'Z' ? 600 : 6000;
-    return gcode('G91\nG1 $axis$mm F$feed\nG90');
+  // --- Motion, with crash protection ---------------------------------------
+
+  bool _moving = false;
+
+  /// True while a move, home or extrude from this app is still running.
+  bool get moving => _moving;
+
+  bool get _printing => status.state == 'printing' || status.state == 'paused';
+
+  /// Runs [script] and waits for the motion to finish (M400). One at a time:
+  /// a second tap while the first move runs is refused, never queued.
+  Future<void> _motion(String script) async {
+    if (_moving) throw MoonrakerError('Still moving. Wait for the last move to finish.');
+    _moving = true;
+    try {
+      await gcode('$script\nM400');
+    } finally {
+      _moving = false;
+    }
   }
 
-  Future<void> extrude(double mm) => gcode('M83\nG1 E$mm F300');
-  Future<void> setHotend(int t) => gcode('M104 S$t');
-  Future<void> setBed(int t) => gcode('M140 S$t');
+  /// Z (gcode coordinates, 0 = bed surface) and whether Z is homed, read
+  /// from the printer now rather than from the last status update.
+  Future<(double, bool)> _zNow() async {
+    final r = await _call('printer.objects.query', {
+      'objects': {'gcode_move': ['gcode_position'], 'toolhead': ['homed_axes']},
+    });
+    final st = r['status'] as Map;
+    final pos = (st['gcode_move']?['gcode_position'] as List?) ?? const [0, 0, 0];
+    return ((pos.length > 2 ? pos[2] as num : 0).toDouble(), '${st['toolhead']?['homed_axes'] ?? ''}'.contains('z'));
+  }
+
+  /// Homes [axes] (all when empty). Refused during a print. If the nozzle is
+  /// near the bed it is raised first, so homing X/Y can't drag it across.
+  Future<void> home([String axes = '']) async {
+    if (_printing) throw MoonrakerError('Can\'t home while a print is running or paused.');
+    final (z, zHomed) = await _zNow();
+    final lift = homeLift(z, zHomed: zHomed);
+    await _motion([
+      if (lift > 0) 'G91\nG1 Z${lift.toStringAsFixed(2)} F600\nG90',
+      'G28 $axes'.trim(),
+    ].join('\n'));
+  }
+
+  /// Moves [axis] by [mm] and returns how far it really went: a Z move toward
+  /// the bed stops at Z 0 (many printers allow Z below the bed for probing).
+  Future<double> jog(String axis, double mm) async {
+    if (_printing) throw MoonrakerError('Movement is locked while a print is running or paused.');
+    var d = mm;
+    if (axis == 'Z' && mm < 0) {
+      final (z, zHomed) = await _zNow();
+      final safe = safeZStep(mm, z: z, zHomed: zHomed);
+      if (safe == null) {
+        throw MoonrakerError(zHomed
+            ? 'The nozzle is already at the bed (Z 0).'
+            : 'Home Z before moving the nozzle toward the bed.');
+      }
+      d = safe;
+    }
+    final feed = axis == 'Z' ? 600 : 6000;
+    await _motion('G91\nG1 $axis${d.toStringAsFixed(3)} F$feed\nG90');
+    return d;
+  }
+
+  Future<void> extrude(double mm) => _motion('M83\nG1 E$mm F300');
+
+  /// Motors off. Refused during a print: the toolhead would lose its place.
+  Future<void> motorsOff() async {
+    if (_printing) throw MoonrakerError('Can\'t turn the motors off while a print is running or paused.');
+    await gcode('M84');
+  }
+  // Klipper refuses targets over each heater's max_temp; below zero is ours.
+  Future<void> setHotend(int t) => gcode('M104 S${t < 0 ? 0 : t}');
+  Future<void> setBed(int t) => gcode('M140 S${t < 0 ? 0 : t}');
   Future<void> setChamber(int t) => gcode(
-      'SET_HEATER_TEMPERATURE HEATER=${status.chamberHeater.split(' ').last} TARGET=$t');
-  Future<void> setSpeed(int pct) => gcode('M220 S$pct');
-  Future<void> setFlow(int pct) => gcode('M221 S$pct');
+      'SET_HEATER_TEMPERATURE HEATER=${status.chamberHeater.split(' ').last} TARGET=${t < 0 ? 0 : t}');
+
+  /// Speed and flow stay in ranges that can't wreck a print (the Orca panel
+  /// passes whatever it's given).
+  Future<void> setSpeed(int pct) => gcode('M220 S${pct.clamp(10, 300)}');
+  Future<void> setFlow(int pct) => gcode('M221 S${pct.clamp(50, 150)}');
   Future<void> setLed(bool on) => gcode(status.raw.containsKey(PrinterStatus.cavityLed)
       ? 'SET_LED LED=cavity_led WHITE=${on ? 1 : 0}'
       : 'SET_PIN PIN=LED VALUE=${on ? 1 : 0}');
@@ -1539,8 +1607,17 @@ class MoonrakerClient {
   Future<void> setToolTemp(String extruder, int t) => extruder == 'extruder'
       ? setHotend(t)
       : gcode('SET_HEATER_TEMPERATURE HEATER=$extruder TARGET=$t');
-  Future<void> adjustZOffset(double mm) =>
-      gcode('SET_GCODE_OFFSET Z_ADJUST=${mm.toStringAsFixed(3)} MOVE=1');
+  /// Live Z offset nudge, kept within [kZOffsetMin]..[kZOffsetMax] so
+  /// repeated taps can't push the nozzle into the bed mid-print.
+  Future<void> adjustZOffset(double mm) async {
+    if (!zOffsetAllowed(status.zOffset, mm)) {
+      throw MoonrakerError(mm < 0
+          ? 'Z offset is already ${status.zOffset.toStringAsFixed(2)} mm. Going closer could hit the bed; '
+              'recalibrate Z instead.'
+          : 'Z offset is already +${status.zOffset.toStringAsFixed(2)} mm.');
+    }
+    await gcode('SET_GCODE_OFFSET Z_ADJUST=${mm.toStringAsFixed(3)} MOVE=1');
+  }
   Future<void> setPressureAdvance(double v) =>
       gcode('SET_PRESSURE_ADVANCE ADVANCE=${v.toStringAsFixed(4)}');
   Future<void> excludeObject(String name) =>
@@ -1699,6 +1776,30 @@ class MoonrakerClient {
     _statusCtrl.close();
     _consoleCtrl.close();
   }
+}
+
+/// Live Z offset limits (mm). Wider than any normal first-layer tweak.
+const kZOffsetMin = -0.5, kZOffsetMax = 1.0;
+
+/// How far a Z move of [mm] may go: toward the bed it stops at Z 0. Null
+/// when it must not move at all (Z not homed, or already at the bed).
+double? safeZStep(double mm, {required double z, required bool zHomed}) {
+  if (mm >= 0) return mm;
+  if (!zHomed) return null;
+  final allowed = -z; // the move that reaches Z 0
+  if (allowed > -0.001) return null;
+  return mm < allowed ? allowed : mm;
+}
+
+/// How far to raise Z before homing so the nozzle clears the bed (3 mm).
+double homeLift(double z, {required bool zHomed}) => zHomed && z < 3 ? 3 - z : 0;
+
+/// Whether a live Z offset nudge of [mm] from [current] stays in range.
+/// Moves back toward zero are always allowed.
+bool zOffsetAllowed(double current, double mm) {
+  final next = current + mm;
+  if (mm < 0) return next >= kZOffsetMin - 1e-9;
+  return next <= kZOffsetMax + 1e-9;
 }
 
 /// [key]'s value in [m], made by [make] when missing; keeps only the newest

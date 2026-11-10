@@ -313,7 +313,7 @@ class OrcaLink {
           case 'home':
             await c.home();
           case 'motors_off':
-            await c.gcode('M84');
+            await c.motorsOff();
           case 'fan':
             final f = c.status.fans.where((f) => f.object == q['object']).firstOrNull;
             if (f == null) return json(404, {'error': 'no such fan'});

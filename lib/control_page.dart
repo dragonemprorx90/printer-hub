@@ -13,8 +13,28 @@ class ControlTab extends StatefulWidget {
 }
 
 class _ControlTabState extends State<ControlTab> {
-  double _step = 10;
+  double _step = 1; // small by default: a slip near the bed is a crash
   int _extrude = 10;
+  bool _moving = false; // a move from this pad is still running
+
+  /// Runs one move at a time from the pad; the buttons stay locked until it
+  /// finishes, so extra taps can't stack up.
+  Future<void> _move(Future<void> Function() action) async {
+    if (_moving) return;
+    setState(() => _moving = true);
+    try {
+      await run(context, action);
+    } finally {
+      if (mounted) setState(() => _moving = false);
+    }
+  }
+
+  Future<void> _jog(String axis, double mm) => _move(() async {
+        final went = await c.jog(axis, mm);
+        if (went != mm && mounted) {
+          toast(context, 'Stopped at the bed (Z 0) after ${went.abs().toStringAsFixed(1)} mm.');
+        }
+      });
   final _macroCtl = TextEditingController();
   String _macroFilter = '';
 
@@ -66,12 +86,15 @@ class _ControlTabState extends State<ControlTab> {
   Widget _movePanel(PrinterStatus s, bool busy) {
     final pos = s.position;
     String p(int i) => i < pos.length ? pos[i].toStringAsFixed(1) : '—';
+    final locked = busy || _moving;
     Widget jog(String axis, double dir, IconData icon) => _PadButton(
           icon: icon,
-          tooltip: '$axis${dir > 0 ? '+' : '−'}',
-          onPressed:
-              busy ? null : () => run(context, () => c.jog(axis, dir * _step)),
+          tooltip: axis == 'Z'
+              ? (dir > 0 ? 'Z+: nozzle farther from the bed' : 'Z−: nozzle closer to the bed (stops at Z 0)')
+              : '$axis${dir > 0 ? '+' : '−'}',
+          onPressed: locked ? null : () => _jog(axis, dir * _step),
         );
+    Widget caption(String t) => Text(t, style: T.caption.copyWith(color: C.muted));
     return Panel(
       title: 'Move',
       icon: Icons.open_with_rounded,
@@ -91,7 +114,7 @@ class _ControlTabState extends State<ControlTab> {
                 icon: Icons.home_rounded,
                 accent: true,
                 tooltip: 'Home X Y',
-                onPressed: busy ? null : () => run(context, () => c.home('X Y')),
+                onPressed: locked ? null : () => _move(() => c.home('X Y')),
               ),
               jog('X', 1, Icons.keyboard_arrow_right_rounded),
             ]),
@@ -99,14 +122,16 @@ class _ControlTabState extends State<ControlTab> {
           ]),
           const SizedBox(width: 28),
           Column(children: [
+            caption('Farther'),
             jog('Z', 1, Icons.keyboard_double_arrow_up_rounded),
             _PadButton(
               icon: Icons.vertical_align_bottom_rounded,
               accent: true,
               tooltip: 'Home Z',
-              onPressed: busy ? null : () => run(context, () => c.home('Z')),
+              onPressed: locked ? null : () => _move(() => c.home('Z')),
             ),
             jog('Z', -1, Icons.keyboard_double_arrow_down_rounded),
+            caption('Closer'),
           ]),
         ]),
         const SizedBox(height: 16),
@@ -148,9 +173,9 @@ class _ControlTabState extends State<ControlTab> {
         Row(children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: disabled
+              onPressed: disabled || _moving
                   ? null
-                  : () => run(context, () => c.extrude(-_extrude.toDouble())),
+                  : () => _move(() => c.extrude(-_extrude.toDouble())),
               icon: const Icon(Icons.arrow_upward_rounded),
               label: Text('Retract $_extrude mm'),
             ),
@@ -158,9 +183,9 @@ class _ControlTabState extends State<ControlTab> {
           const SizedBox(width: 12),
           Expanded(
             child: FilledButton.icon(
-              onPressed: disabled
+              onPressed: disabled || _moving
                   ? null
-                  : () => run(context, () => c.extrude(_extrude.toDouble())),
+                  : () => _move(() => c.extrude(_extrude.toDouble())),
               icon: const Icon(Icons.arrow_downward_rounded),
               label: Text('Extrude $_extrude mm'),
             ),
@@ -175,7 +200,7 @@ class _ControlTabState extends State<ControlTab> {
     final z = s.zOffset;
     final pa = s.pressureAdvance;
     Widget step(String label, double mm, IconData icon) => OutlinedButton.icon(
-          onPressed: s.online ? () => run(context, () => c.adjustZOffset(mm)) : null,
+          onPressed: s.online && zOffsetAllowed(z, mm) ? () => run(context, () => c.adjustZOffset(mm)) : null,
           icon: Icon(icon, size: 16),
           label: Text(label),
         );
