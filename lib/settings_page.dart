@@ -252,6 +252,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('notifyDone', 'Print finished'),
                   ('notifyError', 'Print failed or cancelled'),
                   ('notifyPause', 'Print paused (e.g. filament run-out)'),
+                  ('notifyFailure', 'Possible print failure (spaghetti)'),
                   ('notifyFirstLayer', 'First layer done'),
                   ('notifyAlmost', 'Almost done (about 10 minutes left)'),
                   ('notifyHumidity', 'CFS humidity too high'),
@@ -283,7 +284,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 Text(
                   'Alerts arrive while Printer Hub is open or in the background. '
-                  'The system may ask you to allow notifications the first time.',
+                  'The system may ask you to allow notifications the first time. '
+                  'Failure alerts need the detector on your home bridge (see the setup guide); '
+                  'pausing on a failure is set per printer, on its screen.',
                   style: TextStyle(color: C.muted, fontSize: 12),
                 ),
               ]),

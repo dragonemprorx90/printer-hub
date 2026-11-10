@@ -15,6 +15,7 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - Live camera: Creality K1/K2 and Snapmaker U1 WebRTC, plus MJPEG. Fullscreen zoom, snapshots, and a camera wall for a spare tablet.
 - Status, a progress ring with the finish time, and temperatures with a 10-minute graph.
 - Alerts with the app closed: finished, failed, paused, CFS humidity and low spool, each with a picture.
+- Failure detection: your home bridge spots spaghetti on the camera, alerts you and can pause the print (Obico's open model, on your NAS).
 
 **Control**
 - Move, home, extrude, fans, speed and flow, Z baby-stepping, pressure advance.
@@ -76,6 +77,7 @@ The relay only forwards sealed frames. It can't read them or send commands. Only
 | `bridge/` | Home bridge (Dart) and its Docker image |
 | `deploy/` | Ready-to-run Docker Compose setup and installer for the bridge |
 | `slicer/` | Slicer container for the bridge (OrcaSlicer CLI + a small Python API) |
+| `detector/` | Failure detector container for the bridge (Obico's ONNX model, CPU) |
 | `relay/` | Cloudflare Worker relay |
 | `packages/hub_link/` | Pairing codes and encryption shared by the app and the bridge |
 | `orca-plugin/` | OrcaSlicer 2.5+ panel (`printer_hub.py`) |

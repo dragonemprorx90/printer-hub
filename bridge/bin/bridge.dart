@@ -14,7 +14,12 @@
 //
 // Camera from away: --camera / CAMERA_URL is an MJPEG stream or JPEG
 // snapshot URL on the LAN (for WebRTC-only cameras, a go2rtc MJPEG URL).
-// It is read only while a phone is watching.
+// It is read only while a phone is watching (and, with the failure
+// detector, every 30 s during a print).
+//
+// Failure detection: DETECTOR_URL (default http://127.0.0.1:7072, the
+// detector container from COMPOSE_PROFILES=detector) scores camera frames
+// for spaghetti. Without the container nothing happens.
 
 import 'dart:async';
 import 'dart:convert';
@@ -109,7 +114,11 @@ Future<void> main(List<String> argv) async {
           camera: camera,
           autoFilter: env['AUTO_FILTER'] != 'off',
           quiet: parseQuietHours(env['QUIET_HOURS']),
-          spoolLow: double.tryParse(env['SPOOL_LOW_G'] ?? '') ?? 100);
+          spoolLow: double.tryParse(env['SPOOL_LOW_G'] ?? '') ?? 100,
+          detector: env['DETECTOR_URL'] == 'off'
+              ? null
+              : Uri.parse(env['DETECTOR_URL'] ?? 'http://127.0.0.1:7072'),
+          failureThreshold: double.tryParse(env['FAILURE_THRESHOLD'] ?? '') ?? 0.8);
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -157,14 +166,20 @@ class CameraFeed {
   static const _idle = Duration(seconds: 20);
   Uint8List? _frame;
   var _frameAt = DateTime(0), _wanted = DateTime(0);
-  var _running = false;
+  var _running = false, _quiet = false;
   String? _error;
 
   bool get _watched => DateTime.now().difference(_wanted) < _idle;
 
-  Future<Uint8List> frame() async {
+  /// [quiet]: the failure detector asking, not a phone; not logged.
+  Future<Uint8List> frame({bool quiet = false}) async {
     _wanted = DateTime.now();
-    if (!_running) unawaited(_run());
+    if (!quiet && _quiet && _running) log('Camera: a phone is watching');
+    if (!quiet) _quiet = false;
+    if (!_running) {
+      _quiet = quiet;
+      unawaited(_run());
+    }
     // A cold WebRTC camera behind go2rtc takes ~8 s for its first frame.
     for (var i = 0; i < 200; i++) {
       final f = _frame;
@@ -176,7 +191,7 @@ class CameraFeed {
 
   Future<void> _run() async {
     _running = true;
-    log('Camera: a phone is watching');
+    if (!_quiet) log('Camera: a phone is watching');
     final client = http.Client();
     try {
       while (_watched) {
@@ -204,7 +219,7 @@ class CameraFeed {
       client.close();
       _running = false;
       _frame = null;
-      log('Camera: idle, released');
+      if (!_quiet) log('Camera: idle, released');
     }
   }
 }
@@ -240,8 +255,19 @@ class Alerts {
   final double spoolLow; // grams; warn when a lane's spool has less
   final _spoolWarned = <int, DateTime>{};
 
+  final Uri? detector; // the failure detector container, if any
+  final FailureWatch _failure;
+
   Alerts(this.topic, this.host, this.port,
-      {this.name, this.humidityLimit = 45, this.camera, this.autoFilter = true, this.quiet, this.spoolLow = 100});
+      {this.name,
+      this.humidityLimit = 45,
+      this.camera,
+      this.autoFilter = true,
+      this.quiet,
+      this.spoolLow = 100,
+      this.detector,
+      double failureThreshold = 0.8})
+      : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
 
@@ -298,6 +324,7 @@ class Alerts {
 
   Future<void> run() async {
     unawaited(_rulesLoop());
+    if (detector != null && camera != null) unawaited(_failureLoop());
     var backoff = 2;
     while (true) {
       final started = DateTime.now();
@@ -416,6 +443,7 @@ class Alerts {
         case 'printing' when last == 'standby' || last == 'complete' || last == 'cancelled' || last == 'error':
           _sent = {};
           _started = DateTime.now();
+          _failure.reset();
           await send('$_title: print started', file, tags: ['printer'], priority: 2);
           if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
       }
@@ -662,6 +690,69 @@ extension on Alerts {
     }
   }
 
+  /// Every 30 s of a print: one camera frame to the detector. The smoothed
+  /// score goes to Moonraker's database (`printer_hub/failure_watch`, the
+  /// app shows it); a sustained high one alerts once per print, and pauses
+  /// when the app's "Pause if seen" (`printer_hub/failure`) is on.
+  Future<void> _failureLoop() async {
+    var down = false;
+    while (true) {
+      await Future.delayed(const Duration(seconds: 30));
+      if (_state != 'printing') continue;
+      final Uint8List jpeg;
+      final double score;
+      try {
+        jpeg = await camera!.frame(quiet: true);
+        final r = await _client
+            .post(detector!.resolve('/detect'), headers: {'Content-Type': 'image/jpeg'}, body: jpeg)
+            .timeout(const Duration(seconds: 30));
+        score = ((jsonDecode(r.body) as Map)['score'] as num).toDouble();
+        if (down) log('Failure detector: back');
+        down = false;
+      } catch (e) {
+        if (!down) log('Failure detector not reachable ($e); trying every 30 s');
+        down = true;
+        continue;
+      }
+      var paused = false;
+      if (_failure.add(score) && _sent.add('spaghetti')) {
+        log('Failure detector: possible failure (score ${_failure.level.toStringAsFixed(2)})');
+        Map settings = const {};
+        try {
+          final r = await _client.get(Uri.parse(
+              'http://$host:$port/server/database/item?namespace=printer_hub&key=failure'));
+          if (r.statusCode == 200) settings = (jsonDecode(r.body)['result']?['value'] as Map?) ?? const {};
+        } catch (_) {}
+        if (settings['pause'] == true) {
+          try {
+            await _client.post(Uri.parse('http://$host:$port/printer/print/pause'));
+            paused = true;
+          } catch (e) {
+            log('Pause failed: $e');
+          }
+        }
+        await send('$_title: possible print failure',
+            paused ? 'Looks like spaghetti. The print is paused; check the camera.' : 'Looks like spaghetti. Check the camera.',
+            tags: ['rotating_light'], priority: 5, jpeg: jpeg);
+      }
+      try {
+        await _client.post(Uri.parse('http://$host:$port/server/database/item'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'namespace': 'printer_hub',
+              'key': 'failure_watch',
+              'value': {
+                'level': double.parse(_failure.level.toStringAsFixed(3)),
+                'score': score,
+                'failing': _sent.contains('spaghetti'),
+                'file': '${_stats['filename'] ?? ''}',
+                'at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+              },
+            }));
+      } catch (_) {}
+    }
+  }
+
   bool get _filterOn => _sent.contains('filter_on');
 
   Future<void> _setFilter(bool on) async {
@@ -688,6 +779,20 @@ extension on Alerts {
       }
     } catch (_) {}
   }
+}
+
+/// Smooths the detector's per-frame scores (sum of failure-box
+/// confidences, as Obico computes it) so one odd frame doesn't alert:
+/// failing once the moving average reaches [threshold]. With frames 30 s
+/// apart, a clear spaghetti (score ~3) trips it on the second frame, about a minute in.
+/// ponytail: plain EWMA; Obico also compares short and long rolling means.
+/// FAILURE_THRESHOLD is the knob if a camera gives false alarms.
+class FailureWatch {
+  final double threshold;
+  double level = 0;
+  FailureWatch({this.threshold = 0.8});
+  bool add(double score) => (level = level * 0.8 + score * 0.2) >= threshold;
+  void reset() => level = 0;
 }
 
 /// Set at build time (dart compile exe -DVERSION=1.23.0).

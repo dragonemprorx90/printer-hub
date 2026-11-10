@@ -549,6 +549,63 @@ class _JobPanel extends StatelessWidget {
             ]),
           ),
         ]),
+        if (active && s.failureWatch != null) _FailureWatch(watch: s.failureWatch!, client: client),
+      ]),
+    );
+  }
+}
+
+/// The home bridge's failure detector on this print, and whether it pauses.
+class _FailureWatch extends StatefulWidget {
+  final Map<String, dynamic> watch;
+  final MoonrakerClient client;
+  const _FailureWatch({required this.watch, required this.client});
+  @override
+  State<_FailureWatch> createState() => _FailureWatchState();
+}
+
+class _FailureWatchState extends State<_FailureWatch> {
+  bool? _pause;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.client.dbGet('failure').then((v) {
+      if (mounted) setState(() => _pause = v is Map && v['pause'] == true);
+    }).catchError((_) {
+      if (mounted) setState(() => _pause = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final failing = widget.watch['failing'] == true;
+    final color = C.ink(failing ? C.danger : C.accent);
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(R.md),
+      ),
+      child: Row(children: [
+        Icon(failing ? Icons.report_rounded : Icons.verified_user_outlined, size: 18, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(failing ? 'Possible failure seen. Check the camera.' : 'Failure watch: looks fine',
+              style: T.small),
+        ),
+        Text('Pause if seen', style: T.caption.copyWith(color: C.muted)),
+        Switch(
+          value: _pause ?? false,
+          onChanged: _pause == null
+              ? null
+              : (v) async {
+                  setState(() => _pause = v);
+                  await run(context, () => widget.client.dbSet('failure', {'pause': v}),
+                      done: v ? 'Will pause on a failure' : 'Alert only');
+                },
+        ),
       ]),
     );
   }

@@ -71,4 +71,18 @@ void main() {
     expect(snapshotsToPrune(names, now), ['b__${t(200)}__first.jpg']);
     expect(snapshotsToPrune(names, now, keep: 1), ['c__${t(2)}__t1.jpg', 'b__${t(200)}__first.jpg']);
   });
+
+  test('one odd frame does not alert; sustained spaghetti does', () {
+    final w = FailureWatch();
+    expect(w.add(3.2), isFalse); // a single frame
+    for (var i = 0; i < 10; i++) {
+      expect(w.add(0), isFalse);
+    }
+    expect(w.add(0.3), isFalse); // a stray low-confidence box, over and over
+    for (var i = 0; i < 30; i++) {
+      expect(w.add(0.3), isFalse);
+    }
+    w.reset();
+    expect([w.add(3.2), w.add(3.2)], [false, true]); // about a minute of it
+  });
 }

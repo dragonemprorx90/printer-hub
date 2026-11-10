@@ -74,6 +74,7 @@ Set<String> milestones({required String state, int? layer, double? eta, required
 void watchPrinter(Printer p, MoonrakerClient c) {
   if (!_watched.add(p.key)) return;
   String? last, milestoneFile;
+  var failureAlerted = '';
   var sent = <String>{};
   final humidityAlerted = <String, DateTime>{};
   c.stream.listen((s) {
@@ -115,6 +116,14 @@ void watchPrinter(Printer p, MoonrakerClient c) {
       }
     }
     last = state;
+
+    final fw = s.failureWatch;
+    if (fw?['failing'] == true && failureAlerted != file) {
+      failureAlerted = file;
+      if (settings.flag('notifyFailure')) {
+        notify('${p.name}: possible print failure', 'Looks like spaghetti. Check the camera: $file');
+      }
+    }
 
     if (settings.flag('notifyHumidity')) {
       final limit = settings.number('humidityLimit', 45);

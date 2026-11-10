@@ -269,6 +269,20 @@ class PrinterStatus {
   final raw = <String, Map<String, dynamic>>{};
   bool online = false;
 
+  /// The home bridge's failure detector on this print (`printer_hub/
+  /// failure_watch`): level (smoothed score), failing. Null without one.
+  Map<String, dynamic>? failure;
+
+  /// [failure] when it is current: written in the last 2 minutes for this file.
+  Map<String, dynamic>? get failureWatch {
+    final f = failure;
+    if (f == null || (state != 'printing' && state != 'paused')) return null;
+    final at = (f['at'] as num?)?.toInt() ?? 0;
+    if (DateTime.now().millisecondsSinceEpoch ~/ 1000 - at > 120) return null;
+    if ('${f['file']}' != '${_f('print_stats', 'filename') ?? ''}') return null;
+    return f;
+  }
+
   /// K2 chamber heater, or a DragonBreath heater added to Klipper (U1).
   static const chamberHeaters = ['heater_generic chamber_heater', 'heater_generic dragonbreath'];
   static const chamberSensors = ['temperature_sensor chamber_temp', 'temperature_sensor cavity'];
@@ -521,7 +535,7 @@ class MoonrakerClient {
   WebSocketChannel? _ch;
   int _id = 0, _gen = 0;
   final _pending = <int, Completer<dynamic>>{};
-  Timer? _reconnect, _resub;
+  Timer? _reconnect, _resub, _failurePoll;
   bool _closed = false;
 
   final status = PrinterStatus();
@@ -816,6 +830,9 @@ class MoonrakerClient {
       _emit();
       _loadConsole();
       _prefetch();
+      _failurePoll?.cancel();
+      _failurePoll = Timer.periodic(const Duration(seconds: 30), (_) => _pollFailure());
+      _pollFailure();
     } catch (_) {
       // Klipper may still be starting. Moonraker also sends
       // notify_klippy_ready, but retry in case that was missed.
@@ -858,6 +875,16 @@ class MoonrakerClient {
         status.online = false;
         _emit();
     }
+  }
+
+  /// The detector's verdict, read only while a print runs.
+  Future<void> _pollFailure() async {
+    if (status.state != 'printing' && status.state != 'paused') return;
+    try {
+      final v = await dbGet('failure_watch');
+      status.failure = v is Map ? Map<String, dynamic>.from(v) : null;
+      _emit();
+    } catch (_) {}
   }
 
   void _emit() {
@@ -1667,6 +1694,7 @@ class MoonrakerClient {
     _schedTimer?.cancel();
     _reconnect?.cancel();
     _resub?.cancel();
+    _failurePoll?.cancel();
     _closeTransport();
     _statusCtrl.close();
     _consoleCtrl.close();

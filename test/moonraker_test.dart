@@ -281,5 +281,21 @@ void main() {
     // T0 keeps head 0; T1 (PETG) moves to head 2; T2 yellow PLA goes to the yellow head 1.
     expect(defaultHeads(needs, lanes, [0, 1, 3]), {0: 0, 1: 2, 2: 1});
   });
-}
 
+  test('the failure watch shows only for the running print and while fresh', () {
+    final s = PrinterStatus()
+      ..applyDelta({
+        'print_stats': {'state': 'printing', 'filename': 'cube.gcode'},
+      });
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    s.failure = {'level': 1.2, 'failing': true, 'file': 'cube.gcode', 'at': now};
+    expect(s.failureWatch?['failing'], isTrue);
+    s.failure = {...s.failure!, 'file': 'older.gcode'};
+    expect(s.failureWatch, isNull);
+    s.failure = {'failing': false, 'file': 'cube.gcode', 'at': now - 600};
+    expect(s.failureWatch, isNull);
+    s.applyDelta({'print_stats': {'state': 'complete'}});
+    s.failure = {'failing': false, 'file': 'cube.gcode', 'at': now};
+    expect(s.failureWatch, isNull);
+  });
+}

@@ -42,3 +42,14 @@ services:
     env_file: .env
     volumes:
       - ./slicer-profiles:/opt/orca-data/user/default   # your own Orca presets (optional)
+
+  # Spots failed prints (spaghetti) on the camera and alerts; pauses too if
+  # you turn that on in the app. Turned on by adding detector to
+  # COMPOSE_PROFILES; needs CAMERA_URL. One serves every bridge on the machine
+  # (127.0.0.1:7072), so a second printer's folder leaves it out.
+  detector:
+    profiles: [detector]
+    image: ghcr.io/dragonemprorx90/printer-hub-detector:${BRIDGE_VERSION:-latest}
+    restart: unless-stopped
+    network_mode: host        # 127.0.0.1 only
+    mem_limit: 1g

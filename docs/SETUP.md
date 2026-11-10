@@ -1,6 +1,6 @@
 # Setting up Printer Hub
 
-This takes about 15 minutes. Only part 1 is required. Parts 2–5 add access from away, alerts, OrcaSlicer and slicing from the app.
+This takes about 15 minutes. Only part 1 is required. Parts 2–6 add access from away, alerts, OrcaSlicer, slicing from the app and failure detection.
 
 | Part | What you get | You need |
 |---|---|---|
@@ -9,6 +9,7 @@ This takes about 15 minutes. Only part 1 is required. Parts 2–5 add access fro
 | [3. Home bridge](#3-home-bridge) | Access from anywhere, alerts with the app closed | Any always-on box with Docker: NAS, Raspberry Pi (64-bit), PC |
 | [4. OrcaSlicer](#4-orcaslicer-mac) | Send prints from Orca, plus a printer panel inside Orca | Mac app + OrcaSlicer 2.5+ |
 | [5. Slicing](#5-slicing-from-the-app) | Slice STL / 3MF / STEP models from your phone, no desktop slicer | The home bridge + ~1 GB of disk |
+| [6. Failure detection](#6-failure-detection) | An alert (and optionally a pause) when a print turns to spaghetti | The home bridge with a camera + ~600 MB |
 
 ```
 Phone ⇄ relay (Cloudflare) ⇄ home bridge (NAS / Pi / PC) ⇄ printer
@@ -172,6 +173,29 @@ docker compose pull && docker compose up -d
 - **Find models online:** in Files, the globe button searches **Printables** (no account), **Creality Cloud** (search is open; downloads ask you to sign in once on Creality's own page inside the app) and **Thingiverse** (paste a free app token from [thingiverse.com/developers](https://www.thingiverse.com/developers)). **MakerWorld** opens as its own website inside the app: sign in there, tap Download on a 3MF, and Printer Hub slices it. G-code or a 3MF already made for your K2 Plus or U1 is sent straight to the printer.
 - STEP files are meshed first (fine detail is kept to about 1/36 of a circle), which adds up to a minute for big parts.
 
+## 6. Failure detection
+
+The home bridge can watch the camera during a print and warn you when it looks like spaghetti: a push alert with the picture (with the app closed too), and an alert in the app. It can also pause the print.
+
+```
+camera ─▶ home bridge (a frame every 30 s while printing) ─▶ detector container ─▶ score
+                     └─▶ alert (ntfy + app), pause through Moonraker if you turned it on
+```
+
+The detector is [Obico's](https://github.com/TheSpaghettiDetective/obico-server) open failure model (The Spaghetti Detective), run on the CPU. It looks at a frame in under a second on a NAS, so 2 frames a minute is light work, and nothing leaves your home. One frame never alerts on its own: the score must stay high for about a minute.
+
+**Turn it on.** The bridge needs a camera (`CAMERA_URL`, see part 3). Re-run the installer and answer **y** to "Spot failed prints?". Or add `detector` to `COMPOSE_PROFILES` in `.env` (e.g. `creality,detector` for a K2), then:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+- **Pause or alert only:** alert only by default. While a print runs, the printer's screen in the app shows **Failure watch** with a **Pause if seen** switch for that printer. The bridge pauses through Moonraker; resume or cancel from the app.
+- **App alerts:** Settings → Notifications → **Possible print failure**.
+- **Two printers on one machine:** one detector serves both bridges. Add `detector` to the profiles in one folder only.
+- **False alarms:** raise `FAILURE_THRESHOLD` in `.env` (default 0.8; 1.2 is stricter). It judges only what the camera sees, so aim the camera at the bed.
+- The image is about 550 MB, for amd64 and arm64, and uses up to 1 GB of memory.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -185,6 +209,7 @@ docker compose pull && docker compose up -d
 | Find models: Creality download asks you to sign in again | Creality ended the session. Sign in again on its page in the app (Settings → Model sites shows the state). |
 | Find models: "Thingiverse refused the token" | Create a new app at thingiverse.com/developers, then use the key button in Find models → Thingiverse to paste its App Token. |
 | MakerWorld: tapping Download does nothing | Sign in to MakerWorld on its page first. Printer Hub catches 3MF, STL and STEP downloads only. |
+| No failure alerts | `docker compose logs bridge` should not say "Failure detector not reachable". Check `docker compose logs detector`, that `detector` is in `COMPOSE_PROFILES` and that `CAMERA_URL` is set. |
 | Lost the pairing code | `docker compose run --rm bridge --show-code` |
 | Mac update didn't install | Printer Hub must live in Applications, and your user must be allowed to change it (admin). Otherwise the app opens the download. |
 
