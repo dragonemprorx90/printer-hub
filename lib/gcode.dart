@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import 'moonraker.dart';
+import 'ui.dart';
 
 /// Largest thumbnail embedded in a G-code header ("; thumbnail begin WxH N").
 /// Orca, PrusaSlicer and Creality Print all write this block.
@@ -204,6 +205,76 @@ class LayerPainter extends CustomPainter {
   @override
   bool shouldRepaint(LayerPainter o) =>
       o.layer != layer || o.model != model || o.color != color;
+}
+
+/// The bed with one layer drawn, and a slider to step through the layers.
+class LayerView extends StatefulWidget {
+  final GcodeModel model;
+  final double bedW, bedH;
+  const LayerView(this.model, this.bedW, this.bedH, {super.key});
+  @override
+  State<LayerView> createState() => _LayerViewState();
+}
+
+class _LayerViewState extends State<LayerView> {
+  late int _layer = math.max(0, widget.model.layers.length - 1);
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.model;
+    return Column(children: [
+      Expanded(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: InteractiveViewer(
+            maxScale: 8,
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: LayerPainter(m, _layer, widget.bedW, widget.bedH,
+                  color: C.accent, below: C.muted.withValues(alpha: 0.25), border: C.border),
+            ),
+          ),
+        ),
+      ),
+      SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Panel(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Row(children: [
+              IconButton(
+                tooltip: 'Previous layer',
+                onPressed: _layer > 0 ? () => setState(() => _layer--) : null,
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              Expanded(
+                child: Slider(
+                  value: _layer.toDouble(),
+                  min: 0,
+                  max: math.max(1, m.layers.length - 1).toDouble(),
+                  onChanged: m.layers.length < 2 ? null : (v) => setState(() => _layer = v.round()),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Next layer',
+                onPressed: _layer < m.layers.length - 1 ? () => setState(() => _layer++) : null,
+                icon: const Icon(Icons.add_rounded),
+              ),
+              SizedBox(
+                width: 150,
+                child: Text(
+                  'Layer ${_layer + 1}/${m.layers.length}\nZ ${m.z[_layer].toStringAsFixed(2)} mm',
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
 }
 
 /// Files inside a zip (a .3mf is one) whose names pass [want].

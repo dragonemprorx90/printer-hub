@@ -977,7 +977,6 @@ class _GcodePreviewPageState extends State<GcodePreviewPage> {
   GcodeModel? _model;
   String _status = 'Downloading…';
   String? _error;
-  int _layer = 0;
 
   @override
   void initState() {
@@ -992,10 +991,7 @@ class _GcodePreviewPageState extends State<GcodePreviewPage> {
       setState(() => _status = 'Reading ${fmtBytes(bytes.length)} of G-code…');
       final m = await compute(_parseBytes, bytes);
       if (!mounted) return;
-      setState(() {
-        _model = m;
-        _layer = m.layers.isEmpty ? 0 : m.layers.length - 1;
-      });
+      setState(() => _model = m);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -1019,68 +1015,7 @@ class _GcodePreviewPageState extends State<GcodePreviewPage> {
                 )
               : m.layers.isEmpty
                   ? Center(child: Text('No extrusion moves found', style: TextStyle(color: C.muted)))
-                  : Column(children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: InteractiveViewer(
-                            maxScale: 8,
-                            child: CustomPaint(
-                              size: Size.infinite,
-                              painter: LayerPainter(
-                                m,
-                                _layer,
-                                bed[0] > 0 ? bed[0] : m.maxX,
-                                bed[1] > 0 ? bed[1] : m.maxY,
-                                color: C.accent,
-                                below: C.muted.withValues(alpha: 0.25),
-                                border: C.border,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SafeArea(
-                        top: false,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: Panel(
-                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                            child: Row(children: [
-                              IconButton(
-                                tooltip: 'Previous layer',
-                                onPressed: _layer > 0 ? () => setState(() => _layer--) : null,
-                                icon: const Icon(Icons.remove_rounded),
-                              ),
-                              Expanded(
-                                child: Slider(
-                                  value: _layer.toDouble(),
-                                  min: 0,
-                                  max: (m.layers.length - 1).toDouble(),
-                                  onChanged: (v) => setState(() => _layer = v.round()),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Next layer',
-                                onPressed: _layer < m.layers.length - 1
-                                    ? () => setState(() => _layer++)
-                                    : null,
-                                icon: const Icon(Icons.add_rounded),
-                              ),
-                              SizedBox(
-                                width: 150,
-                                child: Text(
-                                  'Layer ${_layer + 1}/${m.layers.length}\n'
-                                  'Z ${m.z[_layer].toStringAsFixed(2)} mm',
-                                  textAlign: TextAlign.end,
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                            ]),
-                          ),
-                        ),
-                      ),
-                    ]),
+                  : LayerView(m, bed[0] > 0 ? bed[0] : m.maxX, bed[1] > 0 ? bed[1] : m.maxY),
     );
   }
 }
