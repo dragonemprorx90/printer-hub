@@ -3,7 +3,15 @@
 Every release of Printer Hub (app, home bridge, relay and Orca plugin ship together).
 Downloads: [GitHub releases](https://github.com/dragonemprorx90/printer-hub/releases).
 
-## 1.26.0 — unreleased
+## 1.27.0 — unreleased
+
+- Crash protection: moving the nozzle toward the bed stops at the bed (Z 0), even on printers like the K2 that allow Z below it for probing. A bigger step stops early and tells you.
+- One move at a time: the move buttons lock until the printer has finished moving, so quick extra taps no longer pile up.
+- Homing lifts the nozzle clear first when it's close to the bed, so it can't be dragged across the plate.
+- Home, moves and motors off are refused while a print is running or paused, from the app and the Orca panel. Z offset nudges stay within −0.5 to +1.0 mm; speed and flow stay in safe ranges.
+- The Z buttons now say Farther and Closer (the gap to the bed), and the default step is 1 mm.
+
+## 1.26.0 — 2026-11-10
 
 - Choose where to slice: a model from Find models or Files → Upload asks whether to slice it in the app, open it in OrcaSlicer on this Mac, or (from the iPhone) send it to the Mac's OrcaSlicer. Your last choice is remembered.
 - Failure detection: the home bridge can check the camera every 30 seconds during a print and alert you if it looks like spaghetti, with an optional automatic pause. Turn it on with COMPOSE_PROFILES=detector (setup guide part 6), then Settings → Notifications → Possible print failure.
