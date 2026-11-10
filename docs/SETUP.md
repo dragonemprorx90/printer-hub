@@ -120,7 +120,14 @@ Press **Print** or **Send**. Printer Hub uploads the file (at home or through th
 
 ## 5. Slicing from the app
 
-Pick an **STL, 3MF, STEP or OBJ** model in **Files → Upload** (or drop it on the Mac window). Choose the quality and filament, tap **Slice**, and the G-code lands on the printer with its layer preview and the **Print** button. It works at home and away.
+Pick an **STL, 3MF, STEP or OBJ** model in **Files → Upload** (or drop it on the Mac window). The slice editor opens with the model on your printer's plate. It works at home and away.
+
+- **See it:** drag to turn the view, pinch or scroll to zoom, two fingers to pan. The model turns red when it doesn't fit the build volume.
+- **Place it:** drag the model to move it. Turn it about X, Y or Z (15° or 90° steps), scale it, use **Lay on face** and tap the face that should rest on the plate, or use **Auto-orient** (Orca picks the orientation). **Centre** puts it back in the middle. The model is sliced exactly where you put it.
+- **Print settings:** start from an Orca quality preset and change only what you need: layer height, walls, infill and its pattern, supports (normal or tree, overhang angle, from the plate only), brim, wall and infill speeds, flow ratio, and nozzle and bed temperature (for the toolhead that prints, on the U1). Empty fields keep the preset. The app remembers your changes per printer; **Use preset** clears them.
+- **Slice:** you see the print time, the filament in grams and every layer. **Continue to print** opens the file with its **Print** button.
+
+A 3MF you don't move is sliced as it is, with its painted colours and plates. Once you move it, the mesh as placed is sliced and the colours are not kept. STEP, 3MF and OBJ are turned into a mesh by the slicer container for the 3D view; STL is read on the phone.
 
 ```
 App ─(encrypted relay)─▶ home bridge ─▶ slicer container (OrcaSlicer 2.5) ─▶ G-code to the printer (LAN)
@@ -148,6 +155,7 @@ docker compose pull && docker compose up -d
 | K2 camera shows "sent no video" | The camera serves one viewer at a time. Close the Creality app or Creality Print on other devices, wait 30 s, then tap Retry. |
 | Camera from away is black (K1/K2) | `.env` needs both `COMPOSE_PROFILES=creality` and the `CAMERA_URL` line. Check `docker compose logs go2rtc`. |
 | App says the bridge is offline | `docker compose logs bridge`. Check that `RELAY_URL` is your own relay and that the NAS can reach the internet. |
+| "Update the slicer on your home bridge to view this model" or "…to place the model and change print settings" | The slicer container is older than the editor (1.24). Run `docker compose pull && docker compose up -d` in the bridge folder. |
 | "The slicer isn't running on your home bridge" | Update the bridge (`docker compose pull && docker compose up -d`) and add `slicer` to `COMPOSE_PROFILES`. Check `docker compose logs slicer`. |
 | Find models: Creality download asks you to sign in again | Creality ended the session. Sign in again on its page in the app (Settings → Model sites shows the state). |
 | Find models: "Thingiverse refused the token" | Create a new app at thingiverse.com/developers, then use the key button in Find models → Thingiverse to paste its App Token. |

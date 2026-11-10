@@ -27,7 +27,8 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - History with pictures, cost estimates, monthly charts and CSV export. Spool tracking (Spoolman).
 
 **Slice from your phone**
-- Pick an STL, 3MF or STEP model, choose quality and filament (one per toolhead on the U1), and print. OrcaSlicer runs on your home bridge, not in someone's cloud.
+- Pick an STL, 3MF or STEP model and see it on your printer's plate in 3D. Move, turn, scale or lay it on a face, or let Orca auto-orient it.
+- Change the print settings you care about (layer height, walls, infill, supports, brim, speed, flow, temperatures, a filament per U1 toolhead), slice, check the time, filament and layers, and print. OrcaSlicer runs on your home bridge, not in someone's cloud.
 - Find models online: search Printables, Creality Cloud and Thingiverse, or browse MakerWorld, inside the app. Files already sliced for your printer print straight away; the rest are sliced at home.
 
 **From anywhere: free and end-to-end encrypted**

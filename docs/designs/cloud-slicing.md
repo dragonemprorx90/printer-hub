@@ -22,7 +22,19 @@ App ──(E2E relay, same as today)──> bridge ──/slicer/*──> slicer
   take minutes:
   - `GET  /slicer/presets` lists printer, process and filament presets.
   - `POST /slicer/jobs?printer=…&process=…&filaments=…` takes the model bytes and returns `{id}`.
+    Since 1.24 (slice editor), two optional parameters:
+    - `settings`: JSON `{"process": {key: value}, "filaments": [{…} or null per toolhead]}` with
+      whitelisted Orca keys (`SETTINGS` in `server.py`). They're written into the job's preset stubs on
+      top of the chosen preset. `nozzle_temperature` also sets the first layer; `bed_temperature` sets
+      every plate type.
+    - `arrange=0`: slice the model where it is. The app bakes its placement into the STL it sends.
   - `GET  /slicer/jobs/<id>` returns `{state, progress, error, file, time, filament}`.
+  - `POST /slicer/mesh?printer=…&name=…[&orient=1]` (1.24) returns the model as a binary STL centred on
+    the plate, for the editor's 3D view: STEP meshed with gmsh, 3MF objects merged, `orient=1` runs
+    Orca's auto-orient. It answers synchronously, so a STEP that takes over the bridge's 60 s limit
+    fails. Make it a job like slicing if that happens in practice.
+  - `/slicer/presets` also returns each printer's `bed` (build volume in mm); the app takes its absence
+    to mean a slicer from before the editor and slices the old way.
 - **The G-code stays on the LAN.** When a slice finishes, the container uploads the G-code straight to
   the printer (`PRINTER_HOST` from the same `.env`). The phone then uses the
   preview it already has (`lib/gcode.dart`) and the normal "Start print". Large
