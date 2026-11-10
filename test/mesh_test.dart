@@ -117,7 +117,8 @@ void main() {
     expect([s[0], s[1]], [closeTo(400, 1e-6), closeTo(300, 1e-6)]);
 
     final v = place(box(40, 40, 40), const Placement(x: 175, y: 175), turnedBounds(box(40, 40, 40), identity, 1));
-    expect(pick(v, view, const Offset(400, 290)), isNotNull);
+    view.project(175, 175, 20, s, 0);
+    expect(pick(v, view, Offset(s[0], s[1])), isNotNull);
     expect(pick(v, view, const Offset(20, 20)), isNull);
   });
 
@@ -178,7 +179,10 @@ void main() {
             onMove: (dx, dy) => moves.add(Offset(dx, dy))),
       ),
     ));
-    final centre = tester.getCenter(find.byType(MeshView));
+    final box0 = tester.getRect(find.byType(MeshView));
+    final s = Float32List(2);
+    Projection(Camera.forBed([350, 350, 350]), box0.size).project(175, 175, 60, s, 0);
+    final centre = box0.topLeft + Offset(s[0], s[1] + 20); // a point on the model's front
 
     // The middle of the screen is the model, in the model's green (shaded, not black).
     final px = await tester.runAsync(() async {
