@@ -6,6 +6,10 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.26.0', [
+    'Choose where to slice: a model from Find models or Files → Upload asks whether to slice it in the app, open it in OrcaSlicer on this Mac, or (from the iPhone) send it to the Mac\'s OrcaSlicer. Your last choice is remembered.',
+    'Failure detection: the home bridge can check the camera every 30 seconds during a print and alert you if it looks like spaghetti, with an optional automatic pause. Turn it on with COMPOSE_PROFILES=detector (setup guide part 6), then Settings → Notifications → Possible print failure.',
+  ]),
   ('1.25.0', [
     'Choose how each printer connects (Edit printer → Connection): direct first then remote access (as before), direct only (home network or Tailscale), or remote access only.',
     'Slice without the relay: set Edit printer → Slicer address (e.g. your NAS\'s Tailscale address and port) and the editor talks to the slicer directly, falling back to the relay. The slicer needs SLICER_BIND (setup guide, "Slicing").',
