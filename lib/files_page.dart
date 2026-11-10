@@ -10,6 +10,7 @@ import 'gcode.dart';
 import 'models_page.dart';
 import 'moonraker.dart';
 import 'settings.dart';
+import 'slice_where.dart';
 import 'slicer.dart';
 import 'u1_panels.dart';
 import 'ui.dart';
@@ -170,7 +171,7 @@ class _FilesTabState extends State<FilesTab> {
 
   /// Slices a model on the home bridge, then opens the new G-code (preview, print).
   Future<void> _slice(String name, Uint8List bytes) async {
-    final files = await showSliceDialog(context, c, name, bytes, folder: _path);
+    final files = await sliceOrSend(context, c, name, bytes, folder: _path);
     if (files == null || files.isEmpty || !mounted) return;
     await _show(files.first);
   }

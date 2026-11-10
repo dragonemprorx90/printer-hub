@@ -10,6 +10,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import 'moonraker.dart';
 import 'settings.dart';
+import 'slice_where.dart';
 import 'slicer.dart';
 import 'gcode.dart';
 import 'ui.dart';
@@ -406,7 +407,7 @@ class _MakerWorldPageState extends State<MakerWorldPage> {
       final bytes = await _get(http.Client(), url.toString());
       if (!mounted) return;
       final name = Uri.decodeComponent(url.pathSegments.last);
-      final files = await showSliceDialog(context, widget.client, name, bytes, folder: widget.folder);
+      final files = await sliceOrSend(context, widget.client, name, bytes, folder: widget.folder);
       if (files != null && files.isNotEmpty && mounted) Navigator.pop(context, files.first);
     } catch (e) {
       if (mounted) toast(context, '$e', error: true);
@@ -721,7 +722,7 @@ class _ModelDetailPageState extends State<_ModelDetailPage> {
         return;
       }
       setState(() => _busy = null);
-      final files = await showSliceDialog(context, c, f.name, bytes, folder: widget.folder);
+      final files = await sliceOrSend(context, c, f.name, bytes, folder: widget.folder);
       if (files != null && files.isNotEmpty && mounted) Navigator.pop(context, files.first);
     } catch (e) {
       if (mounted) toast(context, '$e', error: true);

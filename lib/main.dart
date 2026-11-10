@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,6 +15,7 @@ import 'printer_page.dart';
 import 'settings.dart';
 import 'scan.dart';
 import 'settings_page.dart';
+import 'slice_where.dart';
 import 'u1_panels.dart';
 import 'ui.dart';
 import 'update.dart';
@@ -128,6 +130,35 @@ class _PrinterListPageState extends State<PrinterListPage> {
       orcaLink = OrcaLink(onUpload: _fromOrca, printers: () => _printers);
       orcaLink!.start().catchError((Object e) => debugPrint('Orca link: $e'));
     }
+    // Models the phone sent to this Mac's OrcaSlicer wait in each printer's inbox.
+    if (Platform.isMacOS && orcaApp() != null) {
+      _inbox = Timer.periodic(const Duration(seconds: 20), (_) => _checkInbox());
+    }
+  }
+
+  Timer? _inbox;
+  bool _inboxBusy = false;
+
+  Future<void> _checkInbox() async {
+    if (_inboxBusy) return;
+    _inboxBusy = true;
+    try {
+      for (final p in [..._printers]) {
+        final c = clientFor(p);
+        if (!c.status.online) continue;
+        for (final name in await takeInbox(c)) {
+          if (mounted) toast(context, 'Opened $name from your phone in OrcaSlicer');
+        }
+      }
+    } finally {
+      _inboxBusy = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _inbox?.cancel();
+    super.dispose();
   }
 
   /// A file OrcaSlicer sent: pick the printer, upload, then print setup.

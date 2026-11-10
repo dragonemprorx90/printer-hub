@@ -137,7 +137,14 @@ Press **Print** or **Send**. Printer Hub uploads the file (at home or through th
 
 ## 5. Slicing from the app
 
-Pick an **STL, 3MF, STEP or OBJ** model in **Files → Upload** (or drop it on the Mac window). The slice editor opens with the model on your printer's plate. It works at home and away.
+Pick an **STL, 3MF, STEP or OBJ** model in **Files → Upload** (or drop it on the Mac window). First choose where to slice it (below). **Slice in the app** opens the slice editor with the model on your printer's plate. It works at home and away.
+
+**Where to slice.** A model from Find models or Files → Upload asks where it goes. The app remembers your last choice on each device and lists it first; until you pick another, it's **Slice in the app**.
+
+- **Slice in the app:** the slice editor below, on your home bridge.
+- **Open in OrcaSlicer** (Mac): the model is saved to `~/Downloads/Printer Hub` and opens in OrcaSlicer, whether Orca is running or not. Shown when OrcaSlicer is in Applications.
+- **Send to my Mac's OrcaSlicer** (iPhone): the model goes to a hidden `.printerhub-inbox` folder on the printer, at home or through the encrypted relay. The Mac app checks every printer's inbox every 20 seconds, opens what it finds in OrcaSlicer and deletes it from the printer. The Mac app must be running with OrcaSlicer installed; until then the file waits on the printer. The home bridge needs no update for this.
+
 
 - **See it:** drag to turn the view, pinch or scroll to zoom, two fingers to pan. The model turns red when it doesn't fit the build volume.
 - **Place it:** drag the model to move it. Turn it about X, Y or Z (15° or 90° steps), scale it, use **Lay on face** and tap the face that should rest on the plate, or use **Auto-orient** (Orca picks the orientation). **Centre** puts it back in the middle. The model is sliced exactly where you put it.

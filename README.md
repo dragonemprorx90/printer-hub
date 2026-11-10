@@ -29,7 +29,7 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 **Slice from your phone**
 - Pick an STL, 3MF or STEP model and see it on your printer's plate in 3D. Move, turn, scale or lay it on a face, or let Orca auto-orient it.
 - Change the print settings you care about (layer height, walls, infill, supports, brim, speed, flow, temperatures, a filament per U1 toolhead), slice, check the time, filament and layers, and print. OrcaSlicer runs on your home bridge, not in someone's cloud.
-- Find models online: search Printables, Creality Cloud and Thingiverse, or browse MakerWorld, inside the app. Files already sliced for your printer print straight away; the rest are sliced at home.
+- Find models online: search Printables, Creality Cloud and Thingiverse, or browse MakerWorld, inside the app. Files already sliced for your printer print straight away; the rest are sliced at home, opened in OrcaSlicer on the Mac, or sent from the iPhone to your Mac's OrcaSlicer.
 
 **From anywhere: free and end-to-end encrypted**
 - A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.
@@ -48,7 +48,7 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
    ```
    Paste the pairing code it prints into **Edit printer → Remote access code**.
 
-3. **Find models (optional)**: in **Files**, tap the globe to search Printables, Creality Cloud and Thingiverse, or browse MakerWorld. Ready files print straight away, and models are sliced on your home bridge.
+3. **Find models (optional)**: in **Files**, tap the globe to search Printables, Creality Cloud and Thingiverse, or browse MakerWorld. Ready files print straight away, and for models you choose: slice on your home bridge, open in OrcaSlicer (Mac), or send to your Mac's OrcaSlicer (iPhone).
 
 Every option (NAS web UIs, Docker Desktop, without Docker, alerts, OrcaSlicer, slicing from the app, troubleshooting) is in **[docs/SETUP.md](docs/SETUP.md)**.
 
