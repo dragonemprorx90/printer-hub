@@ -6,6 +6,12 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.28.0', [
+    'Time left is more accurate: early in a print it trusts the slicer\'s estimate, then shifts to the measured pace as the print goes on.',
+    'Slicing on the U1 no longer fails for models near the front or left edge of the plate. A model that really is off the plate now says so.',
+    'Big models and STEP files have up to 15 minutes to slice instead of timing out after a minute.',
+    'Model editor: new Flip over and Mirror buttons, and models are auto-oriented when they open (switch it off with Auto-orient on open; 3MF files keep their orientation).',
+  ]),
   ('1.27.0', [
     'Crash protection: moving the nozzle toward the bed stops at the bed (Z 0), even on printers like the K2 that allow Z below it for probing. A bigger step stops early and tells you.',
     'One move at a time: the move buttons lock until the printer has finished moving, so quick extra taps no longer pile up.',
