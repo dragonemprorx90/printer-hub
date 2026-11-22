@@ -326,6 +326,11 @@ class _SliceEditorState extends State<SliceEditor> {
         _place = Placement(x: _bed[0] / 2, y: _bed[1] / 2);
         _refresh(turned: true);
       });
+      // A 3MF keeps the designer's orientation; anything else gets Orca's best.
+      if (_editor && !_is3mf && settings.flag('slice.autoOrient', true)) {
+        _meshBusy = false;
+        await _autoOrient(quiet: true);
+      }
     } catch (e) {
       if (mounted) setState(() => _meshError = '$e');
     } finally {
@@ -381,7 +386,7 @@ class _SliceEditorState extends State<SliceEditor> {
       });
 
   /// Orca's auto-orient on the model as it is now.
-  Future<void> _autoOrient() async {
+  Future<void> _autoOrient({bool quiet = false}) async {
     setState(() => _meshBusy = true);
     try {
       final stl = await _api!.mesh(toStl(place(_mesh!.$1.v, _place, _scaled)),
@@ -395,7 +400,7 @@ class _SliceEditorState extends State<SliceEditor> {
         _refresh(turned: true);
       });
     } catch (e) {
-      if (mounted) toast(context, '$e', error: true);
+      if (mounted) toast(context, quiet ? 'Auto-orient didn\'t work: $e' : '$e', error: true);
     } finally {
       if (mounted) setState(() => _meshBusy = false);
     }
@@ -617,6 +622,21 @@ class _SliceEditorState extends State<SliceEditor> {
             avatar: const Icon(Icons.auto_fix_high_rounded, size: 16),
             label: const Text('Auto-orient'),
             onPressed: busy ? null : _autoOrient,
+          ),
+          ActionChip(
+            avatar: const Icon(Icons.flip_rounded, size: 16),
+            label: const Text('Flip over'),
+            onPressed: busy ? null : () => _rotate(0, 180),
+          ),
+          ActionChip(
+            avatar: const Icon(Icons.flip_rounded, size: 16),
+            label: const Text('Mirror'),
+            onPressed: busy ? null : () => _edit(_place.copyWith(rot: mulRot(mirrorX, _place.rot)), turned: true),
+          ),
+          FilterChip(
+            label: const Text('Auto-orient on open'),
+            selected: settings.flag('slice.autoOrient', true),
+            onSelected: (v) => setState(() => settings.setFlag('slice.autoOrient', v)),
           ),
           ActionChip(
             avatar: const Icon(Icons.center_focus_strong_rounded, size: 16),

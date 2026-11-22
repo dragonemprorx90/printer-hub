@@ -122,6 +122,10 @@ if __name__ == '__main__':
     assert any(200 <= x <= 220 and 50 <= y <= 70 for x, y in xy(uploads[-1][1]))
     s = slice_job('printer=k2plus&name=cube.stl', cube(200, 50))
     assert not any(200 <= x <= 220 and 50 <= y <= 70 for x, y in xy(uploads[-1][1])), 'arranged by default'
+    # The app's plate starts at 0,0; the U1's printable area at 0.5,1. A cube
+    # in the app's corner must still slice.
+    s = slice_job('printer=u1&name=cube.stl&arrange=0', cube(0, 0))
+    assert s['state'] == 'done', s
 
     # The editor's mesh: centred on the plate, auto-orient lays a tall box down.
     req = urllib.request.Request('http://127.0.0.1:7198/slicer/mesh?printer=k2plus&name=box.stl&orient=1',

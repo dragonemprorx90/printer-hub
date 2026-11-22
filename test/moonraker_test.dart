@@ -298,4 +298,26 @@ void main() {
     s.failure = {'failing': false, 'file': 'cube.gcode', 'at': now};
     expect(s.failureWatch, isNull);
   });
+
+  test('eta blends the slicer estimate with the measured pace', () {
+    // U1 print: slicer said 15066 s, it really took ~12000 s.
+    final s = PrinterStatus()
+      ..jobMeta = {'estimated_time': 15066, 'gcode_start_byte': 7074, 'gcode_end_byte': 11896672}
+      ..applyDelta({
+        'print_stats': {'print_duration': 600.0},
+        'virtual_sdcard': {'progress': 0.02, 'file_position': 7074 + 118896},
+      });
+    // 1% through after 10 min (heat-up): pace alone says ~16.5 h left.
+    expect(s.fileProgress, closeTo(0.01, 1e-3));
+    expect(s.eta!, closeTo(15066 * 0.99 * 0.99 + 59400 * 0.01, 50));
+    // Near the end the measured pace wins.
+    s.applyDelta({
+      'print_stats': {'print_duration': 10800.0},
+      'virtual_sdcard': {'file_position': 7074 + (11889598 * 0.9).round()},
+    });
+    expect(s.eta!, closeTo(1200, 200));
+    // No metadata yet: falls back to pace only.
+    s.jobMeta = const {};
+    expect(s.eta, isNotNull);
+  });
 }

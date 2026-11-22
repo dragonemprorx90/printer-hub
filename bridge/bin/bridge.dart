@@ -1092,7 +1092,10 @@ class Bridge {
         if (_forwardHeaders.contains(k.toLowerCase())) req.headers[k] = '$v';
       });
       req.headers.addAll(extra);
-      final res = await _client.send(req).timeout(const Duration(seconds: 60));
+      // Meshing a STEP file or orienting a big model can take minutes.
+      final res = await _client
+          .send(req)
+          .timeout(path.startsWith('/slicer/') ? const Duration(minutes: 15) : const Duration(seconds: 60));
       final head = {
         if (res.headers['content-type'] != null) 'content-type': res.headers['content-type'],
       };

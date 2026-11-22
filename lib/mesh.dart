@@ -160,13 +160,21 @@ Float32List place(Float32List v, Placement p, (List<double>, List<double>) bound
   final off = [p.x - (lo[0] + hi[0]) / 2, p.y - (lo[1] + hi[1]) / 2, -lo[2]];
   final r = p.rot, s = p.scale;
   final out = Float32List(v.length);
+  // A mirror turns triangles inside out: swap two corners to keep them facing out.
+  final flip = r[0] * (r[4] * r[8] - r[5] * r[7]) - r[1] * (r[3] * r[8] - r[5] * r[6]) +
+          r[2] * (r[3] * r[7] - r[4] * r[6]) <
+      0;
   for (var i = 0; i < v.length; i += 3) {
+    final j = flip && i % 9 == 3 ? i + 3 : flip && i % 9 == 6 ? i - 3 : i;
     for (var k = 0; k < 3; k++) {
-      out[i + k] = s * (r[k * 3] * v[i] + r[k * 3 + 1] * v[i + 1] + r[k * 3 + 2] * v[i + 2]) + off[k];
+      out[j + k] = s * (r[k * 3] * v[i] + r[k * 3 + 1] * v[i + 1] + r[k * 3 + 2] * v[i + 2]) + off[k];
     }
   }
   return out;
 }
+
+/// Mirror left to right (plate X).
+const Rot mirrorX = [-1, 0, 0, 0, 1, 0, 0, 0, 1];
 
 // --- Camera -----------------------------------------------------------------
 

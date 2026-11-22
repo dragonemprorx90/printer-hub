@@ -349,10 +349,30 @@ class PrinterStatus {
   int? get totalLayers =>
       ((_f('print_stats', 'info') as Map?)?['total_layer'] as num?)?.toInt();
 
-  /// Seconds left, extrapolated from progress. Null until there's signal.
-  double? get eta => progress > 0.005 && printDuration > 0
-      ? printDuration / progress - printDuration
-      : null;
+  /// The current job's file metadata (slicer estimate, gcode byte range),
+  /// fetched by the client when the filename changes.
+  String? jobFile;
+  Map<String, dynamic> jobMeta = const {};
+
+  /// Progress through the gcode itself, skipping the header and thumbnails.
+  double get fileProgress {
+    final pos = _f('virtual_sdcard', 'file_position') as num?;
+    final a = jobMeta['gcode_start_byte'] as num?, b = jobMeta['gcode_end_byte'] as num?;
+    if (pos == null || pos <= 0 || a == null || b == null || b <= a) return progress;
+    return ((pos - a) / (b - a)).clamp(0.0, 1.0).toDouble();
+  }
+
+  /// Seconds left. Extrapolating elapsed time alone is far off early on
+  /// (heat-up, slow first layer), so blend it with the slicer's estimate:
+  /// trust the slicer at the start and the measured pace near the end.
+  double? get eta {
+    final p = fileProgress, d = printDuration;
+    final est = (jobMeta['estimated_time'] as num?)?.toDouble();
+    final slicer = est != null && est > 0 ? est * (1 - p) : null;
+    final pace = p > 0.005 && d > 0 ? d / p - d : null;
+    if (slicer == null || pace == null) return pace ?? (d > 0 ? slicer : null);
+    return slicer * (1 - p) + pace * p;
+  }
 
   double get speedFactor =>
       (_f('gcode_move', 'speed_factor') as num?)?.toDouble() ?? 1;
@@ -827,6 +847,7 @@ class MoonrakerClient {
       if (res is Map && res['status'] is Map) {
         status.applyDelta(Map<String, dynamic>.from(res['status']));
       }
+      _watchJob();
       _emit();
       _loadConsole();
       _prefetch();
@@ -840,6 +861,20 @@ class MoonrakerClient {
       _emit();
       if (!_closed) _resub = Timer(const Duration(seconds: 5), _subscribe);
     }
+  }
+
+  /// Load the slicer estimate for a new job, for [PrinterStatus.eta].
+  void _watchJob() {
+    final f = status.filename;
+    if (f == status.jobFile) return;
+    status.jobFile = f;
+    status.jobMeta = const {};
+    if (f == null) return;
+    metadata(f).then((m) {
+      if (status.jobFile != f) return;
+      status.jobMeta = m;
+      _emit();
+    }).catchError((_) {});
   }
 
   void _onMessage(dynamic raw) {
@@ -861,6 +896,7 @@ class MoonrakerClient {
       case 'notify_status_update':
         if (params is List && params.isNotEmpty && params[0] is Map) {
           status.applyDelta(Map<String, dynamic>.from(params[0]));
+          _watchJob();
           _emit();
         }
       case 'notify_gcode_response':

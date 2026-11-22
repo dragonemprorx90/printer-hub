@@ -60,6 +60,20 @@ void main() {
     }
   });
 
+  test('mirror keeps faces pointing out', () {
+    final v = box(20, 20, 60);
+    final p = Placement(x: 100, y: 100, rot: mulRot(mirrorX, identity));
+    final out = place(v, p, turnedBounds(v, p.rot, 1));
+    // Every face normal of the mirrored box points away from its centre.
+    for (var t = 0; t < out.length ~/ 9; t++) {
+      final (nx, ny, nz) = normalOf(out, t);
+      final cx = (out[t * 9] + out[t * 9 + 3] + out[t * 9 + 6]) / 3 - 100;
+      final cy = (out[t * 9 + 1] + out[t * 9 + 4] + out[t * 9 + 7]) / 3 - 100;
+      final cz = (out[t * 9 + 2] + out[t * 9 + 5] + out[t * 9 + 8]) / 3 - 30;
+      expect(nx * cx + ny * cy + nz * cz, greaterThan(0), reason: 'triangle $t');
+    }
+  });
+
   test('lay flat turns any face normal straight down', () {
     for (final n in [(1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0), (0.3, -0.5, 0.2), (0.0, 1.0, 0.0)]) {
       final r = downRot(n.$1, n.$2, n.$3);
@@ -205,9 +219,9 @@ void main() {
   });
 
   testWidgets('the editor turns the model, changes a setting and slices it as placed', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'slice.autoOrient': false}); // turned by hand here
     await settings.load();
-    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.physicalSize = const Size(1400, 1300);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final jobs = <http.Request>[];

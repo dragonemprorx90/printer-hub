@@ -20,6 +20,7 @@ Standard library only.
 """
 import json
 import os
+import struct
 import re
 import shutil
 import subprocess
@@ -64,6 +65,7 @@ PRINTERS = {
     'u1': {
         'name': 'Snapmaker U1',
         'bed': [270, 270, 270],
+        'origin': (0.5, 1),  # Orca's U1 plate runs 0.5-270.5 x 1-271
         'machine': 'Snapmaker U1 (0.4 nozzle)',
         'tools': 4,
         'process': '0.20 Standard',
@@ -283,8 +285,27 @@ def mesh(q, body):
         forget(job)
 
 
+def shift_stl(path, dx, dy):
+    """Moves a binary STL by (dx, dy): the app places models on a plate that
+    starts at 0,0, Orca's may start elsewhere."""
+    with open(path, 'rb') as f:
+        b = bytearray(f.read())
+    n = int.from_bytes(b[80:84], 'little')
+    if len(b) != 84 + 50 * n:
+        return  # ASCII STL: never sent by the app for a placed model
+    for i in range(n):
+        for k in range(3):
+            o = 84 + 50 * i + 12 + 12 * k
+            x, y = struct.unpack_from('<2f', b, o)
+            struct.pack_into('<2f', b, o, x + dx, y + dy)
+    with open(path, 'wb') as f:
+        f.write(b)
+
+
 def why(out):
     """The useful line of Orca's output when a slice fails."""
+    if 'return -50' in out:
+        return 'Part of the model is outside the printable area. Move it in from the edge.'
     lines = [l.strip() for l in out.splitlines() if l.strip() and 'run found error' not in l]
     return (lines[-1] if lines else 'Slicing failed')[:300]
 
@@ -354,6 +375,9 @@ def new_job(q, body):
     jobs[job] = {'state': 'queued', 'name': name, 'created': time.time()}
     for old in sorted(jobs, key=lambda k: jobs[k]['created'])[:-20]:  # keep the last 20
         jobs.pop(old, None)
+    origin = PRINTERS[q['printer']].get('origin')
+    if origin and q.get('arrange') == '0' and name.lower().endswith('.stl'):
+        shift_stl(model, *origin)
     threading.Thread(target=run, args=(job, args, model, name, folder), daemon=True).start()
     return job
 
