@@ -101,6 +101,7 @@ class _HistoryTabState extends State<HistoryTab> {
   String _filter = 'all';
   String _query = '', _material = '';
   int _days = 0; // 0 = all time
+  bool _notesOnly = false;
 
   @override
   void initState() {
@@ -155,7 +156,10 @@ class _HistoryTabState extends State<HistoryTab> {
         if (_filter == 'all' ||
             (_filter == 'failed' ? (j.status == 'error' || j.status == 'klippy_shutdown') : j.status == _filter))
           j,
-    ], text: _query, material: _material, from: _days == 0 ? null : DateTime.now().subtract(Duration(days: _days)));
+    ], text: _query, material: _material, from: _days == 0 ? null : DateTime.now().subtract(Duration(days: _days)))
+        .where((j) => !_notesOnly ||
+            settings.text('jobNote.${widget.client.host}:${widget.client.port}.${jobKey(j)}').isNotEmpty)
+        .toList();
     final materials = {for (final j in jobs) ?j.material}.toList()..sort();
     _shown = shown; // Export CSV saves what the filters show
     return RefreshIndicator(
@@ -206,6 +210,12 @@ class _HistoryTabState extends State<HistoryTab> {
                 Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   for (final (d, label) in const [(0, 'All time'), (7, '7 days'), (30, '30 days'), (90, '90 days')])
                     ChoiceChip(label: Text(label), selected: _days == d, onSelected: (_) => setState(() => _days = d)),
+                  FilterChip(
+                    avatar: const Icon(Icons.edit_note_rounded, size: 16),
+                    label: const Text('With notes'),
+                    selected: _notesOnly,
+                    onSelected: (v) => setState(() => _notesOnly = v),
+                  ),
                   if (materials.length > 1)
                     DropdownButton<String>(
                       value: _material,
