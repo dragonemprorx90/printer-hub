@@ -131,6 +131,8 @@ void watchPrinter(Printer p, MoonrakerClient c) {
   String? last, milestoneFile;
   var failureAlerted = '', driftAlerted = '';
   String? lastDry; // DragonBreath mode, for "filament is dry"
+  var waitCool = false; // a print finished: tell when the bed is cool enough to take it off
+  String? coolPrev;
   DateTime? driftSince;
   var sent = <String>{};
   final humidityAlerted = <String, DateTime>{};
@@ -215,6 +217,16 @@ void watchPrinter(Printer p, MoonrakerClient c) {
       }
     }
     last = state;
+
+    if (state == 'complete' && coolPrev != null && coolPrev != 'complete') waitCool = true;
+    if (state == 'printing') waitCool = false;
+    coolPrev = state;
+    if (waitCool && s.bed < settings.number('bedCool', 35) && s.bed > 0) {
+      waitCool = false;
+      if (settings.flag('notifyBedCool', false)) {
+        _say(p.key, '${p.name}: bed has cooled', 'Down to ${s.bed.round()}°C. Prints usually come off easily now.');
+      }
+    }
 
     final dry = s.dragon?['mode'] as String?;
     if (lastDry == 'drying' && dry != null && dry != 'drying' && s.dragon?['fault'] != true) {
