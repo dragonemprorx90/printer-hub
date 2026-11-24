@@ -856,6 +856,11 @@ class _RulesPanelState extends State<RulesPanel> {
         if (s.dragon != null) ('Dry filament…', '@dry'),
         if (s.raw.containsKey(PrinterStatus.cavityLed)) ('Light off', 'SET_LED LED=cavity_led WHITE=0'),
         if (s.raw.containsKey('output_pin LED')) ('Light off', 'SET_PIN PIN=LED VALUE=0'),
+        if (s.raw.containsKey(PrinterStatus.cavityLed)) ('Light on', 'SET_LED LED=cavity_led WHITE=1'),
+        if (s.raw.containsKey('output_pin LED')) ('Light on', 'SET_PIN PIN=LED VALUE=1'),
+        ('Pause the print', 'PAUSE'),
+        ('Part cooling fan off', 'M107'),
+        if (widget.client.macros.isNotEmpty) ('Run a macro…', '@macro'),
         ('All heaters off', 'TURN_OFF_HEATERS'),
         if (s.chamberHeatable) ('Chamber heater off', 'M141 S0'),
         if (s.raw.containsKey(PrinterStatus.dragonFilter)) ('Heater filter off', 'SET_PIN PIN=dragonbreath_filter VALUE=0'),
@@ -911,6 +916,19 @@ class _RulesPanelState extends State<RulesPanel> {
       if (h == null || !mounted) return;
       final tc = t.clamp(30, 70), hc = h.clamp(1, 12);
       (label, gcode) = ('Dry filament $tc°C for $hc h', '@dry $tc $hc');
+    }
+    if (gcode == '@macro') {
+      final m = await showModalBottomSheet<String>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: ListView(shrinkWrap: true, children: [
+            const ListTile(title: Text('Which macro?')),
+            for (final m in widget.client.macros) ListTile(title: Text(m, style: mono), onTap: () => Navigator.pop(ctx, m)),
+          ]),
+        ),
+      );
+      if (m == null || !mounted) return;
+      (label, gcode) = ('Run $m', m);
     }
     if (gcode == '@notify') {
       final t = await askText(context, 'Alert text', hint: 'e.g. Take the print off', action: 'Next');
@@ -1085,6 +1103,15 @@ class _RulesPanelState extends State<RulesPanel> {
                       tooltip: 'Test (nothing is sent)',
                       icon: const Icon(Icons.science_outlined),
                       onPressed: () => _test(r),
+                    ),
+                    IconButton(
+                      tooltip: 'Duplicate (then change its days or hours)',
+                      icon: const Icon(Icons.control_point_duplicate_rounded),
+                      onPressed: () async {
+                        final list = [...rules, Map<String, dynamic>.from(r)..remove('off')];
+                        await run(context, () => widget.client.setRules(list), done: 'Rule duplicated');
+                        setState(() => _rules = widget.client.rules());
+                      },
                     ),
                     IconButton(
                       tooltip: 'Copy to all printers',
