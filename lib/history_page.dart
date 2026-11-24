@@ -583,6 +583,8 @@ class _JobTile extends StatelessWidget {
             if (jobOk(job) && (job.estimate ?? 0) > 300 && paceText(job.duration - job.estimate!) != 'on time')
               '${paceText(job.duration - job.estimate!)} than the slicer said',
             if (_reason(job) case final r?) '⚑ $r',
+            if (settings.number('rating.${client.host}:${client.port}.${jobKey(job)}', 0) case final r when r > 0)
+              '★' * r.round(),
             if (settings.text('jobNote.${client.host}:${client.port}.${jobKey(job)}') case final n when n.isNotEmpty) '✎ $n',
           ].join(' · '),
           style: TextStyle(color: C.muted, fontSize: 12),
