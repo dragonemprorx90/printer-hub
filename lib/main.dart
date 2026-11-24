@@ -455,6 +455,62 @@ class _PrinterListPageState extends State<PrinterListPage> {
           ),
       ], humidityLimit: settings.number('humidityLimit', 45));
 
+  /// Searches the files on every printer at once; tap one to open that printer's Files.
+  Future<void> _findFile() async {
+    final all = Future.wait([
+      for (final p in _printers)
+        clientFor(p).listFiles().then((f) => (p, f)).catchError((_) => (p, <GcodeFile>[])),
+    ]);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        var q = '';
+        return StatefulBuilder(
+          builder: (ctx, set) => Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                autofocus: true,
+                decoration: const InputDecoration(hintText: 'File name on any printer', prefixIcon: Icon(Icons.search_rounded)),
+                onChanged: (v) => set(() => q = v.toLowerCase()),
+              ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: FutureBuilder<List<(Printer, List<GcodeFile>)>>(
+                  future: all,
+                  builder: (_, snap) {
+                    if (!snap.hasData) return const Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator());
+                    final hits = [
+                      for (final (p, files) in snap.data!)
+                        for (final f in files)
+                          if (q.length >= 2 && f.path.toLowerCase().contains(q)) (p, f),
+                    ];
+                    if (q.length < 2) return const Padding(padding: EdgeInsets.all(16), child: Text('Type at least two letters.'));
+                    if (hits.isEmpty) return const Padding(padding: EdgeInsets.all(16), child: Text('No file with that name.'));
+                    return ListView(shrinkWrap: true, children: [
+                      for (final (p, f) in hits.take(100))
+                        ListTile(
+                          leading: const Icon(Icons.description_outlined),
+                          title: Text(f.name),
+                          subtitle: Text('${p.name}${f.dir.isEmpty ? '' : ' · ${f.dir}'} · ${fmtAgo(f.modified)}'),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _open(p, tab: 2);
+                          },
+                        ),
+                    ]);
+                  },
+                ),
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
   /// Side by side on wide screens (iPad landscape, a big Mac window), when on.
   Printer? _side;
 
@@ -527,6 +583,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
               icon: const Icon(Icons.more_horiz_rounded),
               onSelected: (v) async {
                 final cs = [for (final p in _printers) clientFor(p)];
+                if (v == 'find') return _findFile();
                 if (v == 'lights') {
                   await run(context, () async {
                     for (final c in cs.where((c) => c.status.online && c.status.led == true)) {
@@ -549,6 +606,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
                 }
               },
               itemBuilder: (_) => const [
+                PopupMenuItem(value: 'find', child: Text('Find a file on any printer…')),
                 PopupMenuItem(value: 'lights', child: Text('Turn every light off')),
                 PopupMenuItem(value: 'pause', child: Text('Pause every print…')),
               ],
