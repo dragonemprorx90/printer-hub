@@ -62,6 +62,8 @@ echo
 for i in 1 2 3 4 5 6 7 8 9 10; do [ -f data/pairing.json ] && break; sleep 1; done
 echo "Running. Pair the app: Edit printer -> Remote access code ->"
 docker compose run --rm bridge --show-code
+echo "Checking what the bridge can reach:"
+docker compose run --rm bridge --check || true
 echo "Logs: cd $DIR && docker compose logs -f bridge"
 case ",$(current COMPOSE_PROFILES)," in
   *,slicer,*) ;;
