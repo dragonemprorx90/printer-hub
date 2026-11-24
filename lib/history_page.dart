@@ -473,6 +473,25 @@ class _JobTile extends StatelessWidget {
           ),
         ),
         actions: [
+          if (job.exists && settings.strings('printers').length > 1)
+            TextButton.icon(
+              onPressed: () async {
+                final others = [
+                  for (final x in settings.strings('printers')) Printer.fromJson(jsonDecode(x)),
+                ].where((p) => p.host != client.host || p.port != client.port).toList();
+                final to = await showDialog<Printer>(
+                  context: ctx,
+                  builder: (d) => SimpleDialog(title: const Text('Send this file to'), children: [
+                    for (final p in others) SimpleDialogOption(onPressed: () => Navigator.pop(d, p), child: Text(p.name)),
+                  ]),
+                );
+                if (to == null || !ctx.mounted) return;
+                final name = job.filename.split('/').last;
+                await run(ctx, () async => clientFor(to).upload(name, await client.download(job.filename)), done: 'Sent to ${to.name}');
+              },
+              icon: const Icon(Icons.send_rounded),
+              label: const Text('Send to'),
+            ),
           if (files.length > 2)
             TextButton.icon(
               onPressed: () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => _Slideshow(client: client, files: files, title: job.filename.split('/').last))),
