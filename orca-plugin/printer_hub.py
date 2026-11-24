@@ -5,7 +5,7 @@
 # name = "Printer Hub"
 # description = "Your printers beside the 3D view: camera, progress, temperatures, controls, filaments and spools, history with pictures, rules and print alerts. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "3.3.0"
+# version = "3.4.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -205,7 +205,7 @@ PAGE = r"""
     if (d.error) return '<div class="sec err">' + esc(d.error) + '</div>';
     if (!d.enabled) return '<div class="sec muted">Spoolman isn\'t set up on this printer.</div>';
     var lanes = (p.filaments || []).filter(function (f) { return f.label && /^T\d/.test(f.label); });
-    var s = esc(p.slug), out = '<div class="sec">';
+    var s = esc(p.slug), out = '<div class="sec">' + (d.spools.length ? inventory(d) : '');
     d.spools.forEach(function (sp) {
       out += '<div class="line"><span class="dot" style="background:' + esc(sp.color || "transparent") + '"></span>' + esc(sp.name || ("Spool " + sp.id)) +
         ' <span class="' + (sp.remaining != null && sp.remaining < 100 ? "warn" : "muted") + '">' + esc(sp.material) + (sp.remaining != null ? ' · ' + Math.round(sp.remaining) + ' g' : '') +
@@ -233,6 +233,45 @@ PAGE = r"""
     }).join("") + '</div>';
   }
 
+  function queue(p) {
+    var d = (extra[p.slug] || {}).queue;
+    if (!d) return '<div class="sec muted">Loading queue…</div>';
+    if (d.error) return '<div class="sec err">' + esc(d.error) + '</div>';
+    if (!d.jobs.length) return '<div class="sec muted">The queue is empty. Add files in the Printer Hub app (Files → long-press → Queue).</div>';
+    var at = p.eta && (p.state === "printing" || p.state === "paused") ? p.eta : 0;
+    return '<div class="sec"><div class="muted">Queue ' + esc(d.state) + '</div>' + d.jobs.map(function (j, i) {
+      at += j.estimate || 0;
+      return '<div class="line">' + (i + 1) + '. <span>' + esc(j.file.split("/").pop()) + '</span> <span class="muted">' +
+        (j.estimate ? dur(j.estimate) + ', done ' + clock(at) : '') + '</span>' +
+        '<button onclick="ph.act(' + q(p.slug) + ',\'dequeue\',{id:' + q(j.id) + '})">Remove</button></div>';
+    }).join("") + '</div>';
+  }
+
+  function stats(p) {
+    var d = (extra[p.slug] || {}).stats;
+    if (!d) return '<div class="sec muted">Loading stats…</div>';
+    if (d.error) return '<div class="sec err">' + esc(d.error) + '</div>';
+    var out = '<div class="sec"><div>' + d.jobs + ' prints · ' + Math.round(d.hours) + ' h · ' + d.kg.toFixed(2) + ' kg · ' +
+      Math.round(d.success * 100) + '% succeeded</div><div class="muted">Best run ' + d.bestStreak + ' good prints, now ' + d.currentStreak + '</div>';
+    (d.byMaterial || []).forEach(function (m) {
+      out += '<div class="line muted">' + esc(m.material) + ': ' + m.prints + ' prints, ' + Math.round(m.rate * 100) + '%</div>';
+    });
+    (d.due || []).forEach(function (t) { out += '<div class="warn">Maintenance due: ' + esc(t) + '</div>'; });
+    return out + '</div>';
+  }
+
+  function inventory(d) {
+    var by = {}, low = [];
+    d.spools.forEach(function (sp) {
+      var m = (sp.material || "Unknown").toUpperCase();
+      by[m] = (by[m] || 0) + (sp.remaining || 0);
+      if (sp.remaining != null && sp.remaining < 200) low.push(m + " " + (sp.name || "") + " (" + Math.round(sp.remaining) + " g)");
+    });
+    var out = '<div class="muted">' + Object.keys(by).sort().map(function (m) { return esc(m) + " " + (by[m] / 1000).toFixed(2) + " kg"; }).join(" · ") + '</div>';
+    if (low.length) out += '<div class="line"><span class="warn">' + low.length + ' to buy</span><button onclick="ph.copy(' + q("Filament to buy:\n" + low.join("\n")) + ')">Copy list</button></div>';
+    return out;
+  }
+
   function card(p) {
     var active = p.state === "printing" || p.state === "paused";
     var look = !p.online ? " is-off" : p.state === "error" || (p.heater && p.heater.fault) ? " is-err" : p.state === "paused" ? " is-paused" : "";
@@ -258,7 +297,11 @@ PAGE = r"""
       (p.layer ? "Layer " + p.layer + (p.layers ? "/" + p.layers : "") + " · " : "") + Math.round(p.progress * 100) + "%" +
       (p.eta ? " · " + dur(p.eta) + " left, done " + clock(p.eta) : "") + '</div><div class="bar"><div style="width:' + Math.round(p.progress * 100) + '%"></div></div>';
     if (p.message && p.state === "paused") h += '<div class="warn">' + esc(p.message) + '</div>';
-    if (o.cam) h += '<img class="cam" src="' + HUB + '/hub/snapshot?printer=' + encodeURIComponent(p.slug) + '&t=' + Date.now() + '" alt="No camera picture">';
+    if (o.cam) {
+      var snap = HUB + '/hub/snapshot?printer=' + encodeURIComponent(p.slug) + '&t=' + Date.now();
+      h += '<img class="cam" src="' + snap + '" alt="No camera picture"><div class="detail"><a href="' + snap +
+        '" download="' + esc(p.slug) + '.jpg">Save picture</a></div>';
+    }
     if (fil) h += '<div class="fil detail">' + fil + '</div>';
     mismatch.forEach(function (m) { h += '<div class="warn detail">⚠ ' + esc(m) + '</div>'; });
     if (p.proxy) h += '<div class="muted detail">Orca connection: 127.0.0.1, port ' + esc(p.proxy.split(":")[1]) +
@@ -272,11 +315,16 @@ PAGE = r"""
       '<button onclick="ph.toggle(' + slug + ',\'controls\')">Controls</button>' +
       '<button onclick="ph.toggle(' + slug + ',\'history\')">History</button>' +
       '<button onclick="ph.toggle(' + slug + ',\'spools\')">Spools</button>' +
-      '<button onclick="ph.toggle(' + slug + ',\'rules\')">Rules</button></div>';
+      '<button onclick="ph.toggle(' + slug + ',\'rules\')">Rules</button>' +
+      '<button onclick="ph.toggle(' + slug + ',\'queue\')">Queue</button>' +
+      '<button onclick="ph.toggle(' + slug + ',\'stats\')">Stats</button>' +
+      '<button title="Snooze this printer\'s alerts for an hour" onclick="ph.act(' + slug + ',\'snooze\',{value:1})">Snooze 1 h</button></div>';
     if (o.controls) h += controls(p);
     if (o.history) h += history(p);
     if (o.spools) h += spools(p);
     if (o.rules) h += rules(p);
+    if (o.queue) h += queue(p);
+    if (o.stats) h += stats(p);
     return h + '</div>';
   }
 
@@ -458,7 +506,7 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
         slug = message.get("printer", "")
         if command == "refresh":
             self._refresh()
-        elif command in ("history", "spools", "rules"):
+        elif command in ("history", "spools", "rules", "queue", "stats"):
             try:
                 data = _get("/hub/%s?printer=%s" % (command, urllib.parse.quote(slug)))
             except Exception as e:
@@ -470,8 +518,9 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
                 do_action(slug, action, message.get("params"))
                 self.panel.post({"command": "note", "text": "Done: %s" % action.replace("_", " ")})
                 self._refresh()
-                if action in ("link_spool", "add_spool", "rule_toggle"):
-                    self.on_message({"command": "rules" if action == "rule_toggle" else "spools", "printer": slug})
+                follow = {"link_spool": "spools", "add_spool": "spools", "rule_toggle": "rules", "dequeue": "queue"}
+                if action in follow:
+                    self.on_message({"command": follow[action], "printer": slug})
             except Exception as e:
                 self.panel.post({"command": "note", "text": "Could not %s: %s" % (action.replace("_", " "), e)})
 

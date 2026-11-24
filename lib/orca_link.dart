@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'camera.dart';
+import 'insights.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 
@@ -354,6 +355,11 @@ class OrcaLink {
             final id = await c.addSpool(
                 vendor: 'Generic', material: lane.material, color: lane.color!, grams: n('grams') <= 0 ? 1000 : n('grams'));
             await c.setLaneSpool(lane.lane!, id);
+          case 'snooze': // hours; 0 turns it off
+            final h = n('value').clamp(0, 24);
+            await c.dbSet('snooze', h <= 0 ? 0 : DateTime.now().add(Duration(minutes: (h * 60).round())).millisecondsSinceEpoch);
+          case 'dequeue':
+            await c.dequeue(q['id'] ?? '');
           case 'rule_toggle':
             final rules = await c.rules();
             final i = n('index').round();
@@ -415,6 +421,35 @@ class OrcaLink {
             });
           case '/hub/rules':
             json(200, await c.rules());
+          case '/hub/queue':
+            final (jobs, state) = await c.queue();
+            json(200, {
+              'state': state,
+              'jobs': [
+                for (final j in jobs)
+                  {
+                    'id': j.id,
+                    'file': j.filename,
+                    'estimate': (await c.metadata(j.filename).catchError((_) => <String, dynamic>{}))['estimated_time'],
+                  },
+              ],
+            });
+          case '/hub/stats':
+            final jobs = await c.allHistory();
+            final r = records(jobs);
+            final hours = jobs.fold(0.0, (a, j) => a + j.duration) / 3600;
+            json(200, {
+              'jobs': jobs.length,
+              'hours': hours,
+              'kg': jobs.fold(0.0, (a, j) => a + gramsFromMm(j.filament)) / 1000,
+              'success': successRate(jobs),
+              'bestStreak': r.bestStreak,
+              'currentStreak': r.currentStreak,
+              'byMaterial': [
+                for (final (m, rate, n) in rateBy(jobs, (j) => j.material).take(6)) {'material': m, 'rate': rate, 'prints': n},
+              ],
+              'due': dueTasks(settings.jsonList('maint.${p.key}'), hours),
+            });
           default:
             json(404, {'error': 'not found'});
         }
