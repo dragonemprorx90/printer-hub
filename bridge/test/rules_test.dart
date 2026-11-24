@@ -26,6 +26,12 @@ void main() {
     expect(bridgeOwn('/server/info'), isNull);
   });
 
+  test('alert text and links', () {
+    expect(openLink('K2 Plus'), 'printerhub://printer/K2%20Plus');
+    expect(finishedText('a.gcode', {'print_duration': 4320, 'filament_used': 14200}), 'a.gcode · 1h 12m · 14.2 m of filament');
+    expect(finishedText('a.gcode', {}), 'a.gcode');
+  });
+
   test('weekly summary time', () {
     expect(weeklyDue('Sun 20:00', DateTime(2026, 11, 29, 20, 0)), isTrue);
     expect(weeklyDue('sun 20:00', DateTime(2026, 11, 29, 20, 1)), isFalse);

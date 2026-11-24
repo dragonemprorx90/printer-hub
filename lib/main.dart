@@ -152,7 +152,9 @@ class _PrinterListPageState extends State<PrinterListPage> {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => WallPage(printers: _printers)));
       } else if (u.host == 'printer' && u.pathSegments.isNotEmpty) {
         final name = u.pathSegments.first.toLowerCase();
-        final p = _printers.where((p) => p.name.toLowerCase() == name || printerSlug(p.name) == name).firstOrNull;
+        final p = _printers
+            .where((p) => p.name.toLowerCase() == name || printerSlug(p.name) == name || p.host == name)
+            .firstOrNull;
         if (p != null) _open(p);
       }
       return;

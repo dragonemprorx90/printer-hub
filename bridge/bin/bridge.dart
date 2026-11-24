@@ -348,6 +348,7 @@ class Alerts {
                   'Message': _h(message),
                   'Tags': tags.join(','),
                   'Priority': '$priority',
+                  'Click': openLink(_title),
                 },
                 body: jpeg)
             .timeout(const Duration(seconds: 30));
@@ -367,6 +368,8 @@ class Alerts {
                 'message': message,
                 'tags': tags,
                 'priority': priority,
+                // Tapping the alert opens this printer in Printer Hub.
+                'click': openLink(_title),
               }))
           .timeout(const Duration(seconds: 15));
       if (r.statusCode >= 300) log('Alert not delivered (HTTP ${r.statusCode})');
@@ -422,7 +425,7 @@ class Alerts {
           'method': 'printer.objects.subscribe',
           'params': {
             'objects': {
-              'print_stats': ['state', 'filename', 'message', 'print_duration', 'info'],
+              'print_stats': ['state', 'filename', 'message', 'print_duration', 'filament_used', 'info'],
               'virtual_sdcard': ['progress'],
               'box': null,
               'dragonbreath': ['connected', 'fault', 'fault_reason'],
@@ -529,12 +532,13 @@ class Alerts {
       switch (state) {
         case 'complete':
           _waitBedCool = true;
-          await send('$_title: print finished', file,
+          await send('$_title: print finished', finishedText(file, _stats),
               tags: ['white_check_mark'], priority: 4, jpeg: await _keep('end'));
           unawaited(_checkSpools());
           unawaited(_prune());
         case 'error':
-          await send('$_title: print failed', note.isEmpty ? file : note,
+          await send('$_title: print failed',
+              '${note.isEmpty ? file : note} (at ${(_progress * 100).round()}%${(_stats['info'] as Map?)?['current_layer'] is num ? ', layer ${(_stats['info'] as Map)['current_layer']}' : ''})',
               tags: ['warning'], priority: 5, jpeg: await _keep('end'));
         case 'cancelled':
           await send('$_title: print cancelled', file, tags: ['x']);
@@ -549,7 +553,7 @@ class Alerts {
           _started = DateTime.now();
           counters['prints_started'] = counters['prints_started']! + 1;
           _failure.reset();
-          await send('$_title: print started', file, tags: ['printer'], priority: 2);
+          await send('$_title: print started', await _startedText(file), tags: ['printer'], priority: 2);
           if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
       }
       if (state != 'printing' && state != 'paused' && _filterOn) {
@@ -685,6 +689,20 @@ extension on Alerts {
             mins % int.parse('${r['at']}') == 0);
       }
       await Future.delayed(Duration(seconds: 60 - DateTime.now().second));
+    }
+  }
+
+  /// "Benchy.gcode, done about 18:40" from the file's slicer estimate.
+  Future<String> _startedText(String file) async {
+    try {
+      final r = await _client.get(Uri.parse('http://$host:$port/server/files/metadata?filename='
+          '${Uri.encodeQueryComponent('${_stats['filename'] ?? ''}')}'));
+      final est = (jsonDecode(r.body)['result']?['estimated_time'] as num?)?.toDouble();
+      if (est == null || est <= 0) return file;
+      final at = DateTime.now().add(Duration(seconds: est.round()));
+      return '$file, done about ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return file;
     }
   }
 
@@ -1008,6 +1026,21 @@ bool ruleAllowed(Map r, DateTime now) {
 Uri? webhookUri(String action) {
   final u = Uri.tryParse(action.replaceFirst('@webhook', '').trim());
   return u != null && (u.scheme == 'http' || u.scheme == 'https') && u.host.isNotEmpty ? u : null;
+}
+
+/// printerhub://printer/<name>: opens that printer in the app (iPhone, Mac).
+String openLink(String printer) => 'printerhub://printer/${Uri.encodeComponent(printer)}';
+
+/// "Benchy.gcode · 1h 12m · 14.2 m of filament".
+String finishedText(String file, Map stats) {
+  final secs = (stats['print_duration'] as num?)?.toDouble() ?? 0;
+  final mm = (stats['filament_used'] as num?)?.toDouble() ?? 0;
+  final h = secs ~/ 3600, m = (secs % 3600) ~/ 60;
+  return [
+    file,
+    if (secs > 0) h > 0 ? '${h}h ${m}m' : '${m}m',
+    if (mm > 0) '${(mm / 1000).toStringAsFixed(1)} m of filament',
+  ].join(' · ');
 }
 
 /// "Sun 20:00" matches Sunday at 20:00.
