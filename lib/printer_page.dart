@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -1320,7 +1321,23 @@ class _Actions extends StatelessWidget {
                     context.mounted &&
                     await confirmAway(context, client.viaRelay, 'cancel the print') &&
                     context.mounted) {
-                  run(context, client.cancel);
+                  final job = client.lastHistory?.$1.where((j) => j.status == 'in_progress').firstOrNull;
+                  await run(context, client.cancel);
+                  if (job == null || !context.mounted) return;
+                  // Optional: why, for Workshop → Why prints failed.
+                  final why = await showModalBottomSheet<String>(
+                    context: context,
+                    builder: (ctx) => SafeArea(
+                      child: ListView(shrinkWrap: true, children: [
+                        const ListTile(title: Text('Why did you cancel it?'), subtitle: Text('Optional: it shows in Workshop')),
+                        for (final r in failureReasons) ListTile(title: Text(r), onTap: () => Navigator.pop(ctx, r)),
+                      ]),
+                    ),
+                  );
+                  if (why == null) return;
+                  final k = 'failReasons.${client.host}:${client.port}';
+                  final m = Map<String, dynamic>.from(jsonDecode(settings.text(k, '{}')) as Map)..[jobKey(job)] = why;
+                  settings.setText(k, jsonEncode(m));
                 }
               },
               icon: const Icon(Icons.stop_rounded),
