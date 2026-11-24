@@ -932,7 +932,8 @@ class _PrinterCard extends StatelessWidget {
                         ? '${(s.progress * 100).toStringAsFixed(0)}%'
                             '${s.currentLayer != null && (s.totalLayers ?? 0) > 0 ? ' · layer ${s.currentLayer}/${s.totalLayers}' : ''}'
                             ' · ${s.filename ?? ''}'
-                        : '${printer.host}:${printer.port}',
+                        : '${printer.host}:${printer.port}'
+                            '${settings.text('group.${printer.key}').isEmpty ? '' : ' · ${settings.text('group.${printer.key}')}'}',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: C.muted, fontSize: 13),
                   ),
