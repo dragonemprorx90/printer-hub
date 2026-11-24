@@ -1575,6 +1575,17 @@ class MoonrakerClient {
 
   Uri timelapseUrl(String path) => _uri(['server', 'files', 'timelapse', ...path.split('/')]);
 
+  double? _nozzle;
+
+  /// The nozzle size in the printer's config (mm), asked once.
+  Future<double?> nozzleDiameter() async {
+    if (_nozzle != null) return _nozzle;
+    final r = await _http.get(_uri(['printer', 'objects', 'query'], {'configfile': 'settings'}), headers: authHeaders);
+    if (r.statusCode != 200) return null;
+    final v = jsonDecode(r.body)['result']?['status']?['configfile']?['settings']?['extruder']?['nozzle_diameter'];
+    return _nozzle = (v is num) ? v.toDouble() : double.tryParse('$v');
+  }
+
   Future<void> deleteTimelapse(String path) async =>
       _check(await _http.delete(timelapseUrl(path), headers: authHeaders));
 

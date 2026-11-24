@@ -1340,6 +1340,14 @@ class _FileSheetState extends State<_FileSheet> {
                   Hint(w),
                 if (bedWarning('${m['filament_type'] ?? ''}'.split(';').first, m['first_layer_bed_temp'] as num?) case final w?)
                   Hint(w),
+                if (m['nozzle_diameter'] is num)
+                  FutureBuilder<double?>(
+                    future: c.nozzleDiameter().catchError((_) => null),
+                    builder: (_, n) {
+                      final w = nozzleWarning(m['nozzle_diameter'] as num, n.data);
+                      return w == null ? const SizedBox.shrink() : Hint(w, color: C.ink(C.danger));
+                    },
+                  ),
                 for (final n in settings.jsonList('materialNotes'))
                   if ('${m['filament_type'] ?? ''}'.toUpperCase().contains('${n['m']}'.toUpperCase()) ||
                       '${n['m']}'.toUpperCase().contains('${m['filament_type'] ?? '~'}'.split(';').first.toUpperCase()))

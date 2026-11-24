@@ -549,6 +549,13 @@ String? bedWarning(String? material, num? temp) {
   return null;
 }
 
+/// A file sliced for a different nozzle than the printer has.
+String? nozzleWarning(num? file, num? printer) {
+  if (file == null || printer == null || file <= 0 || printer <= 0) return null;
+  if ((file - printer).abs() < 0.01) return null;
+  return 'Sliced for a ${file.toStringAsFixed(2)} mm nozzle, but this printer has ${printer.toStringAsFixed(2)} mm.';
+}
+
 /// Drying presets: (material, °C, hours).
 const dryPresets = [
   ('PLA', 50, 4),

@@ -248,6 +248,12 @@ void main() {
     expect(bedWarning('PLA', 0), isNull);
   });
 
+  test('nozzle size', () {
+    expect(nozzleWarning(0.4, 0.6), contains('0.60 mm'));
+    expect(nozzleWarning(0.4, 0.4), isNull);
+    expect(nozzleWarning(null, 0.4), isNull);
+  });
+
   test('CFS and flexible filament', () {
     expect(cfsWarning('TPU 95A', hasCfs: true), contains('external spool'));
     expect(cfsWarning('TPU', hasCfs: false), isNull);
