@@ -1169,12 +1169,26 @@ class _FileSheetState extends State<_FileSheet> {
     Navigator.pop(context);
   }
 
+  /// Tags and the favourite star follow a renamed or moved file.
+  void _carryOver(String to) {
+    final tags = settings.text(_tagKey);
+    if (tags.isNotEmpty) {
+      settings.setText('tags.${widget.favScope}.$to', tags);
+      settings.setText(_tagKey, '');
+    }
+    if (settings.isFavourite(widget.favScope, f.path)) {
+      settings.toggleFavourite(widget.favScope, f.path);
+      settings.toggleFavourite(widget.favScope, to);
+    }
+  }
+
   Future<void> _rename() async {
     final n = await askText(context, 'Rename file', initial: f.name, action: 'Rename');
     if (n == null || n.isEmpty || n == f.name || !mounted) return;
     final nav = Navigator.of(context);
-    await run(context, () => c.moveFile(f.path, f.dir.isEmpty ? n : '${f.dir}/$n'),
-        done: 'Renamed');
+    final to = f.dir.isEmpty ? n : '${f.dir}/$n';
+    await run(context, () => c.moveFile(f.path, to), done: 'Renamed');
+    _carryOver(to);
     widget.onChanged();
     nav.pop();
   }
@@ -1185,8 +1199,9 @@ class _FileSheetState extends State<_FileSheet> {
     if (dir == null || dir == f.dir || !mounted) return;
     final clean = dir.replaceAll(RegExp(r'^/+|/+$'), '');
     final nav = Navigator.of(context);
-    await run(context, () => c.moveFile(f.path, clean.isEmpty ? f.name : '$clean/${f.name}'),
-        done: 'Moved');
+    final to = clean.isEmpty ? f.name : '$clean/${f.name}';
+    await run(context, () => c.moveFile(f.path, to), done: 'Moved');
+    _carryOver(to);
     widget.onChanged();
     nav.pop();
   }
