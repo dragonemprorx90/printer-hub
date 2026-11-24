@@ -118,7 +118,10 @@ Future<void> main(List<String> argv) async {
           detector: env['DETECTOR_URL'] == 'off'
               ? null
               : Uri.parse(env['DETECTOR_URL'] ?? 'http://127.0.0.1:7072'),
-          failureThreshold: double.tryParse(env['FAILURE_THRESHOLD'] ?? '') ?? 0.8);
+          failureThreshold: double.tryParse(env['FAILURE_THRESHOLD'] ?? '') ?? 0.8,
+          pauseRepeat: int.tryParse(env['PAUSE_REPEAT_MIN'] ?? '') ?? 15,
+          offlineAfter: int.tryParse(env['OFFLINE_ALERT_MIN'] ?? '') ?? 10,
+          summaryAt: env['DAILY_SUMMARY'] ?? '');
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -135,6 +138,9 @@ Future<void> main(List<String> argv) async {
   } else if (topic == null && !alertsOff) {
     log('Alerts are off for this pairing. Run with --reset to get a code with alerts.');
   }
+
+  final statusPort = int.tryParse(env['STATUS_PORT'] ?? '');
+  if (statusPort != null) unawaited(serveStatus(statusPort, printer, port, alerts));
 
   log('Printer Hub bridge $kBridgeVersion: printer $printer:$port through ${pair.relay}');
   if (camera != null) log('Camera from away: $cameraUrl');
@@ -258,6 +264,20 @@ class Alerts {
   final Uri? detector; // the failure detector container, if any
   final FailureWatch _failure;
 
+  final int pauseRepeat; // minutes between "still paused" alerts, 0 = once
+  final int offlineAfter; // minutes unreachable before an alert, 0 = never
+  final String summaryAt; // "21:00" = daily summary then, '' = off
+  DateTime? _pausedAt, _downSince;
+  bool _offlineSent = false;
+  int _snoozeUntil = 0; // ms; the app sets printer_hub/snooze
+  final _sensors = <String, bool>{}; // filament sensor -> filament detected
+  final _chamber = <String, dynamic>{};
+  final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
+  String? get state => _state;
+  double get progress => _progress;
+  String get file => '${_stats['filename'] ?? ''}'.split('/').last;
+  bool get online => _downSince == null;
+
   Alerts(this.topic, this.host, this.port,
       {this.name,
       this.humidityLimit = 45,
@@ -266,7 +286,10 @@ class Alerts {
       this.quiet,
       this.spoolLow = 100,
       this.detector,
-      double failureThreshold = 0.8})
+      double failureThreshold = 0.8,
+      this.pauseRepeat = 15,
+      this.offlineAfter = 10,
+      this.summaryAt = ''})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -282,6 +305,11 @@ class Alerts {
       log('Quiet hours: held back "$title"');
       return;
     }
+    if (priority < 5 && DateTime.now().millisecondsSinceEpoch < _snoozeUntil) {
+      log('Snoozed: held back "$title"');
+      return;
+    }
+    counters['alerts'] = counters['alerts']! + 1;
     final server = topic.replace(path: '', query: null);
     final name = topic.pathSegments.last;
     if (jpeg != null || (picture && camera != null)) {
@@ -333,6 +361,12 @@ class Alerts {
       } catch (e) {
         log('Alerts: lost the printer ($e)');
       }
+      _downSince ??= DateTime.now();
+      if (offlineAfter > 0 && !_offlineSent && DateTime.now().difference(_downSince!).inMinutes >= offlineAfter) {
+        _offlineSent = true;
+        await send('$_title: offline', 'The bridge has not reached the printer for $offlineAfter minutes.',
+            tags: ['electric_plug'], priority: 4);
+      }
       if (DateTime.now().difference(started).inMinutes >= 1) backoff = 2;
       await Future.delayed(Duration(seconds: backoff));
       backoff = math.min(backoff * 2, 60);
@@ -343,14 +377,19 @@ class Alerts {
     final ws = await WebSocket.connect('ws://$host:$port/websocket')
         .timeout(const Duration(seconds: 10));
     var id = 0;
+    if (_offlineSent) {
+      _offlineSent = false;
+      unawaited(send('$_title: back online', 'The bridge can reach the printer again.', tags: ['electric_plug']));
+    }
+    _downSince = null;
     // U1 AFC lanes, so OrcaSlicer's own filament sync can read them.
-    List<String> lanes = const [];
+    List<String> lanes = const [], sensors = const [], chambers = const [];
     try {
       final r = await _client.get(Uri.parse('http://$host:$port/printer/objects/list'));
-      lanes = [
-        for (final o in (jsonDecode(r.body)['result']?['objects'] as List?) ?? const [])
-          if ('$o'.startsWith('AFC_lane ')) '$o',
-      ];
+      final objs = [for (final o in (jsonDecode(r.body)['result']?['objects'] as List?) ?? const []) '$o'];
+      lanes = [for (final o in objs) if (o.startsWith('AFC_lane ')) o];
+      sensors = [for (final o in objs) if (o.startsWith('filament_switch_sensor ') || o.startsWith('filament_motion_sensor ')) o];
+      chambers = [for (final o in objs) if (o == 'heater_generic chamber_heater' || o == 'heater_generic dragonbreath') o];
     } catch (_) {}
     void subscribe() => ws.add(jsonEncode({
           'jsonrpc': '2.0',
@@ -364,6 +403,8 @@ class Alerts {
               'dragonbreath': ['connected', 'fault', 'fault_reason'],
               'output_pin dragonbreath_filter': null,
               for (final l in lanes) l: ['map', 'load', 'color', 'material', 'spool_id', 'filament_name'],
+              for (final f in sensors) f: ['filament_detected', 'enabled'],
+              for (final c in chambers) c: ['temperature', 'target'],
             },
           },
         }));
@@ -412,6 +453,32 @@ class Alerts {
       }
     }
     if (lanesChanged) unawaited(_publishLaneData());
+    for (final e in status.entries) {
+      final k = '${e.key}';
+      final v = e.value;
+      if ((k.startsWith('filament_switch_sensor ') || k.startsWith('filament_motion_sensor ')) && v is Map) {
+        final det = v['filament_detected'];
+        if (det is bool) {
+          final was = _sensors[k];
+          _sensors[k] = det;
+          if (was == true && !det && (_state == 'printing' || _state == 'paused') && v['enabled'] != false) {
+            await send('$_title: filament ran out', 'The ${k.split(' ').last} sensor sees no filament.',
+                tags: ['warning'], priority: 5, picture: true);
+            unawaited(_runRules((r) => r['on'] == 'runout'));
+          }
+        }
+      }
+      if (k.startsWith('heater_generic ') && v is Map) _chamber.addAll(Map<String, dynamic>.from(v));
+    }
+    final ct = (_chamber['temperature'] as num?)?.toDouble(), cg = (_chamber['target'] as num?)?.toDouble();
+    if (chamberReady(ct, cg)) {
+      if (_sent.add('chamber_ready $cg')) {
+        await send('$_title: chamber at ${cg!.round()}°C', 'Ready to print.', tags: ['thermometer'], priority: 3);
+        unawaited(_runRules((r) => r['on'] == 'chamber_ready'));
+      }
+    } else if (cg == null || cg <= 0) {
+      _sent.removeWhere((x) => x.startsWith('chamber_ready'));
+    }
     final db = status['dragonbreath'];
     if (db is Map) _dragon.addAll(Map<String, dynamic>.from(db));
     if (status['output_pin dragonbreath_filter'] != null) _hasFilter = true;
@@ -437,12 +504,14 @@ class Alerts {
         case 'cancelled':
           await send('$_title: print cancelled', file, tags: ['x']);
         case 'paused' when last == 'printing':
+          _pausedAt = DateTime.now();
           await send('$_title: print paused',
               note.isEmpty ? 'Check the printer (filament run-out?)' : note,
               tags: ['pause_button'], priority: 4, picture: true);
         case 'printing' when last == 'standby' || last == 'complete' || last == 'cancelled' || last == 'error':
           _sent = {};
           _started = DateTime.now();
+          counters['prints_started'] = counters['prints_started']! + 1;
           _failure.reset();
           await send('$_title: print started', file, tags: ['printer'], priority: 2);
           if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
@@ -551,16 +620,40 @@ extension on Alerts {
             ? List<Map>.from((jsonDecode(r.body)['result']?['value'] as List?) ?? const [])
             : const [];
       } catch (_) {}
+      try {
+        final r = await _client.get(Uri.parse(
+            'http://$host:$port/server/database/item?namespace=printer_hub&key=snooze'));
+        _snoozeUntil = r.statusCode == 200 ? ((jsonDecode(r.body)['result']?['value'] as num?)?.toInt() ?? 0) : 0;
+      } catch (_) {}
       final now = DateTime.now();
+      if (_state == 'paused' && _pausedAt != null && pauseRepeat > 0) {
+        final m = now.difference(_pausedAt!).inMinutes;
+        if (m > 0 && m % pauseRepeat == 0) {
+          await send('$_title: still paused', 'Paused for $m minutes. Resume or cancel it.', tags: ['pause_button'], priority: 4);
+        }
+      }
       final hhmm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       final day = '${now.year}-${now.month}-${now.day}';
       await _runRules((r) => r['on'] == 'time' && r['at'] == hhmm && _ranToday.add('$day ${r['at']} ${r['do']}'));
+      if (summaryAt == hhmm && _ranToday.add('$day summary')) unawaited(_summary(now));
       final mins = _started == null ? 0 : now.difference(_started!).inMinutes;
       if (_state == 'printing' && mins > 0) {
         await _runRules((r) => r['on'] == 'interval' && (int.tryParse('${r['at']}') ?? 0) > 0 &&
             mins % int.parse('${r['at']}') == 0);
       }
       await Future.delayed(Duration(seconds: 60 - DateTime.now().second));
+    }
+  }
+
+  /// Today's prints, hours and failures, sent at [summaryAt].
+  Future<void> _summary(DateTime now) async {
+    try {
+      final since = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch / 1000;
+      final r = await _client.get(Uri.parse('http://$host:$port/server/history/list?limit=100&since=$since'));
+      final jobs = (jsonDecode(r.body)['result']?['jobs'] as List?) ?? const [];
+      await send('$_title: today', summaryText(jobs), tags: ['bar_chart'], priority: 2);
+    } catch (e) {
+      log('Daily summary skipped: $e');
     }
   }
 
@@ -620,7 +713,8 @@ extension on Alerts {
   }
 
   Future<void> _runRules(bool Function(Map) match) async {
-    for (final r in _rules.where((r) => r['off'] != true).where(match)) {
+    for (final r in _rules.where((r) => r['off'] != true).where((r) => ruleAllowed(r, DateTime.now())).where(match)) {
+      counters['rules'] = counters['rules']! + 1;
       final g = '${r['do'] ?? ''}'.trim();
       if (g.isEmpty) continue;
       if (g == '@keep') {
@@ -633,6 +727,35 @@ extension on Alerts {
           'target_c': int.tryParse(p.elementAtOrNull(1) ?? '') ?? 55,
           'hours': int.tryParse(p.elementAtOrNull(2) ?? '') ?? 6,
         });
+        continue;
+      }
+      if (g.startsWith('@webhook')) {
+        final u = webhookUri(g);
+        if (u == null) {
+          log('Rule: bad webhook "$g" (needs http:// or https://)');
+          continue;
+        }
+        try {
+          final res = await _client
+              .post(u,
+                  headers: {'Content-Type': 'application/json'},
+                  body: jsonEncode({
+                    'printer': _title,
+                    'event': r['on'],
+                    'state': _state,
+                    'file': file,
+                    'progress': (_progress * 100).round(),
+                  }))
+              .timeout(const Duration(seconds: 15));
+          log('Rule webhook -> HTTP ${res.statusCode}');
+        } catch (e) {
+          log('Rule webhook failed: $e');
+        }
+        continue;
+      }
+      if (g.startsWith('@notify')) {
+        final text = g.substring(7).trim();
+        await send('$_title: ${text.isEmpty ? 'rule' : text}', file.isEmpty ? 'From your rule' : file, tags: ['bell']);
         continue;
       }
       if (g == '@picture') {
@@ -818,6 +941,99 @@ List<String> snapshotsToPrune(Iterable<String> names, DateTime now,
 String snapshotName(String gcode, DateTime started, String kind) {
   final stem = gcode.replaceAll(RegExp(r'\.gcode$', caseSensitive: false), '').replaceAll(RegExp(r'[^\w.-]+'), '_');
   return '${stem}__${started.millisecondsSinceEpoch ~/ 1000}__$kind.jpg';
+}
+
+/// A rule's optional window: `days` (1 = Mon … 7 = Sun) and `from`/`to`
+/// ("22:00"–"07:00" wraps past midnight). Rules without them always run.
+bool ruleAllowed(Map r, DateTime now) {
+  final days = r['days'];
+  if (days is List && days.isNotEmpty && !days.map((d) => '$d').contains('${now.weekday}')) return false;
+  final from = '${r['from'] ?? ''}', to = '${r['to'] ?? ''}';
+  int? mins(String s) {
+    final m = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(s);
+    return m == null ? null : int.parse(m[1]!) * 60 + int.parse(m[2]!);
+  }
+  final a = mins(from), b = mins(to);
+  if (a == null || b == null) return true;
+  final t = now.hour * 60 + now.minute;
+  return a <= b ? t >= a && t < b : t >= a || t < b;
+}
+
+/// "@webhook https://…" -> its URL; only http(s).
+Uri? webhookUri(String action) {
+  final u = Uri.tryParse(action.replaceFirst('@webhook', '').trim());
+  return u != null && (u.scheme == 'http' || u.scheme == 'https') && u.host.isNotEmpty ? u : null;
+}
+
+/// The chamber is within 1°C of a set target.
+bool chamberReady(double? temp, double? target) =>
+    temp != null && target != null && target > 0 && temp >= target - 1;
+
+/// One line for the daily summary from Moonraker history jobs.
+String summaryText(List jobs) {
+  if (jobs.isEmpty) return 'No prints today.';
+  final ok = jobs.where((j) => j['status'] == 'completed').length;
+  final failed = jobs.where((j) => j['status'] == 'error').length;
+  final secs = jobs.fold<double>(0, (a, j) => a + ((j['print_duration'] as num?) ?? 0));
+  final h = secs ~/ 3600, m = (secs % 3600) ~/ 60;
+  return '${jobs.length} prints ($ok finished${failed > 0 ? ', $failed failed' : ''}), ${h}h ${m}m printing.';
+}
+
+/// Prometheus text for the status endpoint.
+String metricsText(Map<String, num> values) => [
+      for (final e in values.entries) ...[
+        '# TYPE printer_hub_${e.key} gauge',
+        'printer_hub_${e.key} ${e.value}',
+      ],
+    ].join('\n') + '\n';
+
+/// A small read-only status page on the home network (STATUS_PORT):
+/// `/` (HTML), `/status.json` and `/metrics` (Prometheus). It never
+/// controls the printer.
+Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts) async {
+  final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+  log('Status page on port $port (/, /status.json, /metrics)');
+  await for (final req in server) {
+    final res = req.response;
+    final a = alerts;
+    final st = {
+      'version': kBridgeVersion,
+      'printer': '$printer:$moonraker',
+      'online': a?.online,
+      'state': a?.state,
+      'file': a?.file,
+      'progress': a == null ? null : (a.progress * 100).round(),
+      'counters': a?.counters,
+    };
+    if (req.method != 'GET') {
+      res.statusCode = HttpStatus.methodNotAllowed;
+    } else if (req.uri.path == '/status.json') {
+      res.headers.contentType = ContentType.json;
+      res.write(jsonEncode(st));
+    } else if (req.uri.path == '/metrics') {
+      res.headers.contentType = ContentType('text', 'plain', charset: 'utf-8');
+      res.write(metricsText({
+        'up': 1,
+        'printer_online': a?.online == true ? 1 : 0,
+        'printing': a?.state == 'printing' ? 1 : 0,
+        'progress_ratio': a?.progress ?? 0,
+        for (final e in (a?.counters ?? const <String, int>{}).entries) '${e.key}_total': e.value,
+      }));
+    } else if (req.uri.path == '/') {
+      res.headers.contentType = ContentType.html;
+      String esc(Object? v) => const HtmlEscape().convert('${v ?? '—'}');
+      res.write('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width">'
+          '<meta http-equiv=refresh content=10><title>Printer Hub bridge</title>'
+          '<style>body{font:15px system-ui;margin:24px;background:#0b0e13;color:#e9edf3}td{padding:4px 12px 4px 0}'
+          'h1{font-size:20px}</style><h1>Printer Hub bridge ${esc(kBridgeVersion)}</h1><table>'
+          '${[for (final e in st.entries) if (e.key != 'counters') '<tr><td>${esc(e.key)}<td>${esc(e.value)}'].join()}'
+          '${[for (final e in (a?.counters ?? const <String, int>{}).entries) '<tr><td>${esc(e.key)}<td>${esc(e.value)}'].join()}'
+          '</table>');
+    } else {
+      res.statusCode = HttpStatus.notFound;
+    }
+    await res.close();
+  }
 }
 
 /// "23-7" -> (23, 7). Null when unset or malformed.

@@ -96,6 +96,17 @@ void main() {
     expect(totalSize(f), 25);
   });
 
+  test('rule text and dry run', () {
+    final r = {'on': 'progress', 'at': '50', 'do': '@notify Halfway', 'label': 'Alert: Halfway', 'days': [1, 2], 'from': '22:00', 'to': '07:00'};
+    expect(ruleText(r, const {}), 'At 50% → Alert: Halfway (Mon Tue, 22:00–07:00)');
+    final d = ruleDryRun(r, const {}, DateTime(2026, 11, 23, 23)); // Monday 23:00
+    expect(d, contains('"Halfway"'));
+    expect(d, contains('allowed to run right now'));
+    expect(ruleDryRun({...r, 'off': true}, const {}, DateTime(2026, 11, 23, 23)), contains('switched off'));
+    expect(ruleDryRun({'on': 'complete', 'do': 'M84'}, const {'complete': 'Print finishes'}, DateTime(2026, 11, 23)),
+        contains('run the G-code "M84"'));
+  });
+
   test('units, windows, snooze, suggestion', () {
     expect(fmtTemp(100, fahrenheit: true), '212°F');
     expect(fmtHm(DateTime(2026, 1, 1, 18, 5), twelve: true), '6:05 PM');

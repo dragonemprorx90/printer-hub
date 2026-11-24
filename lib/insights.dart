@@ -325,6 +325,47 @@ bool inWindow(DateTime t, {List<int> days = const [], String from = '', String t
   return a <= b ? now >= a && now < b : now >= a || now < b;
 }
 
+const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/// "At 50% → Send me a picture (weekdays 22:00–07:00)".
+String ruleText(Map r, Map<String, String> triggers) {
+  final when = switch (r['on']) {
+    'time' => 'Every day at ${r['at']}',
+    'progress' => 'At ${r['at']}%',
+    'interval' => 'Every ${r['at']} min while printing',
+    final o => triggers[o] ?? '$o',
+  };
+  final days = [for (final d in (r['days'] as List?) ?? const []) _dayNames[(int.tryParse('$d') ?? 1) - 1]];
+  final window = [
+    if (days.isNotEmpty) days.join(' '),
+    if ('${r['from'] ?? ''}'.isNotEmpty) '${r['from']}–${r['to']}',
+  ].join(', ');
+  return '$when → ${r['label'] ?? r['do']}${window.isEmpty ? '' : ' ($window)'}';
+}
+
+/// What a rule would do right now, in words, without doing it.
+String ruleDryRun(Map r, Map<String, String> triggers, DateTime now) {
+  final g = '${r['do'] ?? ''}';
+  final what = g == '@picture'
+      ? 'send you an alert with a camera picture'
+      : g == '@keep'
+          ? 'save a camera picture to History'
+          : g.startsWith('@dry')
+              ? 'start drying filament (${g.split(' ').skip(1).join('°C, ')} h)'
+              : g.startsWith('@notify')
+                  ? 'send you the alert "${g.substring(7).trim()}"'
+                  : g.startsWith('@webhook')
+                      ? 'POST the printer state to ${g.substring(8).trim()}'
+                      : 'run the G-code "$g" on the printer';
+  final days = [for (final d in (r['days'] as List?) ?? const []) int.tryParse('$d') ?? 0];
+  final allowed = inWindow(now, days: days, from: '${r['from'] ?? ''}', to: '${r['to'] ?? ''}');
+  return [
+    'When: ${ruleText(r, triggers).split(' → ').first}.',
+    'It would $what.',
+    r['off'] == true ? 'The rule is switched off, so it won\'t run.' : allowed ? 'It is allowed to run right now.' : 'It would not run right now (outside its days or hours).',
+  ].join('\n');
+}
+
 /// Snooze until: 1 h from now, or tomorrow 08:00.
 DateTime snoozeUntil(String kind, {DateTime? now}) {
   final n = now ?? DateTime.now();

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'insights.dart';
 import 'moonraker.dart';
 import 'scan.dart';
 import 'settings.dart';
@@ -726,7 +727,30 @@ const _triggers = {
   'error': 'Print fails',
   'cancelled': 'Print is cancelled',
   'time': 'Every day at…',
+  'printing': 'Print starts',
+  'runout': 'Filament runs out',
+  'chamber_ready': 'Chamber reaches its temperature',
 };
+
+/// Optional time windows for a rule: (label, days, from, to).
+const _windows = [
+  ('Any time', <int>[], '', ''),
+  ('Weekdays', [1, 2, 3, 4, 5], '', ''),
+  ('Weekends', [6, 7], '', ''),
+  ('At night (22:00–07:00)', <int>[], '22:00', '07:00'),
+  ('In the day (08:00–20:00)', <int>[], '08:00', '20:00'),
+];
+
+/// One-tap rules people often want.
+const ruleTemplates = [
+  {'on': 'complete', 'do': '@picture', 'label': 'Send me a picture'},
+  {'on': 'complete', 'do': 'TURN_OFF_HEATERS', 'label': 'All heaters off'},
+  {'on': 'first_layer', 'do': '@picture', 'label': 'Send me a picture'},
+  {'on': 'interval', 'at': '10', 'do': '@keep', 'label': 'Save a picture to History'},
+  {'on': 'runout', 'do': '@picture', 'label': 'Send me a picture'},
+  {'on': 'error', 'do': 'TURN_OFF_HEATERS', 'label': 'All heaters off'},
+  {'on': 'progress', 'at': '50', 'do': '@notify Halfway there', 'label': 'Alert: Halfway there'},
+];
 
 /// "When X, do Y" rules, run by the home bridge even with the app closed.
 class RulesPanel extends StatefulWidget {
@@ -749,6 +773,8 @@ class _RulesPanelState extends State<RulesPanel> {
         if (s.chamberHeatable) ('Chamber heater off', 'M141 S0'),
         if (s.raw.containsKey(PrinterStatus.dragonFilter)) ('Heater filter off', 'SET_PIN PIN=dragonbreath_filter VALUE=0'),
         ('Motors off', 'M84'),
+        ('Send me an alert…', '@notify'),
+        ('Call a webhook (Home Assistant…)…', '@webhook'),
       ];
 
   Future<void> _add() async {
@@ -799,15 +825,96 @@ class _RulesPanelState extends State<RulesPanel> {
       final tc = t.clamp(30, 70), hc = h.clamp(1, 12);
       (label, gcode) = ('Dry filament $tc°C for $hc h', '@dry $tc $hc');
     }
+    if (gcode == '@notify') {
+      final t = await askText(context, 'Alert text', hint: 'e.g. Take the print off', action: 'Next');
+      if (t == null || t.trim().isEmpty || !mounted) return;
+      (label, gcode) = ('Alert: ${t.trim()}', '@notify ${t.trim()}');
+    }
+    if (gcode == '@webhook') {
+      final u = await askText(context, 'Webhook URL', hint: 'http://homeassistant.local:8123/api/webhook/…', action: 'Next');
+      final uri = Uri.tryParse(u?.trim() ?? '');
+      if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https') || uri.host.isEmpty) {
+        if (u != null && mounted) toast(context, 'That needs to start with http:// or https://', error: true);
+        return;
+      }
+      (label, gcode) = ('Webhook ${uri.host}', '@webhook $uri');
+    }
+    if (!mounted) return;
+    final win = await showModalBottomSheet<(String, List<int>, String, String)>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Only…')),
+          for (final w in _windows) ListTile(title: Text(w.$1), onTap: () => Navigator.pop(ctx, w)),
+        ]),
+      ),
+    );
+    if (win == null || !mounted) return;
     if (gcode.isEmpty) {
       final g = await askText(context, 'G-code to run', hint: 'e.g. M84', action: 'Add');
       if (g == null || g.isEmpty || !mounted) return;
       (label, gcode) = (g, g);
     }
-    final list = [...await _rules, {'on': on, 'at': ?at, 'do': gcode, 'label': label}];
+    final list = [
+      ...await _rules,
+      {
+        'on': on,
+        'at': ?at,
+        'do': gcode,
+        'label': label,
+        if (win.$2.isNotEmpty) 'days': win.$2,
+        if (win.$3.isNotEmpty) ...{'from': win.$3, 'to': win.$4},
+      },
+    ];
     if (!mounted) return;
     await run(context, () => c.setRules(list), done: 'Rule added');
     setState(() => _rules = c.rules());
+  }
+
+  Future<void> _templates() async {
+    final pick = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: ListView(shrinkWrap: true, children: [
+          const ListTile(title: Text('Add a ready-made rule')),
+          for (final t in ruleTemplates)
+            ListTile(title: Text(ruleText(t, _triggers)), onTap: () => Navigator.pop(ctx, Map<String, dynamic>.from(t))),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    final list = [...await _rules, pick];
+    if (!mounted) return;
+    await run(context, () => widget.client.setRules(list), done: 'Rule added');
+    setState(() => _rules = widget.client.rules());
+  }
+
+  /// Dry run: says what the rule would do. Nothing is sent to the printer.
+  void _test(Map<String, dynamic> r) => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Test rule (nothing is sent)'),
+          content: Text(ruleDryRun(r, _triggers, DateTime.now())),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+        ),
+      );
+
+  Future<void> _snooze() async {
+    final pick = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Snooze this printer\'s alerts'), subtitle: Text('Failures and faults still come through.')),
+          ListTile(title: const Text('For 1 hour'), onTap: () => Navigator.pop(ctx, 'hour')),
+          ListTile(title: const Text('Until 08:00 tomorrow'), onTap: () => Navigator.pop(ctx, 'tomorrow')),
+          ListTile(title: const Text('Turn snooze off'), onTap: () => Navigator.pop(ctx, 'off')),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    final until = pick == 'off' ? 0 : snoozeUntil(pick).millisecondsSinceEpoch;
+    await run(context, () => widget.client.dbSet('snooze', until),
+        done: pick == 'off' ? 'Alerts back on' : 'Alerts snoozed until ${fmtTime(DateTime.fromMillisecondsSinceEpoch(until))}');
   }
 
   Future<void> _remove(List<Map<String, dynamic>> all, int i) async {
@@ -849,7 +956,11 @@ class _RulesPanelState extends State<RulesPanel> {
           return Panel(
             title: 'Rules',
             icon: Icons.rule_rounded,
-            trailing: IconButton(tooltip: 'Add rule', icon: const Icon(Icons.add_rounded), onPressed: _add),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(tooltip: 'Snooze alerts', icon: const Icon(Icons.notifications_paused_outlined), onPressed: _snooze),
+              IconButton(tooltip: 'Ready-made rules', icon: const Icon(Icons.auto_awesome_outlined), onPressed: _templates),
+              IconButton(tooltip: 'Add rule', icon: const Icon(Icons.add_rounded), onPressed: _add),
+            ]),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (rules.isEmpty)
                 Text('Run something automatically, like "print finishes → light off". '
@@ -859,14 +970,13 @@ class _RulesPanelState extends State<RulesPanel> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Switch(value: r['off'] != true, onChanged: (on) => _toggle(rules, i, on)),
-                  title: Text('${switch (r['on']) {
-                        'time' => 'Every day at ${r['at']}',
-                        'progress' => 'At ${r['at']}%',
-                        'interval' => 'Every ${r['at']} min while printing',
-                        final o => _triggers[o] ?? o,
-                      }}'
-                      ' → ${r['label'] ?? r['do']}'),
+                  title: Text(ruleText(r, _triggers)),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: 'Test (nothing is sent)',
+                      icon: const Icon(Icons.science_outlined),
+                      onPressed: () => _test(r),
+                    ),
                     IconButton(
                       tooltip: 'Copy to all printers',
                       icon: const Icon(Icons.copy_all_rounded),
