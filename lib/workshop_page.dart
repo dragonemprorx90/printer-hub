@@ -24,6 +24,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
   List<Spool>? _spools;
   String? _error;
   String get _k => widget.printer.key;
+  String _noteFind = '';
 
   @override
   void initState() {
@@ -742,9 +743,36 @@ class _WorkshopPageState extends State<WorkshopPage> {
   // ------------------------------------------------------------ notes
 
   List<Widget> _notes() {
-    final jobs = _jobs!.take(30).toList();
+    final find = _noteFind.toLowerCase();
+    final jobs = [
+      for (final j in _jobs!.take(find.isEmpty ? 30 : 500))
+        if (find.isEmpty ||
+            j.filename.toLowerCase().contains(find) ||
+            settings.text('jobNote.$_k.${jobKey(j)}').toLowerCase().contains(find))
+          j,
+    ];
     final checklist = settings.strings('checklist');
     return [
+      Panel(
+        title: 'Pinned note',
+        icon: Icons.push_pin_outlined,
+        trailing: TextButton(
+          onPressed: () async {
+            final t = await askText(context, 'Note pinned to ${widget.printer.name}',
+                initial: settings.text('pinNote.$_k'), hint: 'e.g. 0.6 mm nozzle fitted', action: 'Pin');
+            if (t == null) return;
+            settings.setText('pinNote.$_k', t.trim());
+            setState(() {});
+          },
+          child: Text(settings.text('pinNote.$_k').isEmpty ? 'Add' : 'Change'),
+        ),
+        child: Text(settings.text('pinNote.$_k').isEmpty ? 'Shows at the top of the Overview.' : settings.text('pinNote.$_k'),
+            style: T.small.copyWith(color: settings.text('pinNote.$_k').isEmpty ? C.muted : C.text)),
+      ),
+      TextField(
+        decoration: const InputDecoration(isDense: true, hintText: 'Search notes and prints', prefixIcon: Icon(Icons.search_rounded)),
+        onChanged: (v) => setState(() => _noteFind = v),
+      ),
       Panel(
         title: 'Pre-print checklist',
         icon: Icons.checklist_rounded,

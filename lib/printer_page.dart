@@ -349,6 +349,14 @@ class _OverviewTabState extends State<OverviewTab> {
         ]);
         final actions = _Actions(s: s, client: c, printer: widget.printer);
         const gap = SizedBox(height: 16, width: 16);
+        // A note you pinned to this printer (Workshop → Notes), e.g. "0.6 mm nozzle fitted".
+        final pin = settings.text('pinNote.${widget.printer.key}');
+        final pinned = pin.isEmpty
+            ? const SizedBox.shrink()
+            : Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Hint('📌 $pin'),
+              );
         return LayoutBuilder(builder: (context, box) {
           if (box.maxWidth >= 860) {
             return SingleChildScrollView(
@@ -358,7 +366,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 children: [
                   Expanded(
                     flex: 3,
-                    child: Column(children: staggered([camera, gap, job, gap, chart])),
+                    child: Column(children: staggered([pinned, camera, gap, job, gap, chart])),
                   ),
                   gap,
                   Expanded(
@@ -370,6 +378,7 @@ class _OverviewTabState extends State<OverviewTab> {
             );
           }
           return ListView(padding: const EdgeInsets.all(16), children: staggered([
+            pinned,
             camera,
             gap,
             job,

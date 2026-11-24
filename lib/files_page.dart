@@ -555,6 +555,12 @@ class _FilesTabState extends State<FilesTab> {
                 icon: const Icon(Icons.home_rounded, size: 18),
                 label: const Text('All files'),
               ),
+              if (_files != null && _files!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text('${_files!.length} files · ${fmtBytes(totalSize(_files!))}',
+                      style: T.caption.copyWith(color: C.muted)),
+                ),
               for (var i = 0; i < crumbs.length; i++) ...[
                 Icon(Icons.chevron_right_rounded, size: 18, color: C.muted),
                 TextButton(
