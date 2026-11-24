@@ -6,6 +6,12 @@ import 'update.dart';
 
 /// Release notes shown once after an update. Add the new version at the top.
 const kWhatsNew = <(String, List<String>)>[
+  ('1.30.0', [
+    'A new look: calmer and flatter, with clearer numbers, no shadows, and new dark and light colours.',
+    'Printer list: names get the full width, and on a phone the extra toolbar buttons (find printers, all printers, wall) are in the ⋯ menu.',
+    'Overview: the Printing panel shows the ring next to the file name and time left, with stats in an even grid. Without a camera you get a slim row instead of a black box.',
+    'Files: more room to search; recent, tags, tidy up, new folder, grid view and refresh are in the ⋯ menu. Error messages are shorter and plainer.',
+  ]),
   ('1.29.0', [
     'Workshop (Tools → Workshop, or the Overview): stats and records, a calendar of print days, why prints failed, a maintenance log with ready-made tasks and nozzle wear, spare parts, filament inventory (also without Spoolman), a shopping list, notes, a price quote and calibration calculators.',
     'Needs you: the bell on the printer list gathers everything paused, failed, offline, damp, due or running low. All printers shows combined stats and every queue.',
