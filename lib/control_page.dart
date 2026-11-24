@@ -372,6 +372,9 @@ class _ControlTabState extends State<ControlTab> {
       );
       if (!ok || !mounted) return;
     }
+    // Remember what was run, and with which parameters, for "Recent".
+    final recent = settings.strings('macros.recent.${widget.printer.key}').where((x) => x != script).toList()..insert(0, script);
+    settings.setStrings('macros.recent.${widget.printer.key}', recent.take(6).toList());
     run(context, () => c.gcode(script), done: '$m finished');
   }
 
@@ -434,6 +437,22 @@ class _ControlTabState extends State<ControlTab> {
         Text('Tap to run · long-press or right-click for parameters and favourites',
             style: T.caption.copyWith(color: C.muted)),
         const SizedBox(height: 10),
+        if (settings.strings('macros.recent.${widget.printer.key}') case final recent when recent.isNotEmpty && q.isEmpty) ...[
+          Text('Recent', style: T.label.copyWith(color: C.muted)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final r in recent)
+              ActionChip(
+                avatar: Icon(Icons.history_rounded, size: 16, color: C.muted),
+                label: Text(r, style: mono.copyWith(fontSize: 12)),
+                onPressed: () async {
+                  if (!await confirm(context, 'Run $r again?', action: 'Run') || !mounted) return;
+                  run(context, () => c.gcode(r), done: 'Done');
+                },
+              ),
+          ]),
+          const SizedBox(height: 10),
+        ],
         if (list.isEmpty)
           const StateView.empty(Icons.code_off_rounded, 'No macros found')
         else
