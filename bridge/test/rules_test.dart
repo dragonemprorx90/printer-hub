@@ -26,6 +26,18 @@ void main() {
     expect(bridgeOwn('/server/info'), isNull);
   });
 
+  test('MQTT packets', () {
+    expect(mqttLength(0), [0]);
+    expect(mqttLength(127), [127]);
+    expect(mqttLength(128), [0x80, 1]);
+    expect(mqttLength(16383), [0xFF, 0x7F]);
+    final p = mqttPublish('a/b', 'hi', retain: true);
+    expect(p, [0x31, 7, 0, 3, 0x61, 0x2F, 0x62, 0x68, 0x69]);
+    final c = mqttConnect('id', user: 'u', password: 'p');
+    expect(c.first, 0x10);
+    expect(c[2 + 7], 0xC2); // user + password + clean session
+  });
+
   test('alert text and links', () {
     expect(openLink('K2 Plus'), 'printerhub://printer/K2%20Plus');
     expect(finishedText('a.gcode', {'print_duration': 4320, 'filament_used': 14200}), 'a.gcode · 1h 12m · 14.2 m of filament');

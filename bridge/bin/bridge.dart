@@ -146,7 +146,10 @@ Future<void> main(List<String> argv) async {
             for (final t in (env['EXTRA_TOPICS'] ?? '').split(','))
               if (Uri.tryParse(t.trim()) case final u? when u.scheme.startsWith('http') && u.pathSegments.isNotEmpty) u,
           ],
-          alertWebhook: webhookUri('@webhook ${env['ALERT_WEBHOOK'] ?? ''}'));
+          alertWebhook: webhookUri('@webhook ${env['ALERT_WEBHOOK'] ?? ''}'),
+          mqtt: (env['MQTT_URL'] ?? '').startsWith('mqtt://')
+              ? MqttStatus(Uri.parse(env['MQTT_URL']!), args['name'] ?? env['PRINTER_NAME'] ?? printer)
+              : null);
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -306,6 +309,8 @@ class Alerts {
   final int layerStuck; // minutes on one layer before an alert, 0 = off
   final List<Uri> extraTopics; // more ntfy topics that get every alert (family)
   final Uri? alertWebhook; // every alert also POSTed here as JSON
+  final MqttStatus? mqtt; // status to Home Assistant over MQTT
+  DateTime _mqttAt = DateTime(0);
   double? _estimate; // slicer's estimate for the current print
   int? _layer;
   DateTime? _layerSince;
@@ -341,7 +346,8 @@ class Alerts {
       this.overrunPct = 30,
       this.layerStuck = 30,
       this.extraTopics = const [],
-      this.alertWebhook})
+      this.alertWebhook,
+      this.mqtt})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -602,6 +608,19 @@ class Alerts {
 
     final state = _stats['state'] as String?;
     final file = '${_stats['filename'] ?? ''}'.split('/').last;
+    // At most every 10 s, or at once when the state changes.
+    if (mqtt != null && (state != _state || DateTime.now().difference(_mqttAt).inSeconds >= 10)) {
+      _mqttAt = DateTime.now();
+      final dur = (_stats['print_duration'] as num?)?.toDouble() ?? 0;
+      unawaited(mqtt!.publish({
+        'state': state,
+        'progress': (_progress * 100).round(),
+        'eta_min': state == 'printing' && _progress > 0.01 && dur > 0 ? (dur / _progress - dur) ~/ 60 : null,
+        'nozzle': _nozzle?.round(),
+        'bed': _bedTemp?.round(),
+        'file': file,
+      }));
+    }
     final note = '${_stats['message'] ?? ''}'.trim();
     final last = _state;
     _state = state;
@@ -1160,6 +1179,120 @@ bool ruleAllowed(Map r, DateTime now) {
 Uri? webhookUri(String action) {
   final u = Uri.tryParse(action.replaceFirst('@webhook', '').trim());
   return u != null && (u.scheme == 'http' || u.scheme == 'https') && u.host.isNotEmpty ? u : null;
+}
+
+/// MQTT 3.1.1 "remaining length" bytes.
+List<int> mqttLength(int n) {
+  final out = <int>[];
+  do {
+    var b = n % 128;
+    n ~/= 128;
+    if (n > 0) b |= 0x80;
+    out.add(b);
+  } while (n > 0);
+  return out;
+}
+
+List<int> _mqttString(String s) {
+  final b = utf8.encode(s);
+  return [b.length >> 8, b.length & 0xFF, ...b];
+}
+
+/// CONNECT packet (clean session, 60 s keep-alive, optional user/password).
+List<int> mqttConnect(String clientId, {String? user, String? password}) {
+  final flags = 0x02 | (user != null ? 0x80 : 0) | (password != null ? 0x40 : 0);
+  final body = [
+    ..._mqttString('MQTT'), 4, flags, 0, 60, //
+    ..._mqttString(clientId),
+    if (user != null) ..._mqttString(user),
+    if (password != null) ..._mqttString(password),
+  ];
+  return [0x10, ...mqttLength(body.length), ...body];
+}
+
+/// PUBLISH packet, QoS 0, optionally retained.
+List<int> mqttPublish(String topic, String payload, {bool retain = false}) {
+  final body = [..._mqttString(topic), ...utf8.encode(payload)];
+  return [0x30 | (retain ? 1 : 0), ...mqttLength(body.length), ...body];
+}
+
+/// Publishes printer status to an MQTT broker (Home Assistant's Mosquitto),
+/// with Home Assistant discovery so the sensors appear by themselves.
+/// ponytail: QoS 0, no subscriptions; reconnects on the next publish if the
+/// broker went away. Add QoS 1 if status ever needs to be guaranteed.
+class MqttStatus {
+  final Uri url; // mqtt://user:pass@host:1883
+  final String name;
+  Socket? _s;
+  bool _announced = false;
+  Timer? _ping;
+  MqttStatus(this.url, this.name);
+
+  String get slug => name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+  String get base => 'printerhub/$slug';
+
+  Future<Socket?> _socket() async {
+    if (_s != null) return _s;
+    try {
+      final s = await Socket.connect(url.host, url.hasPort ? url.port : 1883, timeout: const Duration(seconds: 10));
+      final info = url.userInfo.split(':');
+      s.add(mqttConnect('printerhub-$slug-${DateTime.now().millisecondsSinceEpoch % 100000}',
+          user: info.first.isEmpty ? null : Uri.decodeComponent(info.first),
+          password: info.length > 1 ? Uri.decodeComponent(info[1]) : null));
+      s.listen((_) {}, onDone: _drop, onError: (_) => _drop(), cancelOnError: true);
+      _ping = Timer.periodic(const Duration(seconds: 45), (_) => _s?.add(const [0xC0, 0])); // PINGREQ
+      _s = s;
+      _announced = false;
+      return s;
+    } catch (e) {
+      log('MQTT: no broker at ${url.host} ($e)');
+      return null;
+    }
+  }
+
+  void _drop() {
+    _ping?.cancel();
+    _s?.destroy();
+    _s = null;
+  }
+
+  /// Home Assistant discovery: one sensor per value, all on one device.
+  void _announce(Socket s) {
+    final device = {'identifiers': ['printerhub_$slug'], 'name': name, 'manufacturer': 'Printer Hub'};
+    for (final (key, label, unit, cls) in const [
+      ('state', 'State', null, null),
+      ('progress', 'Progress', '%', null),
+      ('eta_min', 'Time left', 'min', 'duration'),
+      ('nozzle', 'Nozzle', '°C', 'temperature'),
+      ('bed', 'Bed', '°C', 'temperature'),
+      ('file', 'File', null, null),
+    ]) {
+      s.add(mqttPublish(
+          'homeassistant/sensor/printerhub_${slug}_$key/config',
+          jsonEncode({
+            'name': label,
+            'unique_id': 'printerhub_${slug}_$key',
+            'state_topic': '$base/state',
+            'value_template': '{{ value_json.$key }}',
+            'unit_of_measurement': ?unit,
+            'device_class': ?cls,
+            'device': device,
+          }),
+          retain: true));
+    }
+    _announced = true;
+  }
+
+  Future<void> publish(Map<String, Object?> state) async {
+    final s = await _socket();
+    if (s == null) return;
+    try {
+      if (!_announced) _announce(s);
+      s.add(mqttPublish('$base/state', jsonEncode(state), retain: true));
+    } catch (e) {
+      _drop();
+    }
+  }
 }
 
 /// printerhub://printer/<name>: opens that printer in the app (iPhone, Mac).
