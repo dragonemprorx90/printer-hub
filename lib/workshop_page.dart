@@ -1214,17 +1214,28 @@ class _FirstLayers extends StatefulWidget {
 }
 
 class _FirstLayersState extends State<_FirstLayers> {
-  late final Future<List<(PrintJob, String)>> _pics = () async {
-    final files = await widget.client.snapshotFiles().catchError((_) => <String>[]);
+  late final _files = widget.client.snapshotFiles().catchError((_) => <String>[]);
+  String _kind = 'first'; // or 'end': the picture when the print finished
+
+  Future<List<(PrintJob, String)>> get _pics async {
+    final files = await _files;
     return [
       for (final j in widget.jobs.take(60))
-        if (snapshotsFor(j, files).where((f) => f.endsWith('__first.jpg')).firstOrNull case final f?) (j, f),
+        if (snapshotsFor(j, files).where((f) => f.endsWith('__$_kind.jpg')).firstOrNull case final f?) (j, f),
     ].take(24).toList();
-  }();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('First layers')),
+        appBar: AppBar(title: Text(_kind == 'first' ? 'First layers' : 'Finished prints'), actions: [
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: const [ButtonSegment(value: 'first', label: Text('First layer')), ButtonSegment(value: 'end', label: Text('Finished'))],
+            selected: {_kind},
+            onSelectionChanged: (v) => setState(() => _kind = v.first),
+          ),
+          const SizedBox(width: 8),
+        ]),
         body: FutureBuilder<List<(PrintJob, String)>>(
           future: _pics,
           builder: (context, snap) {
