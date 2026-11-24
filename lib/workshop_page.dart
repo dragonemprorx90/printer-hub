@@ -1063,6 +1063,14 @@ class _FleetPageState extends State<FleetPage> {
                   StatTile(label: 'Print hours', value: h(all)),
                   StatTile(label: 'Filament', value: '${kg(all)} kg'),
                   StatTile(label: 'Success', value: '${(successRate(all) * 100).round()}%'),
+                  if (monthlyCost(all,
+                          pricePerKg: settings.number('filamentPrice', 20),
+                          watts: settings.number('printerWatts', 350),
+                          pricePerKwh: settings.number('kwhPrice', 0.30))
+                      .where((c) => c.$1 == monthKey(DateTime.now()))
+                      .firstOrNull case final m?)
+                    StatTile(label: 'This month', value: '${settings.text('currency', r'$')}${(m.$2 + m.$3).toStringAsFixed(2)}'),
+                  StatTile(label: 'Prints this week', value: '${weekTotals(all).$1}'),
                 ]),
               ),
               const SizedBox(height: 12),
