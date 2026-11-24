@@ -894,6 +894,7 @@ const _triggers = {
   'chamber_ready': 'Chamber reaches its temperature',
   'bed_cool': 'Bed has cooled after a print',
   'layer': 'Print reaches layer…',
+  'idle': 'Printer has been idle for…',
   'humidity': 'CFS humidity goes over the limit',
 };
 
@@ -915,6 +916,7 @@ const ruleTemplates = [
   {'on': 'runout', 'do': '@picture', 'label': 'Send me a picture'},
   {'on': 'error', 'do': 'TURN_OFF_HEATERS', 'label': 'All heaters off'},
   {'on': 'bed_cool', 'do': '@notify Take the print off', 'label': 'Alert: Take the print off'},
+  {'on': 'idle', 'at': '60', 'do': 'TURN_OFF_HEATERS', 'label': 'All heaters off'},
   {'on': 'progress', 'at': '50', 'do': '@notify Halfway there', 'label': 'Alert: Halfway there'},
 ];
 
@@ -969,6 +971,10 @@ class _RulesPanelState extends State<RulesPanel> {
       at = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
     } else if (on == 'interval') {
       final m = await askNumber(context, 'Every how many minutes?', presets: const [5, 10, 15, 30], unit: ' min');
+      if (m == null || m <= 0 || !mounted) return;
+      at = '$m';
+    } else if (on == 'idle') {
+      final m = await askNumber(context, 'Idle for how many minutes?', presets: const [15, 30, 60, 120], unit: ' min');
       if (m == null || m <= 0 || !mounted) return;
       at = '$m';
     } else if (on == 'layer') {

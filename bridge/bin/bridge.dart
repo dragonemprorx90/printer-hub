@@ -320,6 +320,8 @@ class Alerts {
   bool _waitBedCool = false; // after a finished print, until the bed is cool
   int _queuedIdle = 0; // jobs in Moonraker's queue while idle (checked each minute)
   bool _fromQueue = false; // the current print was taken from the queue
+  DateTime? _idleSince; // when the printer last stopped printing
+  final _idleRan = <String>{}; // idle rules already run in this idle stretch
   final double bedCool; // °C; "take the print off" below this, 0 = off
   final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
   String? get state => _state;
@@ -802,6 +804,19 @@ extension on Alerts {
       } catch (_) {}
       final now = DateTime.now();
       if (_state != 'printing' && _state != 'paused') _queuedIdle = await _queueSize();
+      // "Idle for N minutes" rules, once per idle stretch (e.g. a smart plug off).
+      if (_state == 'printing' || _state == 'paused') {
+        _idleSince = null;
+        _idleRan.clear();
+      } else {
+        _idleSince ??= now;
+        final idle = now.difference(_idleSince!).inMinutes;
+        await _runRules((r) =>
+            r['on'] == 'idle' &&
+            (int.tryParse('${r['at']}') ?? 0) > 0 &&
+            idle >= int.parse('${r['at']}') &&
+            _idleRan.add('${r['at']} ${r['do']}'));
+      }
       if (_state == 'paused' && _pausedAt != null && pauseRepeat > 0) {
         final m = now.difference(_pausedAt!).inMinutes;
         if (m > 0 && m % pauseRepeat == 0) {

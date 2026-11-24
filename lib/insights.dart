@@ -559,6 +559,7 @@ String ruleText(Map r, Map<String, String> triggers) {
     'progress' => 'At ${r['at']}%',
     'interval' => 'Every ${r['at']} min while printing',
     'layer' => 'At layer ${r['at']}',
+    'idle' => 'Idle for ${r['at']} min',
     final o => triggers[o] ?? '$o',
   };
   final days = [for (final d in (r['days'] as List?) ?? const []) _dayNames[(int.tryParse('$d') ?? 1) - 1]];
