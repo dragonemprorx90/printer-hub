@@ -329,6 +329,11 @@ class _PrinterListPageState extends State<PrinterListPage> {
         isScrollControlled: true,
         builder: (_) => _DiscoverySheet(
           known: {for (final p in _printers) p.host},
+          onAddAll: (list) {
+            Navigator.pop(context);
+            _import([for (final f in list) Printer(name: f.name, host: f.host)]);
+            toast(context, 'Added ${list.length} printers. Edit each to add its camera or remote access code.');
+          },
           onAdd: (f) {
             Navigator.pop(context);
             _edit(prefill: Printer(name: f.name, host: f.host));
@@ -814,7 +819,8 @@ class _PrinterCard extends StatelessWidget {
 class _DiscoverySheet extends StatefulWidget {
   final Set<String> known;
   final ValueChanged<FoundPrinter> onAdd;
-  const _DiscoverySheet({required this.known, required this.onAdd});
+  final ValueChanged<List<FoundPrinter>> onAddAll;
+  const _DiscoverySheet({required this.known, required this.onAdd, required this.onAddAll});
   @override
   State<_DiscoverySheet> createState() => _DiscoverySheetState();
 }
@@ -827,6 +833,19 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
   @override
   void initState() {
     super.initState();
+    _start();
+  }
+
+  void _scan() {
+    setState(() {
+      _found.clear();
+      _done = false;
+      _progress = 0;
+    });
+    _start();
+  }
+
+  void _start() {
     discoverPrinters(onProgress: (p) {
       if (mounted) setState(() => _progress = p);
     }).listen(
@@ -835,6 +854,8 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
       onError: (_) => mounted ? setState(() => _done = true) : null,
     );
   }
+
+  List<FoundPrinter> get _new => [for (final f in _found) if (!widget.known.contains(f.host)) f];
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -867,6 +888,12 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
                     ? Text('Added', style: TextStyle(color: C.muted))
                     : FilledButton(onPressed: () => widget.onAdd(f), child: const Text('Add')),
               ),
+            if (_done)
+              Wrap(spacing: 8, children: [
+                OutlinedButton.icon(onPressed: _scan, icon: const Icon(Icons.refresh_rounded), label: const Text('Scan again')),
+                if (_new.length > 1)
+                  FilledButton.tonal(onPressed: () => widget.onAddAll(_new), child: Text('Add all ${_new.length}')),
+              ]),
           ]),
         ),
       );
