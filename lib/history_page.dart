@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'charts.dart';
+import 'gcode.dart';
 import 'insights.dart';
 import 'moonraker.dart';
 import 'settings.dart';
@@ -456,7 +457,24 @@ class _JobTile extends StatelessWidget {
                   '${fmtFilament(job.filament)} · ${money(jobCost(job))}'));
           toast(context, 'Copied');
         },
-        leading: Icon(icon, color: color, size: 28),
+        leading: job.exists
+            ? Stack(clipBehavior: Clip.none, children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(R.sm),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: FutureBuilder<Uint8List?>(
+                      future: Thumbs.of(client, job.filename),
+                      builder: (_, t) => t.data == null
+                          ? Icon(icon, color: color, size: 28)
+                          : Image.memory(t.data!, fit: BoxFit.cover, gaplessPlayback: true),
+                    ),
+                  ),
+                ),
+                Positioned(right: -4, bottom: -4, child: Icon(icon, color: color, size: 16)),
+              ])
+            : Icon(icon, color: color, size: 28),
         title: Text(name,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -474,6 +492,19 @@ class _JobTile extends StatelessWidget {
         ),
         trailing: job.exists
             ? Row(mainAxisSize: MainAxisSize.min, children: [
+                if (job.id != null && job.status != 'in_progress')
+                  IconButton(
+                    tooltip: 'Remove from history',
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    onPressed: () async {
+                      if (!await confirm(context, 'Remove $name from history?',
+                              message: 'Only the history entry goes; the file stays.', action: 'Remove', danger: true) ||
+                          !context.mounted) {
+                        return;
+                      }
+                      await run(context, () => client.deleteJob(job.id!), done: 'Removed. Pull down to refresh.');
+                    },
+                  ),
                 IconButton(
                   tooltip: 'Add to the queue',
                   icon: const Icon(Icons.queue_rounded),

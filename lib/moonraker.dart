@@ -550,9 +550,10 @@ class PrintJob {
   final bool exists;
   final String? material;
   final List<int> spoolIds; // recorded by Moonraker's Spoolman integration
+  final String? id; // Moonraker's job id, for removing it from history
   PrintJob(this.filename, this.status, this.start, this.duration, this.filament,
       this.exists,
-      {this.material, this.spoolIds = const []});
+      {this.material, this.spoolIds = const [], this.id});
 }
 
 class HistoryTotals {
@@ -1629,9 +1630,14 @@ class MoonrakerClient {
           j['exists'] == true,
           material: jobMaterial(j as Map),
           spoolIds: jobSpoolIds(j),
+          id: j['job_id'] == null ? null : '${j['job_id']}',
         ),
     ];
   }
+
+  /// Removes one job from Moonraker's print history (not the file).
+  Future<void> deleteJob(String id) async =>
+      _check(await _http.delete(_uri(['server', 'history', 'job'], {'uid': id}), headers: authHeaders));
 
   // ponytail: last results kept in memory so a reopened Files/History tab
   // paints at once and refreshes quietly; dropped with the client.

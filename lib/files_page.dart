@@ -581,6 +581,14 @@ class _FilesTabState extends State<FilesTab> {
               icon: Icons.queue_rounded,
               trailing: TextButton.icon(
                 onPressed: () async {
+                  final idle = !const {'printing', 'paused'}.contains(c.status.state);
+                  if (_queueState != 'ready' && idle &&
+                      !await confirm(context, 'Start the queue?',
+                          message: 'The first job (${_queue.first.filename.split('/').last}) starts printing now. Is the plate clear?',
+                          action: 'Start')) {
+                    return;
+                  }
+                  if (!context.mounted) return;
                   await run(context,
                       _queueState == 'ready' ? c.pauseQueue : c.startQueue);
                   _loadQueue();
