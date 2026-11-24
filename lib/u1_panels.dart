@@ -144,7 +144,8 @@ class _DryCountdownState extends State<_DryCountdown> {
       ? const SizedBox.shrink()
       : Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Text('${fmtDuration(_left)} left', style: TextStyle(color: C.muted)),
+          child: Text('${fmtDuration(_left)} left · done ${fmtTime(DateTime.now().add(Duration(seconds: _left!.round())))}',
+              style: TextStyle(color: C.muted)),
         );
 }
 
