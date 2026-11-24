@@ -436,6 +436,21 @@ class _SettingsPageState extends State<SettingsPage> {
                     _refresh();
                   },
                 ),
+                if (widget.printers.length > 1) ...[
+                  const SizedBox(height: 8),
+                  Text('Alerts from', style: T.label.copyWith(color: C.muted)),
+                  for (final p in widget.printers)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(p.name),
+                      value: !settings.flag('muteAlways.${p.key}', false),
+                      onChanged: (v) {
+                        settings.setFlag('muteAlways.${p.key}', v != true);
+                        _refresh();
+                      },
+                    ),
+                ],
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
