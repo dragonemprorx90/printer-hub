@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class Palette {
   final Color bg, surface, surfaceHi, border, text, muted;
@@ -43,6 +45,12 @@ extension Contrast on Palette {
         text: text,
         muted: Color.lerp(muted, text, 0.5)!,
       );
+}
+
+/// Mac: keep the window above other apps (camera views). Off when [on] is false.
+void keepOnTop(bool on) {
+  if (!Platform.isMacOS) return;
+  const MethodChannel('printerhub/statusbar').invokeMethod('setOnTop', on).catchError((_) => null);
 }
 
 /// Display units, set from Settings at the app root.

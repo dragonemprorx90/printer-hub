@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -652,8 +653,11 @@ class _CameraFullscreenState extends State<CameraFullscreen> {
       ? [for (final v in settings.strings(_key)) double.parse(v)]
       : Matrix4.identity().storage.toList()));
 
+  bool _onTop = false;
+
   @override
   void dispose() {
+    if (_onTop) keepOnTop(false);
     settings.setStrings(_key, [for (final v in _t.value.storage) '$v']);
     _t.dispose();
     super.dispose();
@@ -667,6 +671,15 @@ class _CameraFullscreenState extends State<CameraFullscreen> {
       foregroundColor: Colors.white,
       title: Text(widget.title),
       actions: [
+        if (Platform.isMacOS)
+          IconButton(
+            tooltip: _onTop ? 'Stop keeping on top' : 'Keep on top of other apps',
+            icon: Icon(_onTop ? Icons.push_pin_rounded : Icons.push_pin_outlined),
+            onPressed: () {
+              setState(() => _onTop = !_onTop);
+              keepOnTop(_onTop);
+            },
+          ),
         IconButton(
           tooltip: 'Reset zoom',
           icon: const Icon(Icons.zoom_out_map_rounded),

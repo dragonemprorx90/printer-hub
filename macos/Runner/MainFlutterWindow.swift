@@ -40,6 +40,10 @@ class MainFlutterWindow: NSWindow {
         NSApp.dockTile.badgeLabel = attention > 0 ? "\(attention)" : nil
         self?.setStatus(self?.statusItem?.button?.title.trimmingCharacters(in: .whitespaces) ?? "")
         result(nil)
+      case "setOnTop":
+        // Float above other apps (camera on top while you work in Orca).
+        self?.level = (call.arguments as? Bool ?? false) ? .floating : .normal
+        result(nil)
       case "loginItem":
         result(Self.loginItemEnabled)
       case "setLoginItem":

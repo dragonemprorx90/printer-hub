@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -39,8 +40,11 @@ class _WallPageState extends State<WallPage> {
     });
   }
 
+  bool _onTop = false;
+
   @override
   void dispose() {
+    if (_onTop) keepOnTop(false);
     _resort?.cancel();
     WakelockPlus.disable();
     super.dispose();
@@ -84,6 +88,15 @@ class _WallPageState extends State<WallPage> {
             selectedIcon: Icon(Icons.sort_rounded, color: C.accent),
             onPressed: () => setState(() => settings.setFlag('wallSort', !_sorted)),
           ),
+          if (Platform.isMacOS)
+            IconButton(
+              tooltip: _onTop ? 'Stop keeping on top' : 'Keep on top of other apps',
+              icon: Icon(_onTop ? Icons.push_pin_rounded : Icons.push_pin_outlined),
+              onPressed: () {
+                setState(() => _onTop = !_onTop);
+                keepOnTop(_onTop);
+              },
+            ),
           IconButton(
             tooltip: _busyOnly ? 'Showing busy printers only' : 'Showing every printer',
             isSelected: _busyOnly,
