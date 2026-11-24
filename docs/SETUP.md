@@ -133,6 +133,8 @@ More options for `.env` (all optional):
 | `EXTRA_TOPICS` | off | More ntfy topic URLs (comma-separated, e.g. `https://ntfy.sh/family-printer`): each gets every alert, text only |
 | `ALERT_WEBHOOK` | off | A URL that gets every alert as JSON (`printer`, `title`, `message`, `priority`; `content` too, so a Discord webhook shows it) |
 | `MQTT_URL` | off | `mqtt://user:password@homeassistant.local:1883`: state, progress, time left, temperatures and file go to `printerhub/<printer>/state`, and Home Assistant finds them by itself (MQTT discovery) |
+| `ALERT_PICTURES` | on | `off` sends alerts as text only, without camera pictures |
+| `ALERTS_MIN_PRIORITY` | `1` | Only send alerts at least this important (`4` = failures, pauses, run-outs and offline only; `5` = failures only) |
 | `BED_COOL_C` | `35` | After a print, "bed has cooled" once the bed drops below this (`0` = off) |
 | `STATUS_PORT` | off | A port like `7127`: a read-only status page on your home network at `http://<nas>:7127/`, plus `/status.json`, `/metrics` (Prometheus), `/log`, `/history.csv` and `/snapshot.jpg` (a camera still for Home Assistant's generic camera) |
 

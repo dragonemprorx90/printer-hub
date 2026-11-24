@@ -149,7 +149,9 @@ Future<void> main(List<String> argv) async {
           alertWebhook: webhookUri('@webhook ${env['ALERT_WEBHOOK'] ?? ''}'),
           mqtt: (env['MQTT_URL'] ?? '').startsWith('mqtt://')
               ? MqttStatus(Uri.parse(env['MQTT_URL']!), args['name'] ?? env['PRINTER_NAME'] ?? printer)
-              : null);
+              : null,
+          pictures: env['ALERT_PICTURES'] != 'off',
+          minPriority: (int.tryParse(env['ALERTS_MIN_PRIORITY'] ?? '') ?? 1).clamp(1, 5));
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -310,6 +312,8 @@ class Alerts {
   final List<Uri> extraTopics; // more ntfy topics that get every alert (family)
   final Uri? alertWebhook; // every alert also POSTed here as JSON
   final MqttStatus? mqtt; // status to Home Assistant over MQTT
+  final bool pictures; // ALERT_PICTURES=off: text only, no camera frames
+  final int minPriority; // ALERTS_MIN_PRIORITY: drop alerts below this (1–5)
   DateTime _mqttAt = DateTime(0);
   double? _estimate; // slicer's estimate for the current print
   int? _layer;
@@ -353,7 +357,9 @@ class Alerts {
       this.layerStuck = 30,
       this.extraTopics = const [],
       this.alertWebhook,
-      this.mqtt})
+      this.mqtt,
+      this.pictures = true,
+      this.minPriority = 1})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -365,6 +371,14 @@ class Alerts {
   /// [picture] and a camera, the current frame is attached instead.
   Future<void> send(String title, String message,
       {List<String> tags = const [], int priority = 3, bool picture = false, List<int>? jpeg, String filename = 'printer.jpg'}) async {
+    if (priority < minPriority) {
+      log('Below ALERTS_MIN_PRIORITY: held back "$title"');
+      return;
+    }
+    if (!pictures) {
+      picture = false;
+      jpeg = null;
+    }
     if (priority < 5 && inQuietHours(quiet, DateTime.now().hour)) {
       log('Quiet hours: held back "$title"');
       return;
