@@ -1264,13 +1264,24 @@ class _PrinterDialogState extends State<PrinterDialog> {
             _field(_cam, 'Camera URL (optional)', hint: 'Leave empty to auto-detect'),
             _field(_relay, 'Remote access code (optional)',
                 hint: 'PHB1:… from your home bridge, for use away from home',
-                suffix: canScan
-                    ? IconButton(
-                        tooltip: 'Scan QR code',
-                        icon: const Icon(Icons.qr_code_scanner_rounded),
-                        onPressed: _scanRelay,
-                      )
-                    : null),
+                suffix: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    tooltip: 'Paste',
+                    icon: const Icon(Icons.content_paste_rounded),
+                    onPressed: () async {
+                      final t = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim() ?? '';
+                      if (!mounted) return;
+                      if (!t.startsWith('PHB')) return toast(context, 'The clipboard has no remote access code (it starts with PHB1:)', error: true);
+                      setState(() => _relay.text = t);
+                    },
+                  ),
+                  if (canScan)
+                    IconButton(
+                      tooltip: 'Scan QR code',
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      onPressed: _scanRelay,
+                    ),
+                ])),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: DropdownButtonFormField<Connection>(
