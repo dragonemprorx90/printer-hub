@@ -125,6 +125,21 @@ class _WorkshopPageState extends State<WorkshopPage> {
         ]),
       ),
       Panel(
+        title: 'This month',
+        icon: Icons.compare_arrows_rounded,
+        child: Builder(builder: (_) {
+          final (n, h, kg) = monthTotals(jobs);
+          final (n0, h0, kg0) = monthTotals(jobs, offset: 1);
+          String d(num a, num b, String unit, [int dp = 0]) =>
+              '${a.toStringAsFixed(dp)}$unit${b == 0 ? '' : ' (${a >= b ? '+' : ''}${(a - b).toStringAsFixed(dp)} vs last month)'}';
+          return Column(children: [
+            _row('Prints', d(n, n0, '')),
+            _row('Print hours', d(h, h0, ' h')),
+            _row('Filament', d(kg, kg0, ' kg', 2)),
+          ]);
+        }),
+      ),
+      Panel(
         title: 'Records',
         icon: Icons.emoji_events_outlined,
         child: Column(children: [
@@ -181,6 +196,14 @@ class _WorkshopPageState extends State<WorkshopPage> {
           for (final (m, f, e) in costs.take(6))
             _row('$m  (filament $cur${f.toStringAsFixed(2)} + power $cur${e.toStringAsFixed(2)})',
                 '$cur${(f + e).toStringAsFixed(2)}'),
+        ]),
+      ),
+      Panel(
+        title: 'Filament cost by material',
+        icon: Icons.pie_chart_outline_rounded,
+        child: Column(children: [
+          for (final (m, c) in costByMaterial(jobs, settings.number('filamentPrice', 20)).take(8))
+            _row(m, '$cur${c.toStringAsFixed(2)}'),
         ]),
       ),
       Panel(

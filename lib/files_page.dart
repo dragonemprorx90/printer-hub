@@ -17,7 +17,7 @@ import 'u1_panels.dart';
 import 'ui.dart';
 import 'workshop_page.dart';
 
-enum _Sort { newest, oldest, name, size, smallest }
+enum _Sort { newest, oldest, name, size, smallest, popular }
 
 const _gcodeExt = ['gcode', 'g', 'gco', '3mf'];
 final _isDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
@@ -258,6 +258,13 @@ class _FilesTabState extends State<FilesTab> {
         list.sort((a, b) => a.modified.compareTo(b.modified));
       case _Sort.smallest:
         list.sort((a, b) => a.size.compareTo(b.size));
+      case _Sort.popular:
+        final jobs = c.lastHistory?.$1 ?? const <PrintJob>[];
+        final n = <String, int>{for (final j in jobs) j.filename: 0};
+        for (final j in jobs) {
+          n[j.filename] = n[j.filename]! + 1;
+        }
+        list.sort((a, b) => (n[b.path] ?? 0).compareTo(n[a.path] ?? 0));
     }
     return list;
   }
@@ -475,6 +482,7 @@ class _FilesTabState extends State<FilesTab> {
             PopupMenuItem(value: _Sort.size, child: Text('Largest first')),
             PopupMenuItem(value: _Sort.oldest, child: Text('Oldest first')),
             PopupMenuItem(value: _Sort.smallest, child: Text('Smallest first')),
+            PopupMenuItem(value: _Sort.popular, child: Text('Printed most')),
           ],
         ),
         IconButton(

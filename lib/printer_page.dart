@@ -545,6 +545,15 @@ class _JobPanel extends StatelessWidget {
                           'Check the printer is on and on the same network'),
                   style: TextStyle(color: C.muted, fontSize: 13),
                 ),
+                if (s.online)
+                  if (client.lastHistory?.$1 case final jobs? when jobs.isNotEmpty)
+                    Text(
+                      'Last print: ${jobs.first.filename.split('/').last} · ${jobs.first.status}'
+                      '${lastPrintEnd(jobs) == null ? '' : ' · idle for ${fmtDuration(DateTime.now().difference(lastPrintEnd(jobs)!).inSeconds)}'}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.caption.copyWith(color: C.muted),
+                    ),
               ]),
             ),
             if (s.online)

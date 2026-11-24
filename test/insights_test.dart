@@ -108,6 +108,15 @@ void main() {
     expect(mostPrinted(jobs).first, ('f4.gcode', 2));
   });
 
+  test('month totals, cost by material, last end', () {
+    final t = monthTotals(jobs, now: DateTime(2026, 11, 20));
+    expect(t.$1, 6);
+    expect(t.$2, 13);
+    expect(monthTotals(jobs, offset: 1, now: DateTime(2026, 11, 20)).$1, 0);
+    expect(costByMaterial(jobs, 20).first.$1, 'PLA');
+    expect(lastPrintEnd(jobs), DateTime(2026, 11, 5, 13));
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

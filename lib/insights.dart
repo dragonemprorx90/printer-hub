@@ -82,6 +82,38 @@ List<(String, int)> mostPrinted(Iterable<PrintJob> jobs, {int top = 10}) {
   return ([for (final e in m.entries) (e.key, e.value)]..sort((a, b) => b.$2.compareTo(a.$2))).take(top).toList();
 }
 
+/// (prints, hours, kg) for the calendar month [offset] months back (0 = this one).
+(int, double, double) monthTotals(Iterable<PrintJob> jobs, {int offset = 0, DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final m = DateTime(n.year, n.month - offset);
+  final mine = [for (final j in jobs) if (j.start.year == m.year && j.start.month == m.month) j];
+  return (
+    mine.length,
+    mine.fold(0.0, (a, j) => a + j.duration) / 3600,
+    mine.fold(0.0, (a, j) => a + gramsFromMm(j.filament)) / 1000,
+  );
+}
+
+/// Filament cost per material at one price per kg, most first.
+List<(String, double)> costByMaterial(Iterable<PrintJob> jobs, double pricePerKg) {
+  final m = <String, double>{};
+  for (final j in jobs) {
+    final k = j.material ?? 'Unknown';
+    m[k] = (m[k] ?? 0) + gramsFromMm(j.filament) / 1000 * pricePerKg;
+  }
+  return [for (final e in m.entries) (e.key, e.value)]..sort((a, b) => b.$2.compareTo(a.$2));
+}
+
+/// When the last print ended (start + duration), or null.
+DateTime? lastPrintEnd(Iterable<PrintJob> jobs) {
+  DateTime? best;
+  for (final j in jobs) {
+    final end = j.start.add(Duration(seconds: j.duration.round()));
+    if (j.status != 'in_progress' && (best == null || end.isAfter(best))) best = end;
+  }
+  return best;
+}
+
 String dayKey(DateTime t) => '${t.year}-${t.month}-${t.day}';
 
 /// Prints per day for the last [days] days, oldest first (calendar heat-map).
