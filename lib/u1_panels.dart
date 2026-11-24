@@ -1437,6 +1437,14 @@ Future<bool> snapmakerPrintSetup(BuildContext context, MoonrakerClient c, String
   ];
   final needs = toolNeeds(meta, lanes);
   final heads = defaultHeads(needs, lanes, await c.extruderMap().catchError((_) => <int>[]));
+  // The heads you picked last time for this file, where they still hold filament.
+  final remembered = jsonDecode(settings.text('u1heads.${c.host}.$file', '{}')) as Map;
+  for (final e in remembered.entries) {
+    final tool = int.tryParse('${e.key}'), head = e.value is int ? e.value as int : null;
+    if (tool != null && head != null && heads.containsKey(tool) && lanes.any((l) => laneHead(l) == head && !l.empty)) {
+      heads[tool] = head;
+    }
+  }
   var bed = settings.flag('u1.bedLevel', true), flow = settings.flag('u1.flow', false), lapse = settings.flag('u1.timelapse', false);
   if (!context.mounted) return false;
   final ok = await showDialog<bool>(
@@ -1537,6 +1545,7 @@ Future<bool> snapmakerPrintSetup(BuildContext context, MoonrakerClient c, String
     ..setFlag('u1.timelapse', lapse);
   var started = false;
   await run(context, () async {
+    settings.setText('u1heads.${c.host}.$file', jsonEncode({for (final e in heads.entries) '${e.key}': e.value}));
     await c.startSnapmakerPrint(file, heads, bedLevel: bed, flowCalibrate: flow, timelapse: lapse);
     started = true;
   }, done: 'Print started');
