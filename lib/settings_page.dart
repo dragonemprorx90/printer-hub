@@ -16,6 +16,7 @@ import 'scan.dart';
 import 'settings.dart';
 import 'ui.dart';
 import 'update.dart';
+import 'whats_new.dart';
 
 const _shareTag = 'PH1:';
 
@@ -587,6 +588,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 8, children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.new_releases_outlined, size: 16),
+                    label: const Text("What's new"),
+                    onPressed: () => showAllNotes(context),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.tour_outlined, size: 16),
+                    label: const Text('Welcome tour'),
+                    onPressed: () => showWelcome(context),
+                  ),
                   for (final (label, icon, url) in [
                     ('Setup guide', Icons.menu_book_outlined, 'https://github.com/$kUpdateRepo/blob/main/docs/SETUP.md'),
                     ('Changelog', Icons.history_rounded, 'https://github.com/$kUpdateRepo/blob/main/CHANGELOG.md'),

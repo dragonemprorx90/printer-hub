@@ -245,6 +245,35 @@ Future<void> showWhatsNewIfUpdated(BuildContext context, {required bool freshIns
   );
 }
 
+/// Every release's notes, newest first (Settings → About).
+void showAllNotes(BuildContext context) => Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text("What's new")),
+          body: ListView(padding: const EdgeInsets.all(16), children: [
+            for (final (v, items) in kWhatsNew) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Text(v, style: T.title),
+              ),
+              for (final i in items)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('•  ', style: TextStyle(color: C.accent)),
+                    Expanded(child: Text(i)),
+                  ]),
+                ),
+            ],
+          ]),
+        ),
+      ),
+    );
+
+/// The welcome tour again.
+Future<void> showWelcome(BuildContext context) => _welcome(context);
+
 const _tips = [
   (Icons.add_circle_outline_rounded, 'Add a printer', 'Tap + and enter its IP. Printers on your network are found for you.'),
   (Icons.public_rounded, 'From anywhere', 'Run the home bridge on a NAS or Pi and paste its remote access code (or scan its QR).'),

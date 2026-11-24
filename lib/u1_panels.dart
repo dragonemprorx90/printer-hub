@@ -1049,6 +1049,19 @@ class _RulesPanelState extends State<RulesPanel> {
     setState(() => _rules = widget.client.rules());
   }
 
+  /// Does the rule's action once, now, from the app (asks first). The bridge-only
+  /// actions (pictures, alerts, webhooks, drying) aren't run from here.
+  Future<void> _runNow(Map<String, dynamic> r) async {
+    final g = '${r['do'] ?? ''}'.trim();
+    if (g.isEmpty || g.startsWith('@')) {
+      return toast(context, 'That one runs on your home bridge only. Use Test to see what it does.');
+    }
+    if (!await confirm(context, 'Run "${r['label'] ?? g}" now?', message: 'Sends $g to the printer.', action: 'Run') || !mounted) {
+      return;
+    }
+    await run(context, () => widget.client.gcode(g), done: 'Done');
+  }
+
   /// Dry run: says what the rule would do. Nothing is sent to the printer.
   void _test(Map<String, dynamic> r) => showDialog<void>(
         context: context,
@@ -1154,6 +1167,11 @@ class _RulesPanelState extends State<RulesPanel> {
                   subtitle: Text('Long-press to change when it may run', style: T.caption.copyWith(color: C.muted)),
                   onLongPress: () => _window(rules, i),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: 'Run it now',
+                      icon: const Icon(Icons.play_circle_outline_rounded),
+                      onPressed: () => _runNow(r),
+                    ),
                     IconButton(
                       tooltip: 'Test (nothing is sent)',
                       icon: const Icon(Icons.science_outlined),
