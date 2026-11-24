@@ -488,6 +488,11 @@ class _JobPanel extends StatelessWidget {
   const _JobPanel(
       {required this.s, required this.client, required this.onBrowseFiles, required this.name});
 
+  /// Filament (at this job's material price) plus electricity.
+  double _cost(double grams, double secs) =>
+      grams / 1000 * settings.pricePerKg('${s.jobMeta['filament_type'] ?? ''}') +
+      secs / 3600 * settings.number('printerWatts', 350) / 1000 * settings.number('kwhPrice', 0.30);
+
   void _objects(BuildContext context) => showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -628,8 +633,8 @@ class _JobPanel extends StatelessWidget {
                 if (active)
                   StatTile(
                       label: 'Cost so far',
-                      value: '${settings.text('currency', r'$')}${(gramsFromMm(s.filamentUsed) / 1000 * settings.pricePerKg('${s.jobMeta['filament_type'] ?? ''}') + s.printDuration / 3600 * settings.number('printerWatts', 350) / 1000 * settings.number('kwhPrice', 0.30)).toStringAsFixed(2)}'
-                          '${s.jobMeta['filament_weight_total'] is num && s.jobMeta['estimated_time'] is num ? ' of ${(((s.jobMeta['filament_weight_total'] as num) / 1000 * settings.pricePerKg('${s.jobMeta['filament_type'] ?? ''}')) + (s.jobMeta['estimated_time'] as num) / 3600 * settings.number('printerWatts', 350) / 1000 * settings.number('kwhPrice', 0.30)).toStringAsFixed(2)}' : ''}'),
+                      value: '${settings.text('currency', r'$')}${_cost(gramsFromMm(s.filamentUsed), s.printDuration).toStringAsFixed(2)}'
+                          '${s.jobMeta['filament_weight_total'] is num && s.jobMeta['estimated_time'] is num ? ' of ${_cost((s.jobMeta['filament_weight_total'] as num).toDouble(), (s.jobMeta['estimated_time'] as num).toDouble()).toStringAsFixed(2)}' : ''}'),
                 if (active && s.liveSpeed != null)
                   StatTile(label: 'Speed now', value: '${s.liveSpeed!.round()} mm/s'),
                 if (active && (s.liveFlow ?? 0) > 0.1)
