@@ -1464,7 +1464,10 @@ Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts
           'h1{font-size:20px}</style><h1>Printer Hub bridge ${esc(kBridgeVersion)}</h1><table>'
           '${[for (final e in st.entries) if (e.key != 'counters') '<tr><td>${esc(e.key)}<td>${esc(e.value)}'].join()}'
           '${[for (final e in (a?.counters ?? const <String, int>{}).entries) '<tr><td>${esc(e.key)}<td>${esc(e.value)}'].join()}'
-          '</table>');
+          '</table>'
+          '${camera == null ? '' : '<p><img src="/snapshot.jpg" style="max-width:100%;border-radius:12px" alt="camera"></p>'}'
+          '<p><a style="color:#2ee6a6" href="/history.csv">history.csv</a> · <a style="color:#2ee6a6" href="/metrics">metrics</a> · '
+          '<a style="color:#2ee6a6" href="/status.json">status.json</a> · <a style="color:#2ee6a6" href="/log">log</a></p>');
     } else {
       res.statusCode = HttpStatus.notFound;
     }
