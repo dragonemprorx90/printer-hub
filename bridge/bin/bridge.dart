@@ -364,7 +364,7 @@ class Alerts {
   /// ntfy's JSON publish endpoint takes UTF-8 titles (headers can't). With
   /// [picture] and a camera, the current frame is attached instead.
   Future<void> send(String title, String message,
-      {List<String> tags = const [], int priority = 3, bool picture = false, List<int>? jpeg}) async {
+      {List<String> tags = const [], int priority = 3, bool picture = false, List<int>? jpeg, String filename = 'printer.jpg'}) async {
     if (priority < 5 && inQuietHours(quiet, DateTime.now().hour)) {
       log('Quiet hours: held back "$title"');
       return;
@@ -386,7 +386,7 @@ class Alerts {
         final r = await _client
             .put(topic,
                 headers: {
-                  'Filename': 'printer.jpg',
+                  'Filename': filename,
                   'Title': _h(title),
                   'Message': _h(message),
                   'Tags': tags.join(','),
@@ -677,7 +677,9 @@ class Alerts {
           counters['prints_started'] = counters['prints_started']! + 1;
           unawaited(_queueSize().then((n) => _fromQueue = _queuedIdle > n));
           _failure.reset();
-          await send('$_title: print started', await _startedText(file), tags: ['printer'], priority: 2);
+          final thumb = await _thumbnail('${_stats['filename'] ?? ''}');
+          await send('$_title: print started', await _startedText(file),
+              tags: ['printer'], priority: 2, jpeg: thumb, filename: 'model.png');
           if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
       }
       if (state != 'printing' && state != 'paused' && _filterOn) {
@@ -878,6 +880,21 @@ extension on Alerts {
       return ((jsonDecode(r.body)['result']?['queued_jobs'] as List?) ?? const []).length;
     } catch (_) {
       return 0; // no job queue on this printer
+    }
+  }
+
+  /// The biggest thumbnail the slicer put in the file (PNG), or null.
+  Future<List<int>?> _thumbnail(String path) async {
+    try {
+      final r = await _client.get(Uri.parse('http://$host:$port/server/files/metadata?filename=${Uri.encodeQueryComponent(path)}'));
+      final thumbs = (jsonDecode(r.body)['result']?['thumbnails'] as List?) ?? const [];
+      if (thumbs.isEmpty) return null;
+      final best = thumbs.reduce((a, b) => ((a['width'] as num?) ?? 0) >= ((b['width'] as num?) ?? 0) ? a : b);
+      final dir = path.contains('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '';
+      final img = await _client.get(Uri.parse('http://$host:$port/server/files/gcodes/${Uri.encodeFull('$dir${best['relative_path']}')}'));
+      return img.statusCode == 200 && img.bodyBytes.length > 100 ? img.bodyBytes : null;
+    } catch (_) {
+      return null;
     }
   }
 
