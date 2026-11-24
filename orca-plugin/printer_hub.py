@@ -88,7 +88,7 @@ PAGE = r"""
   <h3>Printer Hub</h3>
   <span>
     <label><input type="checkbox" id="sort"> problems first</label>
-    <label><input type="checkbox" id="compact"> compact</label>
+    <label><input type="checkbox" id="compact"> compact</label> <label><input type="checkbox" id="busy"> busy only</label>
     <select id="every" title="Refresh">
       <option value="3000">3 s</option><option value="5000" selected>5 s</option><option value="10000">10 s</option>
     </select>
@@ -295,7 +295,11 @@ PAGE = r"""
     if (p.heater) h += '<div class="' + (p.heater.fault ? "err" : "muted") + ' detail">Heater: ' + (p.heater.fault ? "fault " + esc(p.heater.faultReason || "") : esc(p.heater.mode || "off")) + '</div>';
     if (active) h += '<div class="muted">' + esc((p.file || "").split("/").pop()) + '</div><div class="muted">' +
       (p.layer ? "Layer " + p.layer + (p.layers ? "/" + p.layers : "") + " · " : "") + Math.round(p.progress * 100) + "%" +
-      (p.eta ? " · " + dur(p.eta) + " left, done " + clock(p.eta) : "") + '</div><div class="bar"><div style="width:' + Math.round(p.progress * 100) + '%"></div></div>';
+      (p.eta ? " · " + dur(p.eta) + " left, done " + clock(p.eta) : "") + '</div>' +
+      '<div class="muted detail">' + [p.grams ? p.grams + " g so far" : "", p.liveSpeed ? Math.round(p.liveSpeed) + " mm/s" : "",
+        p.pace != null && Math.abs(p.pace) >= 120 ? Math.round(Math.abs(p.pace) / 60) + " min " + (p.pace > 0 ? "slower" : "faster") + " than Orca's estimate" : ""]
+        .filter(Boolean).join(" · ") + '</div>' +
+      '<div class="bar"><div style="width:' + Math.round(p.progress * 100) + '%"></div></div>';
     if (p.message && p.state === "paused") h += '<div class="warn">' + esc(p.message) + '</div>';
     if (o.cam) {
       var snap = HUB + '/hub/snapshot?printer=' + encodeURIComponent(p.slug) + '&t=' + Date.now();
@@ -312,6 +316,7 @@ PAGE = r"""
       (p.state === "printing" ? '<button onclick="ph.act(' + slug + ',\'pause\')">Pause</button>' : '') +
       (p.state === "paused" ? '<button onclick="ph.act(' + slug + ',\'resume\')">Resume</button>' : '') +
       (active ? '<button class="danger" onclick="ph.act(' + slug + ',\'cancel\',{},' + q("Cancel the print on " + p.name + "?") + ')">Cancel</button>' : '') +
+      (active ? '<button onclick="ph.copy(' + q(p.name + ": " + (p.file || "").split("/").pop() + " is " + Math.round(p.progress * 100) + "% done" + (p.eta ? ", done about " + clock(p.eta) : "")) + ')">Copy status</button>' : '') +
       '<button onclick="ph.toggle(' + slug + ',\'controls\')">Controls</button>' +
       '<button onclick="ph.toggle(' + slug + ',\'history\')">History</button>' +
       '<button onclick="ph.toggle(' + slug + ',\'spools\')">Spools</button>' +
@@ -335,6 +340,8 @@ PAGE = r"""
     var a = document.activeElement;
     if (!force && a && (a.tagName === "INPUT" || a.tagName === "SELECT") && list.contains(a)) return;
     var ps = last.printers.slice();
+    if (document.getElementById("busy").checked)
+      ps = ps.filter(function (p) { return p.state === "printing" || p.state === "paused" || p.state === "error"; });
     if (document.getElementById("sort").checked)
       ps.sort(function (x, y) { function r(p) { return !p.online || p.state === "error" || p.state === "paused" ? 0 : p.state === "printing" ? 1 : 2; } return r(x) - r(y); });
     list.className = document.getElementById("compact").checked ? "compact" : "";
@@ -353,7 +360,7 @@ PAGE = r"""
     st.textContent = "Updated " + new Date().toLocaleTimeString();
   });
 
-  ["sort", "compact"].forEach(function (id) {
+  ["sort", "compact", "busy"].forEach(function (id) {
     var e = document.getElementById(id); e.checked = store("ph." + id) === "1";
     e.addEventListener("change", function () { store("ph." + id, e.checked ? "1" : "0"); render(true); });
   });
