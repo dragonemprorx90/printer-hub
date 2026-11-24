@@ -5,6 +5,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'gcode.dart';
 import 'models_page.dart';
@@ -84,6 +85,22 @@ class _FilesTabState extends State<FilesTab> {
             TextButton(
               onPressed: () => setState(() => _sel.addAll(_visible.map((f) => f.path))),
               child: const Text('Select all'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final t = await askText(context, 'Add tags to ${_sel.length} files', hint: 'e.g. gifts, spare parts', action: 'Add');
+                if (t == null || t.trim().isEmpty || !mounted) return;
+                final add = [for (final x in t.split(',')) if (x.trim().isNotEmpty) x.trim()];
+                for (final p in _sel) {
+                  final k = 'tags.$_favScope.$p';
+                  final have = settings.text(k).split(', ').where((x) => x.isNotEmpty).toSet()..addAll(add);
+                  settings.setText(k, have.join(', '));
+                }
+                toast(context, 'Tagged ${_sel.length} files');
+                setState(_sel.clear);
+              },
+              icon: const Icon(Icons.sell_outlined),
+              label: const Text('Tag'),
             ),
             OutlinedButton.icon(
               onPressed: () async {
@@ -613,6 +630,10 @@ class _FilesTabState extends State<FilesTab> {
                     SizedBox(
                         width: 24,
                         child: Text('${i + 1}.', style: TextStyle(color: C.muted))),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: SizedBox(width: 32, height: 32, child: FittedBox(child: _Thumb(client: c, path: j.filename))),
+                    ),
                     Expanded(
                         child: Text(j.filename.split('/').last,
                             overflow: TextOverflow.ellipsis)),
@@ -1096,6 +1117,14 @@ class _FileSheetState extends State<_FileSheet> {
             Expanded(
               child: Text(f.name,
                   style: T.title),
+            ),
+            IconButton(
+              tooltip: 'Copy the file name',
+              icon: const Icon(Icons.copy_rounded, size: 20),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: f.name));
+                toast(context, 'Name copied');
+              },
             ),
             IconButton(
               tooltip: fav ? 'Remove from favourites' : 'Add to favourites',

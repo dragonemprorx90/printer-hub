@@ -473,17 +473,24 @@ class _JobTile extends StatelessWidget {
           style: TextStyle(color: C.muted, fontSize: 12),
         ),
         trailing: job.exists
-            ? IconButton(
-                tooltip: 'Print again',
-                icon: const Icon(Icons.replay_rounded),
-                onPressed: () async {
-                  if (await confirm(context, 'Print $name again?', action: 'Print') &&
-                      context.mounted && await preflight(context) && context.mounted) {
-                    run(context, () => client.startPrint(job.filename),
-                        done: 'Print started');
-                  }
-                },
-              )
+            ? Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: 'Add to the queue',
+                  icon: const Icon(Icons.queue_rounded),
+                  onPressed: () => run(context, () => client.enqueue(job.filename), done: 'Added to the queue'),
+                ),
+                IconButton(
+                  tooltip: 'Print again',
+                  icon: const Icon(Icons.replay_rounded),
+                  onPressed: () async {
+                    if (await confirm(context, 'Print $name again?', action: 'Print') &&
+                        context.mounted && await preflight(context) && context.mounted) {
+                      run(context, () => client.startPrint(job.filename),
+                          done: 'Print started');
+                    }
+                  },
+                ),
+              ])
             : null,
       ),
     );
