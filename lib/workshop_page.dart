@@ -997,6 +997,19 @@ class _FleetPageState extends State<FleetPage> {
       clientFor(p).queue().then<(Printer, List<QueuedJob>)>((q) => (p, q.$1)).catchError((_) => (p, <QueuedJob>[])),
   ]);
 
+  /// Slicer estimates for queued files, for finish times.
+  final _est = <String, double?>{};
+
+  Future<void> _estimates(Printer p, List<QueuedJob> jobs) async {
+    for (final j in jobs.take(10)) {
+      final k = '${p.key}|${j.filename}';
+      if (_est.containsKey(k)) continue;
+      _est[k] = null;
+      final m = await clientFor(p).metadata(j.filename).catchError((_) => <String, dynamic>{});
+      if (mounted) setState(() => _est[k] = (m['estimated_time'] as num?)?.toDouble());
+    }
+  }
+
   late final Future<List<(Printer, List<PrintJob>?)>> _data = Future.wait([
     for (final p in widget.printers)
       clientFor(p).allHistory().then<(Printer, List<PrintJob>?)>((j) => (p, j)).catchError((_) => (p, null)),
@@ -1037,9 +1050,20 @@ class _FleetPageState extends State<FleetPage> {
                       icon: Icons.queue_rounded,
                       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                         for (final (p, jobs) in qs) ...[
+                          Builder(builder: (_) {
+                            _estimates(p, jobs);
+                            return const SizedBox.shrink();
+                          }),
                           Text('${p.name} · ${jobs.length}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          for (final j in jobs.take(5))
-                            Text('  ${j.filename.split('/').last}', style: T.small.copyWith(color: C.muted), overflow: TextOverflow.ellipsis),
+                          for (final (i, j) in jobs.take(10).indexed)
+                            Builder(builder: (_) {
+                              final st = clientFor(p).status;
+                              final times = queueFinishTimes([for (final x in jobs.take(10)) _est['${p.key}|${x.filename}']],
+                                  from: DateTime.now(), currentLeft: st.state == 'printing' ? (st.eta ?? 0) : 0);
+                              final known = _est['${p.key}|${j.filename}'] != null;
+                              return Text('  ${j.filename.split('/').last}${known ? ' · done ${fmtTime(times[i])}' : ''}',
+                                  style: T.small.copyWith(color: C.muted), overflow: TextOverflow.ellipsis);
+                            }),
                           const SizedBox(height: 8),
                         ],
                       ]),
