@@ -179,6 +179,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
           if ([for (final j in jobs) settings.number('rating.$_k.${jobKey(j)}', 0)].where((x) => x > 0).toList()
               case final rs when rs.isNotEmpty)
             _row('Your rating (${rs.length} rated)', '${(rs.reduce((a, b) => a + b) / rs.length).toStringAsFixed(1)} / 5 ★'),
+          if (_bestRated(jobs) case (final m, final r)) _row('Best-rated material', '$m · ${r.toStringAsFixed(1)} ★'),
           if (estimateRatio(jobs) case final r?)
             _row('Slicer estimates', r >= 1 ? '${((r - 1) * 100).round()}% short of real time' : '${((1 - r) * 100).round()}% longer than real time'),
           _row('Current run', '${r.currentStreak}', color: r.currentStreak > 0 ? C.ink(C.accent) : null),
@@ -396,6 +397,18 @@ class _WorkshopPageState extends State<WorkshopPage> {
     } catch (e) {
       if (mounted) toast(context, 'Could not save: $e', error: true);
     }
+  }
+
+  /// The material whose prints you rated highest (two ratings or more).
+  (String, double)? _bestRated(List<PrintJob> jobs) {
+    final by = <String, List<double>>{};
+    for (final j in jobs) {
+      final r = settings.number('rating.$_k.${jobKey(j)}', 0);
+      if (r > 0 && j.material != null) by.putIfAbsent(j.material!, () => []).add(r);
+    }
+    final ok = [for (final e in by.entries) if (e.value.length >= 2) (e.key, e.value.reduce((a, b) => a + b) / e.value.length)];
+    if (ok.isEmpty) return null;
+    return ok.reduce((a, b) => b.$2 > a.$2 ? b : a);
   }
 
   // ------------------------------------------------------------ maintenance
