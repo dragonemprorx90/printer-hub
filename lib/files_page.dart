@@ -1348,6 +1348,12 @@ class _FileSheetState extends State<_FileSheet> {
                 if (fileRecord(c.lastHistory?.$1 ?? const [], f.path) case (final n, final ok, final avg) when n > 0) ...[
                   StatTile(label: 'Printed before', value: '$n× ($ok finished)'),
                   if (avg != null) StatTile(label: 'Real time', value: fmtDuration(avg)),
+                  if ([
+                    for (final j in c.lastHistory?.$1 ?? const <PrintJob>[])
+                      if (j.filename == f.path) settings.number('rating.${c.host}:${c.port}.${jobKey(j)}', 0),
+                  ].where((x) => x > 0).toList()
+                      case final rs when rs.isNotEmpty)
+                    StatTile(label: 'Your rating', value: '${(rs.reduce((a, b) => a + b) / rs.length).toStringAsFixed(1)} ★'),
                 ],
                 FilamentCheck(meta: m, client: c),
                 if (tempWarning('${m['filament_type'] ?? ''}'.split(';').first,
