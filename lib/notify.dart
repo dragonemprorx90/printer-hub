@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -161,9 +162,15 @@ void watchPrinter(Printer p, MoonrakerClient c) {
         for (final q in const [25, 50, 75]) if (s.progress * 100 >= q) 'q$q',
       };
     }
-    if (state == 'printing' && settings.flag('notifyQuarters', false)) {
+    final voiceOver = WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.accessibleNavigation;
+    if (state == 'printing' && (settings.flag('notifyQuarters', false) || voiceOver)) {
       for (final q in const [25, 50, 75]) {
-        if (s.progress * 100 >= q && sent.add('q$q')) _say(p.key, '${p.name}: $q% done', file);
+        if (s.progress * 100 >= q && sent.add('q$q')) {
+          // VoiceOver users hear it while the app is open, even without the alert.
+          // ignore: deprecated_member_use
+          if (voiceOver) SemanticsService.announce('${p.name}: $q percent done', TextDirection.ltr);
+          if (settings.flag('notifyQuarters', false)) _say(p.key, '${p.name}: $q% done', file);
+        }
       }
     }
     for (final m in milestones(state: state, layer: s.currentLayer, eta: s.eta, sent: sent)) {
