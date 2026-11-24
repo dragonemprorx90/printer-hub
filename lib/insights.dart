@@ -291,6 +291,15 @@ List<(String, double)> maintenanceTemplate(String printerName) {
   return [...common, ('Replace the PTFE tube', 300.0)];
 }
 
+/// Print hours per day over the last 30 days.
+double hoursPerDay(Iterable<PrintJob> jobs, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  return jobs.where((j) => n.difference(j.start).inDays < 30).fold(0.0, (a, j) => a + j.duration / 3600) / 30;
+}
+
+/// Days until [hoursLeft] more print hours at your recent pace, or null.
+double? daysUntil(double hoursLeft, double perDay) => perDay <= 0 ? null : (hoursLeft <= 0 ? 0 : hoursLeft / perDay);
+
 /// Tasks due (used >= every), from maintenance items as saved by the Tools tab.
 List<String> dueTasks(List<Map<String, dynamic>> items, double hours) => [
       for (final m in items)

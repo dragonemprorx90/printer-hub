@@ -283,6 +283,12 @@ class _WorkshopPageState extends State<WorkshopPage> {
     final jobs = _jobs!;
     final hours = jobs.fold(0.0, (a, j) => a + j.duration) / 3600;
     final due = dueTasks(settings.jsonList(_maintKey), hours);
+    final perDay = hoursPerDay(jobs);
+    final upcoming = [
+      for (final m in settings.jsonList(_maintKey))
+        if ((m['hours'] as num) > 0)
+          ('${m['name']}', daysUntil((m['hours'] as num) - (hours - (m['since'] as num)), perDay)),
+    ]..sort((a, b) => (a.$2 ?? 1e9).compareTo(b.$2 ?? 1e9));
     final nozzleSince = DateTime.fromMillisecondsSinceEpoch(settings.number('nozzleSince.$_k', 0).toInt());
     final wear = nozzleHours(jobs, nozzleSince);
     final nozzleLife = settings.number('nozzleLife', 500);
@@ -293,6 +299,17 @@ class _WorkshopPageState extends State<WorkshopPage> {
         child: due.isEmpty
             ? Hint('Nothing due. Reminders live in Tools → Maintenance.')
             : Column(children: [for (final d in due) _row(d, 'due', color: C.ink(C.warn))]),
+      ),
+      Panel(
+        title: 'Coming up',
+        icon: Icons.event_outlined,
+        child: perDay <= 0
+            ? Hint('Shows when each reminder falls due once you have printed in the last 30 days.')
+            : Column(children: [
+                for (final (name, d) in upcoming.take(6))
+                  _row(name, d == null ? '—' : d < 1 ? 'now' : 'in about ${d.round()} days'),
+                _row('Your pace', '${perDay.toStringAsFixed(1)} print hours a day'),
+              ]),
       ),
       Panel(
         title: 'Ready-made tasks',
@@ -341,6 +358,11 @@ class _WorkshopPageState extends State<WorkshopPage> {
               color: wear >= nozzleLife ? C.danger : C.accent,
             ),
           ),
+          if (daysUntil(nozzleLife - wear, perDay) case final d? when wear < nozzleLife)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('At your pace, about ${d.round()} days left on this nozzle.', style: T.small.copyWith(color: C.muted)),
+            ),
           if (nozzleSince.millisecondsSinceEpoch == 0)
             Padding(padding: const EdgeInsets.only(top: 8), child: Hint('Counting from the first print. Tap New nozzle when you change it.')),
         ]),

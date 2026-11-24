@@ -1126,7 +1126,18 @@ class _FileSheetState extends State<_FileSheet> {
                 future: Thumbs.of(c, f.path),
                 builder: (_, snap) => snap.data == null
                     ? Center(child: Icon(Icons.image_not_supported_outlined, color: C.muted))
-                    : Image.memory(snap.data!, fit: BoxFit.contain),
+                    : GestureDetector(
+                        // Tap for a big picture, pinch to zoom.
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => Scaffold(
+                                      appBar: AppBar(title: Text(f.name)),
+                                      body: InteractiveViewer(
+                                          maxScale: 6, child: Center(child: Image.memory(snap.data!, fit: BoxFit.contain))),
+                                    ))),
+                        child: Image.memory(snap.data!, fit: BoxFit.contain),
+                      ),
               ),
             ),
           ),

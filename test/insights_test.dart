@@ -133,6 +133,14 @@ void main() {
     expect(recentSuccess([job('error', 9), job('completed', 8)], n: 1), 0);
   });
 
+  test('pace of print hours', () {
+    final use = [job('completed', 10, h: 30)];
+    expect(hoursPerDay(use, now: DateTime(2026, 11, 20)), 1);
+    expect(daysUntil(10, 1), 10);
+    expect(daysUntil(-1, 1), 0);
+    expect(daysUntil(5, 0), isNull);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

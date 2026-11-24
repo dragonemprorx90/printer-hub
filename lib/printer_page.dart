@@ -603,6 +603,10 @@ class _JobPanel extends StatelessWidget {
               const SizedBox(height: 14),
               Wrap(spacing: 24, runSpacing: 12, children: [
                 StatTile(label: 'Elapsed', value: fmtDuration(s.printDuration)),
+                if (active)
+                  StatTile(
+                      label: 'Started',
+                      value: fmtTime(DateTime.now().subtract(Duration(seconds: ((s.raw['print_stats']?['total_duration'] as num?) ?? s.printDuration).round())))),
                 StatTile(label: 'Remaining', value: fmtDuration(eta)),
                 StatTile(
                   label: 'Done at',
