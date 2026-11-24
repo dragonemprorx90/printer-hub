@@ -290,6 +290,36 @@ class _ControlTabState extends State<ControlTab> {
             display: pct,
             onCommit: (v) => run(context, () => c.setFan(f, v)),
           ),
+        if (s.fans.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Wrap(spacing: 8, children: [
+              Text('All fans', style: T.small.copyWith(color: C.muted)),
+              for (final v in const [0.0, 0.5, 1.0])
+                ActionChip(
+                  label: Text(v == 0 ? 'Off' : '${(v * 100).round()}%'),
+                  onPressed: () => run(context, () async {
+                    for (final f in s.fans) {
+                      await c.setFan(f, v);
+                    }
+                  }),
+                ),
+            ]),
+          ),
+        Wrap(spacing: 8, children: [
+          Text('Speed', style: T.small.copyWith(color: C.muted)),
+          for (final (label, pct) in const [('Quiet 75%', 75), ('Normal', 100), ('Fast 125%', 125)])
+            ActionChip(label: Text(label), onPressed: () => run(context, () => c.setSpeed(pct))),
+          if ((s.speedFactor - 1).abs() > 0.01 || (s.flowFactor - 1).abs() > 0.01)
+            ActionChip(
+              avatar: const Icon(Icons.restart_alt_rounded, size: 16),
+              label: const Text('Reset speed and flow'),
+              onPressed: () => run(context, () async {
+                await c.setSpeed(100);
+                await c.setFlow(100);
+              }),
+            ),
+        ]),
         _SliderRow(
           key: const ValueKey('speed'),
           label: 'Speed',

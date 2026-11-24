@@ -540,6 +540,12 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
             child: spools.isEmpty
                 ? Text('No spools yet. Add them in Spoolman.', style: TextStyle(color: C.muted))
                 : Column(children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                          [for (final (m, g, n) in inventory(spools)) '$m ${(g / 1000).toStringAsFixed(1)} kg ($n)'].join(' · '),
+                          style: T.small.copyWith(color: C.muted)),
+                    ),
                     for (final sp in spools)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -551,9 +557,12 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
                             style: TextStyle(fontWeight: sp.id == active ? FontWeight.w800 : null)),
                         subtitle: Text([
                           sp.material,
+                          if (sp.color != null) colorName(sp.color!),
                           if (sp.remaining != null) '${sp.remaining!.round()} g left',
+                          if (pricePerGram(sp) case final g?) '${settings.text('currency', r'$')}${g.toStringAsFixed(3)}/g',
                           if (sp.id == active) 'active',
-                        ].where((x) => x.isNotEmpty).join(' · ')),
+                        ].where((x) => x.isNotEmpty).join(' · '),
+                            style: TextStyle(color: (sp.remaining ?? 1e9) < 100 ? C.ink(C.warn) : null)),
                         onTap: () => _pick(sp, active),
                       ),
                   ]),

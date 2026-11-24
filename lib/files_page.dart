@@ -478,6 +478,10 @@ class _FilesTabState extends State<FilesTab> {
           ],
         ),
         IconButton(
+            tooltip: settings.flag('filesGrid', false) ? 'Show as a list' : 'Show as a grid',
+            icon: Icon(settings.flag('filesGrid', false) ? Icons.view_list_rounded : Icons.grid_view_rounded),
+            onPressed: () => setState(() => settings.setFlag('filesGrid', !settings.flag('filesGrid', false)))),
+        IconButton(
             tooltip: 'Tidy up',
             icon: const Icon(Icons.cleaning_services_outlined),
             onPressed: _tidy),
@@ -620,6 +624,41 @@ class _FilesTabState extends State<FilesTab> {
                         ),
                 ),
               ])
+            : settings.flag('filesGrid', false) && dirs.isEmpty
+            ? GridView.builder(
+                key: ValueKey('grid $_path'),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 200, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 0.8),
+                itemCount: files.length,
+                itemBuilder: (_, i) {
+                  final f = files[i];
+                  return Reveal(
+                    index: i,
+                    child: Tile(
+                      onTap: () => _sel.isEmpty ? _openFile(f) : _toggleSel(f.path),
+                      onLongPress: () => _toggleSel(f.path),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Expanded(
+                          child: Container(
+                            color: _sel.contains(f.path) ? C.accent.withValues(alpha: 0.2) : C.surfaceHi,
+                            child: FutureBuilder<Uint8List?>(
+                              future: Thumbs.of(c, f.path),
+                              builder: (_, snap) => snap.data == null
+                                  ? Icon(Icons.description_outlined, color: C.accent, size: 40)
+                                  : Image.memory(snap.data!, fit: BoxFit.contain, gaplessPlayback: true),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: T.small),
+                        ),
+                      ]),
+                    ),
+                  );
+                },
+              )
             : ListView.separated(
                 key: ValueKey(_path), // new folder: rows replay their entrance
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
