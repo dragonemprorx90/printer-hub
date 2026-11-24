@@ -313,7 +313,8 @@ class Alerts {
   double? get bedTemp => _bedTemp;
   double? get chamber => (_chamber['temperature'] as num?)?.toDouble();
   bool _waitBedCool = false; // after a finished print, until the bed is cool
-  int _queued = 0; // jobs in Moonraker's queue at the last print start
+  int _queuedIdle = 0; // jobs in Moonraker's queue while idle (checked each minute)
+  bool _fromQueue = false; // the current print was taken from the queue
   final double bedCool; // °C; "take the print off" below this, 0 = off
   final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
   String? get state => _state;
@@ -609,10 +610,9 @@ class Alerts {
       switch (state) {
         case 'complete':
           _waitBedCool = true;
-          if (_queued > 0) {
+          if (_fromQueue) {
             unawaited(_queueSize().then((n) async {
               if (n == 0) await send('$_title: queue finished', 'Every job in the queue has printed.', tags: ['tada'], priority: 3);
-              _queued = n;
             }));
           }
           await send('$_title: print finished', finishedText(file, _stats),
@@ -639,7 +639,7 @@ class Alerts {
           _layerSince = null;
           _started = DateTime.now();
           counters['prints_started'] = counters['prints_started']! + 1;
-          unawaited(_queueSize().then((n) => _queued = n));
+          unawaited(_queueSize().then((n) => _fromQueue = _queuedIdle > n));
           _failure.reset();
           await send('$_title: print started', await _startedText(file), tags: ['printer'], priority: 2);
           if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
@@ -779,6 +779,7 @@ extension on Alerts {
         _snoozeUntil = r.statusCode == 200 ? ((jsonDecode(r.body)['result']?['value'] as num?)?.toInt() ?? 0) : 0;
       } catch (_) {}
       final now = DateTime.now();
+      if (_state != 'printing' && _state != 'paused') _queuedIdle = await _queueSize();
       if (_state == 'paused' && _pausedAt != null && pauseRepeat > 0) {
         final m = now.difference(_pausedAt!).inMinutes;
         if (m > 0 && m % pauseRepeat == 0) {
