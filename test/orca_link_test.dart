@@ -36,6 +36,11 @@ void main() {
 
     final list = await http.get(Uri.parse('http://127.0.0.1:17126/hub/printers'));
     expect(jsonDecode(list.body), isEmpty);
+
+    // New in 1.29: the panel's "Needs you" list (empty without printers).
+    final att = await http.get(Uri.parse('http://127.0.0.1:17126/hub/attention'));
+    expect(att.statusCode, 200);
+    expect(jsonDecode(att.body), isEmpty);
   });
 
   test('filaments in Orca slot order, U1 lanes by tool', () {

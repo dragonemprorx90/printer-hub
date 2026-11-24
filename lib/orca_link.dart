@@ -462,8 +462,9 @@ class OrcaLink {
             json(404, {'error': 'not found'});
         }
       } else if (path == '/hub/attention') {
-        json(200, attentionItems([
-          for (final p in printers())
+        final ps = printers();
+        json(200, ps.isEmpty ? const [] : attentionItems([
+          for (final p in ps)
             (
               p.name,
               clientFor(p).status,
