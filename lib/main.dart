@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:hub_link/hub_link.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'camera.dart';
 import 'discovery.dart';
 import 'gcode.dart';
 import 'insights.dart';
@@ -466,10 +467,11 @@ class _PrinterListPageState extends State<PrinterListPage> {
                           },
                           itemBuilder: (_, i) {
                             final p = shown[i];
-                            return ReorderableDelayedDragStartListener(
+                            // Drag the handle to reorder (long-press the card opens quick actions).
+                            return Stack(
                               key: ValueKey(p.key),
-                              index: i,
-                              child: Padding(
+                              children: [
+                              Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: Reveal(index: i, child: _PrinterCard(
                                   printer: p,
@@ -482,7 +484,20 @@ class _PrinterListPageState extends State<PrinterListPage> {
                                       prefill: Printer.fromJson({...p.toJson(), 'name': '${p.name} copy'})),
                                 )),
                               ),
-                            );
+                              if (shown.length > 1)
+                                Positioned(
+                                  left: 2,
+                                  top: 0,
+                                  bottom: 12,
+                                  child: ReorderableDragStartListener(
+                                    index: i,
+                                    child: Tooltip(
+                                      message: 'Drag to reorder',
+                                      child: Icon(Icons.drag_indicator_rounded, size: 18, color: C.muted.withValues(alpha: 0.6)),
+                                    ),
+                                  ),
+                                ),
+                            ]);
                           },
                         ),
                       ),
@@ -584,6 +599,7 @@ class _PrinterCard extends StatelessWidget {
         return Tile(
           radius: 20,
           onTap: onOpen,
+          onLongPress: () => _quick(context, client, s),
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Row(children: [
@@ -704,6 +720,60 @@ class _PrinterCard extends StatelessWidget {
       },
     );
   }
+
+  /// Long-press: the things you reach for most, without opening the printer.
+  void _quick(BuildContext context, MoonrakerClient client, PrinterStatus s) => showModalBottomSheet<void>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(title: Text(printer.name, style: T.title), subtitle: Text(fleetSummary([s]))),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Camera'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => CameraFullscreen(client: client, cameraUrl: printer.cameraUrl, title: printer.name)));
+              },
+            ),
+            if (s.led != null)
+              ListTile(
+                leading: Icon(s.led! ? Icons.lightbulb_rounded : Icons.lightbulb_outline_rounded),
+                title: Text(s.led! ? 'Light off' : 'Light on'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  run(context, () => client.setLed(!s.led!));
+                },
+              ),
+            if (s.state == 'printing')
+              ListTile(
+                leading: const Icon(Icons.pause_rounded),
+                title: const Text('Pause'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  run(context, client.pause);
+                },
+              ),
+            if (s.state == 'paused')
+              ListTile(
+                leading: const Icon(Icons.play_arrow_rounded),
+                title: const Text('Resume'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  run(context, client.resume);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.handyman_outlined),
+              title: const Text('Workshop'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => WorkshopPage(client: client, printer: printer)));
+              },
+            ),
+          ]),
+        ),
+      );
 
   Widget _mini(IconData icon, Color color, double t, double target) =>
       Row(mainAxisSize: MainAxisSize.min, children: [
