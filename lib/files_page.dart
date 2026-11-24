@@ -1294,6 +1294,10 @@ class _FileSheetState extends State<_FileSheet> {
               final m = snap.data!;
               return Wrap(spacing: 28, runSpacing: 12, children: [
                 StatTile(label: 'Est. time', value: fmtDuration(m['estimated_time'] as num?)),
+                if ((m['estimated_time'] as num? ?? 0) > 0 && (c.status.etaFactor - 1).abs() > 0.03)
+                  StatTile(
+                      label: 'On this printer',
+                      value: 'about ${fmtDuration((m['estimated_time'] as num) * c.status.etaFactor)}'),
                 if ((m['estimated_time'] as num? ?? 0) > 0)
                   StatTile(
                       label: 'Done if started now',
