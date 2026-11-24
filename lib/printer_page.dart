@@ -84,6 +84,7 @@ class _PrinterPageState extends State<PrinterPage> {
                 final k = 'mute.${widget.printer.key}';
                 if (alertsMuted(widget.printer.key)) {
                   settings.setNumber(k, 0);
+                  settings.setFlag('muteAlways.${widget.printer.key}', false);
                   setState(() {});
                   return toast(context, 'Alerts on');
                 }
@@ -95,10 +96,15 @@ class _PrinterPageState extends State<PrinterPage> {
                           subtitle: Text('Home bridge alerts: Tools → Rules → snooze.')),
                       ListTile(title: const Text('For 1 hour'), onTap: () => Navigator.pop(ctx, 'hour')),
                       ListTile(title: const Text('Until 08:00 tomorrow'), onTap: () => Navigator.pop(ctx, 'tomorrow')),
+                      ListTile(title: const Text('Always (until I turn it back on)'), onTap: () => Navigator.pop(ctx, 'always')),
                     ]),
                   ),
                 );
                 if (pick == null || !mounted) return;
+                if (pick == 'always') {
+                  settings.setFlag('muteAlways.${widget.printer.key}', true);
+                  return setState(() {});
+                }
                 settings.setNumber(k, snoozeUntil(pick).millisecondsSinceEpoch.toDouble());
                 setState(() {});
               },

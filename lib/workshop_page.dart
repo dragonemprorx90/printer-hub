@@ -158,6 +158,23 @@ class _WorkshopPageState extends State<WorkshopPage> {
         ]),
       ),
       Panel(
+        title: 'Last 7 days',
+        icon: Icons.view_day_outlined,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          for (var d = 0; d < 7; d++)
+            Builder(builder: (_) {
+              final day = DateTime.now().subtract(Duration(days: d));
+              final mine = [for (final j in jobs) if (dayKey(j.start) == dayKey(day)) j];
+              return _row(
+                  d == 0 ? 'Today' : d == 1 ? 'Yesterday' : fmtDate(day),
+                  mine.isEmpty
+                      ? '—'
+                      : '${mine.length} · ${fmtDuration(mine.fold<double>(0, (a, j) => a + j.duration))}'
+                          '${mine.any((j) => !jobOk(j) && j.status != 'in_progress') ? ' · ${mine.where((j) => !jobOk(j) && j.status != 'in_progress').length} not finished' : ''}');
+            }),
+        ]),
+      ),
+      Panel(
         title: 'Last 12 weeks',
         icon: Icons.calendar_month_rounded,
         child: _Heatmap(days),
@@ -1004,6 +1021,7 @@ class _CalcTabState extends State<_CalcTab> {
     'gross': 1180, 'empty': 250,
     'h': 50, 'lh2': 0.2,
     'nz': 0.4,
+    'in': 1, 'price': 20, 'kg': 1,
   };
 
   Widget _f(String k, String label, {String suffix = ''}) => Padding(
@@ -1132,6 +1150,25 @@ class _CalcTabState extends State<_CalcTab> {
           _f('Nozzle', 'nz', suffix: 'mm'),
           _answer('Line width to start with', '${_num(v['nz']! * 1.125, 2)} mm'),
           _answer('Layer height range', '${_num(v['nz']! * 0.25, 2)}–${_num(v['nz']! * 0.75, 2)} mm'),
+        ]),
+      ),
+      Panel(
+        title: 'Inches and millimetres',
+        icon: Icons.swap_horiz_rounded,
+        child: Column(children: [
+          _f('Inches', 'in', suffix: 'in'),
+          _answer('Millimetres', '${_num(v['in']! * 25.4, 2)} mm'),
+          _answer('…and that many mm in inches', '${_num(v['in']! / 25.4, 4)} in'),
+        ]),
+      ),
+      Panel(
+        title: 'Price per gram',
+        icon: Icons.payments_outlined,
+        child: Column(children: [
+          _f('Spool price', 'price', suffix: settings.text('currency', r'$')),
+          _f('Spool weight', 'kg', suffix: 'kg'),
+          _answer('Per gram', '${settings.text('currency', r'$')}${_num(v['price']! / (v['kg']! * 1000), 4)}'),
+          _answer('Per kg', '${settings.text('currency', r'$')}${_num(v['price']! / v['kg']!, 2)}'),
         ]),
       ),
     ]);

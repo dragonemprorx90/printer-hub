@@ -257,7 +257,8 @@ void _say(String key, String title, String body, {bool urgent = false}) {
 }
 
 /// Muted with "Mute alerts" on the printer page, until a time.
-bool alertsMuted(String key) => snoozed(settings.number('mute.$key', 0).toInt());
+bool alertsMuted(String key) =>
+    settings.flag('muteAlways.$key', false) || snoozed(settings.number('mute.$key', 0).toInt());
 
 /// Once a day per printer: maintenance that's due and spare parts running low.
 Future<void> _dailyReminders(Printer p, MoonrakerClient c) async {
