@@ -35,6 +35,13 @@ class _WallPageState extends State<WallPage> {
   void initState() {
     super.initState();
     if (_awake) WakelockPlus.enable();
+    // One big printer at a time, next every 15 s (for a TV or a spare tablet).
+    _cycleTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_cycle && mounted) setState(() => _at++);
+    });
+    _clock = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
     // ponytail: re-sort every 10 s rather than listening to every printer.
     _resort = Timer.periodic(const Duration(seconds: 10), (_) {
       if ((_sorted || _busyOnly) && mounted) setState(() {});
@@ -46,12 +53,17 @@ class _WallPageState extends State<WallPage> {
   @override
   void dispose() {
     if (_onTop) keepOnTop(false);
+    _cycleTimer?.cancel();
+    _clock?.cancel();
     _resort?.cancel();
     WakelockPlus.disable();
     super.dispose();
   }
 
   bool get _busyOnly => settings.flag('wallBusyOnly', false);
+  bool get _cycle => settings.flag('wallCycle', false);
+  int _at = 0; // which printer the cycle shows
+  Timer? _cycleTimer, _clock;
   int get _cols => settings.number('wallCols', 0).round(); // 0 = fit the screen
 
   List<Printer> get _order {
@@ -80,7 +92,7 @@ class _WallPageState extends State<WallPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wall'),
+        title: Text('Wall · ${fmtTime(DateTime.now())}'),
         actions: [
           IconButton(
             tooltip: _sorted ? 'Sorted: problems first' : 'Saved order',
@@ -104,6 +116,13 @@ class _WallPageState extends State<WallPage> {
             icon: const Icon(Icons.filter_alt_outlined),
             selectedIcon: Icon(Icons.filter_alt_rounded, color: C.accent),
             onPressed: () => setState(() => settings.setFlag('wallBusyOnly', !_busyOnly)),
+          ),
+          IconButton(
+            tooltip: _cycle ? 'Cycling: one printer at a time' : 'Show one printer at a time, in turn',
+            isSelected: _cycle,
+            icon: const Icon(Icons.slideshow_outlined),
+            selectedIcon: Icon(Icons.slideshow_rounded, color: C.accent),
+            onPressed: () => setState(() => settings.setFlag('wallCycle', !_cycle)),
           ),
           PopupMenuButton<int>(
             tooltip: 'Columns',
@@ -129,6 +148,15 @@ class _WallPageState extends State<WallPage> {
         final cols = _cols > 0 ? _cols : (c.maxWidth / 520).floor().clamp(1, 4);
         final order = _order;
         if (order.isEmpty) return const StateView.empty(Icons.filter_alt_off_outlined, 'No printer is busy right now.');
+        if (_cycle) {
+          final p = order[_at % order.length];
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: AspectRatio(aspectRatio: 16 / 12.5, child: _WallTile(key: ValueKey('cycle ${p.key}'), printer: p)),
+            ),
+          );
+        }
         return GridView.count(
           padding: const EdgeInsets.all(16),
           crossAxisCount: cols,
