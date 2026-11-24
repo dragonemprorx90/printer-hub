@@ -490,6 +490,38 @@ class _PrinterListPageState extends State<PrinterListPage> {
               onPressed: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => WallPage(printers: _printers))),
             ),
+          if (_printers.length > 1)
+            PopupMenuButton<String>(
+              tooltip: 'All printers',
+              icon: const Icon(Icons.more_horiz_rounded),
+              onSelected: (v) async {
+                final cs = [for (final p in _printers) clientFor(p)];
+                if (v == 'lights') {
+                  await run(context, () async {
+                    for (final c in cs.where((c) => c.status.online && c.status.led == true)) {
+                      await c.setLed(false);
+                    }
+                  }, done: 'Lights off');
+                } else if (v == 'pause') {
+                  final busy = cs.where((c) => c.status.online && c.status.state == 'printing').toList();
+                  if (busy.isEmpty) return toast(context, 'Nothing is printing');
+                  if (!await confirm(context, 'Pause ${busy.length} print${busy.length == 1 ? '' : 's'}?',
+                          message: 'Each printer pauses where it is. Resume them from their screens.', action: 'Pause all') ||
+                      !mounted) {
+                    return;
+                  }
+                  await run(context, () async {
+                    for (final c in busy) {
+                      await c.pause();
+                    }
+                  }, done: 'Paused');
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'lights', child: Text('Turn every light off')),
+                PopupMenuItem(value: 'pause', child: Text('Pause every print…')),
+              ],
+            ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
