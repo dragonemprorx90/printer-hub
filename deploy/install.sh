@@ -62,8 +62,11 @@ echo
 for i in 1 2 3 4 5 6 7 8 9 10; do [ -f data/pairing.json ] && break; sleep 1; done
 echo "Running. Pair the app: Edit printer -> Remote access code ->"
 docker compose run --rm bridge --show-code
-echo "Checking what the bridge can reach:"
-docker compose run --rm bridge --check || true
+# Older bridge images don't know --check (they'd just start): ask --help first.
+if docker compose run --rm bridge --help 2>/dev/null | grep -q -- '--check'; then
+  echo "Checking what the bridge can reach:"
+  docker compose run --rm bridge --check || true
+fi
 echo "Logs: cd $DIR && docker compose logs -f bridge"
 case ",$(current COMPOSE_PROFILES)," in
   *,slicer,*) ;;
