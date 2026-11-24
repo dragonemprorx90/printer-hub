@@ -255,6 +255,13 @@ double netGrams(double gross, double emptySpool) => math.max(0, gross - emptySpo
 int layerCount(double height, double layer, {double? first}) =>
     layer <= 0 ? 0 : 1 + ((height - (first ?? layer)) / layer).ceil().clamp(0, 1 << 20);
 
+/// Does a part fit a build volume, either way round on the plate?
+bool fits(List<double> part, List<double> volume) =>
+    part.length >= 3 &&
+    volume.length >= 3 &&
+    part[2] <= volume[2] &&
+    ((part[0] <= volume[0] && part[1] <= volume[1]) || (part[1] <= volume[0] && part[0] <= volume[1]));
+
 // ---------------------------------------------------------------- queue
 
 /// When each queued job will finish, one after another, starting [from]

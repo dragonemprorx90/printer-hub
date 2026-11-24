@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -380,6 +381,14 @@ class PrinterStatus {
   double? get liveFlow {
     final e = (_f('motion_report', 'live_extruder_velocity') as num?)?.toDouble();
     return e == null ? null : e * 2.405; // π × 0.875²
+  }
+
+  /// Print volume (x, y, z in mm) from Klipper's axis limits, or null.
+  List<double>? get buildVolume {
+    final hi = _f('toolhead', 'axis_maximum'), lo = _f('toolhead', 'axis_minimum');
+    if (hi is! List || lo is! List || hi.length < 3 || lo.length < 3) return null;
+    // Negative minimums are off the plate (wipe or purge areas): count from 0.
+    return [for (var i = 0; i < 3; i++) (hi[i] as num).toDouble() - math.max(0.0, (lo[i] as num).toDouble())];
   }
 
   double get speedFactor =>

@@ -190,6 +190,13 @@ void main() {
     expect(layerCount(10, 0.2, first: 0.3), 50);
   });
 
+  test('fits', () {
+    expect(fits([300, 200, 100], [350, 350, 350]), isTrue);
+    expect(fits([300, 200, 100], [270, 270, 270]), isFalse);
+    expect(fits([260, 280, 10], [280, 270, 270]), isTrue); // turned
+    expect(fits([10, 10, 300], [270, 270, 270]), isFalse);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

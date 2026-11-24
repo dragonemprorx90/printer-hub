@@ -1022,6 +1022,7 @@ class _CalcTabState extends State<_CalcTab> {
     'h': 50, 'lh2': 0.2,
     'nz': 0.4,
     'in': 1, 'price': 20, 'kg': 1,
+    'px': 200, 'py': 200, 'pz': 100,
   };
 
   Widget _f(String k, String label, {String suffix = ''}) => Padding(
@@ -1150,6 +1151,22 @@ class _CalcTabState extends State<_CalcTab> {
           _f('Nozzle', 'nz', suffix: 'mm'),
           _answer('Line width to start with', '${_num(v['nz']! * 1.125, 2)} mm'),
           _answer('Layer height range', '${_num(v['nz']! * 0.25, 2)}–${_num(v['nz']! * 0.75, 2)} mm'),
+        ]),
+      ),
+      Panel(
+        title: 'Will it fit?',
+        icon: Icons.aspect_ratio_rounded,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _f('Width (X)', 'px', suffix: 'mm'),
+          _f('Depth (Y)', 'py', suffix: 'mm'),
+          _f('Height (Z)', 'pz', suffix: 'mm'),
+          const SizedBox(height: 8),
+          for (final p in [for (final s in settings.strings('printers')) Printer.fromJson(jsonDecode(s))])
+            if (clientFor(p).status.buildVolume case final vol?)
+              _answer('${p.name} (${vol.map((x) => x.round()).join('×')})',
+                  fits([v['px']!, v['py']!, v['pz']!], vol) ? 'fits' : 'too big')
+            else
+              _answer(p.name, 'size unknown (offline?)'),
         ]),
       ),
       Panel(
