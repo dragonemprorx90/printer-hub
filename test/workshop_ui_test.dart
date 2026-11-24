@@ -51,7 +51,7 @@ void main() {
       home: WorkshopPage(client: _Fake(), printer: const Printer(name: 'K2 Plus', host: 'fake.local')),
     ));
     await t.pumpAndSettle();
-    expect(find.text('Odometer'.toUpperCase()), findsOneWidget);
+    expect(find.textContaining('ODOMETER'), findsOneWidget);
     for (final tab in ['Maintenance', 'Filament', 'Notes', 'Quote', 'Calculators']) {
       await t.ensureVisible(find.text(tab)); // the tab bar scrolls on a phone
       await t.tap(find.text(tab));

@@ -1,6 +1,10 @@
 import 'dart:convert';
 
+import 'dart:ui' as ui;
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'insights.dart';
@@ -128,8 +132,10 @@ class _WorkshopPageState extends State<WorkshopPage> {
         watts: settings.number('printerWatts', 350),
         pricePerKwh: settings.number('kwhPrice', 0.30));
     return [
-      Panel(
-        title: 'Odometer',
+      RepaintBoundary(
+        key: _cardKey,
+        child: Panel(
+        title: '${widget.printer.name} · odometer',
         icon: Icons.speed_rounded,
         child: Wrap(spacing: 24, runSpacing: 12, children: [
           StatTile(label: 'Prints', value: '${jobs.length}'),
@@ -140,7 +146,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
           StatTile(label: 'Avg print', value: fmtDuration(hours * 3600 / jobs.length)),
           StatTile(label: 'Energy', value: '${(hours * settings.number('printerWatts', 350) / 1000).toStringAsFixed(0)} kWh'),
         ]),
-      ),
+      )),
       Panel(
         title: 'This month',
         icon: Icons.compare_arrows_rounded,
@@ -331,6 +337,11 @@ class _WorkshopPageState extends State<WorkshopPage> {
             label: const Text('Copy history as JSON'),
           ),
           FilledButton.tonalIcon(
+            onPressed: _saveCard,
+            icon: const Icon(Icons.image_outlined),
+            label: const Text('Save the odometer as a picture'),
+          ),
+          FilledButton.tonalIcon(
             onPressed: () => _copy(
                 '${widget.printer.name}: ${jobs.length} prints, ${hours.toStringAsFixed(0)} h, '
                 '${(grams / 1000).toStringAsFixed(1)} kg of filament, ${pct(successRate(jobs))} success, '
@@ -342,6 +353,24 @@ class _WorkshopPageState extends State<WorkshopPage> {
         ]),
       ),
     ];
+  }
+
+  final _cardKey = GlobalKey();
+
+  /// The odometer panel as a PNG, to share.
+  Future<void> _saveCard() async {
+    final b = _cardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (b == null) return;
+    try {
+      final img = await b.toImage(pixelRatio: 3);
+      final png = await img.toByteData(format: ui.ImageByteFormat.png);
+      if (png == null) return;
+      final saved = await FilePicker.saveFile(
+          fileName: '${widget.printer.name.replaceAll(RegExp(r'[^\w-]+'), '_')}-stats.png', bytes: png.buffer.asUint8List());
+      if (saved != null && mounted) toast(context, 'Picture saved');
+    } catch (e) {
+      if (mounted) toast(context, 'Could not save: $e', error: true);
+    }
   }
 
   // ------------------------------------------------------------ maintenance
