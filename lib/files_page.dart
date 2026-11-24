@@ -398,10 +398,14 @@ class _FilesTabState extends State<FilesTab> {
   }
 
   Future<void> _pick() async {
-    final f = await FilePicker.pickFile(
+    // Pick one or several: each goes up in turn (models still open the slicer one by one).
+    final picked = await FilePicker.pickFiles(
         type: FileType.custom, allowedExtensions: [..._gcodeExt, ...modelExt]);
-    if (f == null || !mounted) return;
-    await _upload(f.name, await f.readAsBytes());
+    for (final f in picked) {
+      if (!mounted) return;
+      await _upload(f.name, await f.readAsBytes());
+    }
+    if (picked.length > 1 && mounted) toast(context, 'Uploaded ${picked.length} files');
   }
 
   Future<void> _onDrop(DropDoneDetails d) async {
