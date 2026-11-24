@@ -917,6 +917,10 @@ const ruleTemplates = [
   {'on': 'error', 'do': 'TURN_OFF_HEATERS', 'label': 'All heaters off'},
   {'on': 'bed_cool', 'do': '@notify Take the print off', 'label': 'Alert: Take the print off'},
   {'on': 'idle', 'at': '60', 'do': 'TURN_OFF_HEATERS', 'label': 'All heaters off'},
+  {'on': 'chamber_ready', 'do': '@notify Chamber is warm, ready to print', 'label': 'Alert: Chamber is warm'},
+  {'on': 'humidity', 'do': '@dry 50 4', 'label': 'Dry filament 50°C for 4 h'},
+  {'on': 'printing', 'do': '@picture', 'label': 'Send me a picture'},
+  {'on': 'time', 'at': '23:00', 'do': '@notify Is anything still printing?', 'label': 'Alert: nightly check', 'days': [1, 2, 3, 4, 5, 6, 7]},
   {'on': 'progress', 'at': '50', 'do': '@notify Halfway there', 'label': 'Alert: Halfway there'},
 ];
 
