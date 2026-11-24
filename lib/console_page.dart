@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -54,6 +57,29 @@ class _ConsoleTabState extends State<ConsoleTab> {
   final _focus = FocusNode();
   static const _quick = ['M114', 'M105', 'G28', 'QUERY_ENDSTOPS', 'M84'];
   late final _history = CommandHistory(settings.strings('console.history'));
+  String _find = '';
+  bool _errorsOnly = false, _hideTemps = true;
+
+  /// Lines shown with the search box, "errors only" and the "hide
+  /// temperature reports" switches applied.
+  List<ConsoleLine> _filter(List<ConsoleLine> all) => [
+        for (final l in all)
+          if ((!_errorsOnly || l.kind == ConsoleKind.error) &&
+              (!_hideTemps || !isTempReport(l.text)) &&
+              (_find.isEmpty || l.text.toLowerCase().contains(_find.toLowerCase())))
+            l,
+      ];
+
+  Future<void> _save() async {
+    final text = widget.client.console.map((l) => '${fmtClock(l.time)}  ${l.kind == ConsoleKind.sent ? '> ' : ''}${l.text}').join('\n');
+    try {
+      final saved = await FilePicker.saveFile(
+          fileName: 'console-${fmtDate(DateTime.now())}.txt', bytes: Uint8List.fromList(utf8.encode(text)));
+      if (saved != null && mounted) toast(context, 'Console saved');
+    } catch (e) {
+      if (mounted) toast(context, 'Could not save: $e', error: true);
+    }
+  }
 
   /// ↑/↓ in the command field recall earlier commands (keyboards, Mac).
   KeyEventResult _key(FocusNode _, KeyEvent e) {
@@ -104,12 +130,29 @@ class _ConsoleTabState extends State<ConsoleTab> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1000),
         child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(isDense: true, hintText: 'Find in output', prefixIcon: Icon(Icons.search_rounded)),
+                  onChanged: (v) => setState(() => _find = v),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilterChip(label: const Text('Errors'), selected: _errorsOnly, onSelected: (v) => setState(() => _errorsOnly = v)),
+              const SizedBox(width: 6),
+              FilterChip(
+                  label: const Text('Hide temps'), selected: _hideTemps, onSelected: (v) => setState(() => _hideTemps = v)),
+              IconButton(tooltip: 'Save to a file', icon: const Icon(Icons.save_alt_rounded), onPressed: _save),
+            ]),
+          ),
           Expanded(
             child: StreamBuilder<List<ConsoleLine>>(
               stream: widget.client.consoleStream,
               initialData: widget.client.console,
               builder: (context, snap) {
-                final lines = snap.data!;
+                final lines = _filter(snap.data!);
                 return Container(
                   margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   decoration: BoxDecoration(
@@ -225,3 +268,8 @@ class _Line extends StatelessWidget {
     );
   }
 }
+
+/// Klipper's periodic "ok T:210.0 /210.0 B:60.0 /60.0" style reports.
+bool isTempReport(String line) =>
+    RegExp(r'^(ok\s+)?T\d?:\s*[\d.]+\s*/\s*[\d.]+').hasMatch(line.trim()) ||
+    RegExp(r'^B:\s*[\d.]+\s*/').hasMatch(line.trim());

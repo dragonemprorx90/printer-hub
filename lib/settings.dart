@@ -33,6 +33,20 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  static const lookKeys = [
+    'theme', 'accent', 'highContrast', 'fahrenheit', 'twelveHour', 'textScale', 'splitView', 'openTab',
+    'wallSort', 'wallBusyOnly', 'wallCols', 'hideOffline',
+  ];
+
+  /// Puts the look and layout back to how a new install starts. Printers,
+  /// rules, notes and logs stay.
+  Future<void> resetLook() async {
+    for (final k in lookKeys) {
+      await _p.remove(k);
+    }
+    notifyListeners();
+  }
+
   /// Per-printer colour (ARGB) to tell printers apart.
   int? printerColor(String key) => _p.getInt('printerColor.$key');
   void setPrinterColor(String key, int c) => _write(() => _p.setInt('printerColor.$key', c));

@@ -29,7 +29,10 @@ class PrinterPage extends StatefulWidget {
 }
 
 class _PrinterPageState extends State<PrinterPage> {
-  int _tab = 0;
+  // Opens on the tab you last used for this printer (Settings → "Open printers on").
+  late int _tab = settings.text('openTab', 'last') == 'last'
+      ? settings.number('lastTab.${widget.printer.key}', 0).round().clamp(0, 4)
+      : (int.tryParse(settings.text('openTab')) ?? 0).clamp(0, 4);
   late final MoonrakerClient _client = clientFor(widget.printer);
 
   static const _dest = [
@@ -40,7 +43,10 @@ class _PrinterPageState extends State<PrinterPage> {
     (Icons.history, Icons.history, 'History'),
   ];
 
-  void _go(int i) => setState(() => _tab = i);
+  void _go(int i) {
+    settings.setNumber('lastTab.${widget.printer.key}', i.toDouble());
+    setState(() => _tab = i);
+  }
 
   @override
   Widget build(BuildContext context) {

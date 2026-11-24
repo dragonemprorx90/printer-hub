@@ -87,4 +87,11 @@ void main() {
     expect(milestones(state: 'printing', layer: 41, eta: 400, sent: {'first', 'almost'}), isEmpty);
     expect(milestones(state: 'paused', layer: 2, eta: 100, sent: {}), isEmpty);
   });
+
+  test('console hides temperature reports', () {
+    expect(isTempReport('ok T:210.0 /210.0 B:60.0 /60.0'), isTrue);
+    expect(isTempReport('T:24.9 /0.0 B:23.1 /0.0'), isTrue);
+    expect(isTempReport('!! Move out of range'), isFalse);
+    expect(isTempReport('X:10.00 Y:20.00 Z:5.00'), isFalse);
+  });
 }

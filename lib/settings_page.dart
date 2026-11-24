@@ -200,7 +200,21 @@ class _SettingsPageState extends State<SettingsPage> {
                     _refresh();
                   },
                 ),
-                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () async {
+                      if (!await confirm(context, 'Reset the look and layout?',
+                          message: 'Theme, text size, units and layout go back to the defaults. Printers, rules and notes stay.',
+                          action: 'Reset')) {
+                        return;
+                      }
+                      await settings.resetLook();
+                      _refresh();
+                    },
+                    child: const Text('Reset to defaults'),
+                  ),
+                ),
                 for (final (key, label, sub) in const [
                   ('highContrast', 'High contrast', 'Brighter secondary text and borders'),
                   ('fahrenheit', 'Temperatures in °F', 'Display only; the printer still uses °C'),
@@ -218,6 +232,26 @@ class _SettingsPageState extends State<SettingsPage> {
                       _refresh();
                     },
                   ),
+                Row(children: [
+                  const Text('Open printers on'),
+                  const Spacer(),
+                  DropdownButton<String>(
+                    value: settings.text('openTab', 'last'),
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(value: 'last', child: Text('The last tab used')),
+                      DropdownMenuItem(value: '0', child: Text('Overview')),
+                      DropdownMenuItem(value: '1', child: Text('Control')),
+                      DropdownMenuItem(value: '2', child: Text('Files')),
+                      DropdownMenuItem(value: '3', child: Text('Tools')),
+                      DropdownMenuItem(value: '4', child: Text('History')),
+                    ],
+                    onChanged: (v) {
+                      settings.setText('openTab', v ?? 'last');
+                      _refresh();
+                    },
+                  ),
+                ]),
                 Row(children: [
                   const Text('Text size'),
                   Expanded(

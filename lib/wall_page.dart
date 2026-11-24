@@ -35,7 +35,7 @@ class _WallPageState extends State<WallPage> {
     if (_awake) WakelockPlus.enable();
     // ponytail: re-sort every 10 s rather than listening to every printer.
     _resort = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_sorted && mounted) setState(() {});
+      if ((_sorted || _busyOnly) && mounted) setState(() {});
     });
   }
 
@@ -46,8 +46,14 @@ class _WallPageState extends State<WallPage> {
     super.dispose();
   }
 
+  bool get _busyOnly => settings.flag('wallBusyOnly', false);
+  int get _cols => settings.number('wallCols', 0).round(); // 0 = fit the screen
+
   List<Printer> get _order {
-    final list = [...widget.printers];
+    final list = [
+      for (final p in widget.printers)
+        if (!_busyOnly || const {'printing', 'paused', 'error'}.contains(clientFor(p).status.state)) p,
+    ];
     if (_sorted) {
       // List.sort isn't stable; keep the saved order within a rank.
       final idx = {for (final (i, p) in list.indexed) p: i};
@@ -79,6 +85,23 @@ class _WallPageState extends State<WallPage> {
             onPressed: () => setState(() => settings.setFlag('wallSort', !_sorted)),
           ),
           IconButton(
+            tooltip: _busyOnly ? 'Showing busy printers only' : 'Showing every printer',
+            isSelected: _busyOnly,
+            icon: const Icon(Icons.filter_alt_outlined),
+            selectedIcon: Icon(Icons.filter_alt_rounded, color: C.accent),
+            onPressed: () => setState(() => settings.setFlag('wallBusyOnly', !_busyOnly)),
+          ),
+          PopupMenuButton<int>(
+            tooltip: 'Columns',
+            icon: const Icon(Icons.view_column_outlined),
+            initialValue: _cols,
+            onSelected: (v) => setState(() => settings.setNumber('wallCols', v.toDouble())),
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 0, child: Text('Fit the screen')),
+              for (final n in const [1, 2, 3, 4]) PopupMenuItem(value: n, child: Text('$n column${n == 1 ? '' : 's'}')),
+            ],
+          ),
+          IconButton(
             tooltip: _awake ? 'Screen stays on' : 'Screen may sleep',
             isSelected: _awake,
             icon: const Icon(Icons.light_mode_outlined),
@@ -89,7 +112,9 @@ class _WallPageState extends State<WallPage> {
         ],
       ),
       body: LayoutBuilder(builder: (context, c) {
-        final cols = (c.maxWidth / 520).floor().clamp(1, 4);
+        final cols = _cols > 0 ? _cols : (c.maxWidth / 520).floor().clamp(1, 4);
+        final order = _order;
+        if (order.isEmpty) return const StateView.empty(Icons.filter_alt_off_outlined, 'No printer is busy right now.');
         return GridView.count(
           padding: const EdgeInsets.all(16),
           crossAxisCount: cols,
@@ -97,7 +122,7 @@ class _WallPageState extends State<WallPage> {
           crossAxisSpacing: 16,
           childAspectRatio: 16 / 12.5,
           children: [
-            for (final p in _order) _WallTile(key: ValueKey(p.key), printer: p),
+            for (final p in order) _WallTile(key: ValueKey(p.key), printer: p),
           ],
         );
       }),
