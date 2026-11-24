@@ -619,7 +619,7 @@ class Alerts {
         unawaited(_runRules((r) => r['on'] == 'layer' && int.tryParse('${r['at']}') == _layer));
       } else if (_layerSince == null) {
         _layerSince = DateTime.now(); // just resumed: start counting again
-      } else if (layerStuck > 0 &&
+      } else if (layerStuck > 0 && _layer != null &&
           DateTime.now().difference(_layerSince!).inMinutes >= layerStuck && _sent.add('stuck')) {
         await send('$_title: stuck on layer $_layer?', 'The same layer for $layerStuck minutes. Check for a clog or a stall.',
             tags: ['warning'], priority: 4, picture: true);
