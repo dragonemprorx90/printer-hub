@@ -146,6 +146,8 @@ More rule triggers: *print reaches layer N*, *printer has been idle for N minute
 
 **Home Assistant**: with `MQTT_URL` set, the printer shows up as a device with state, progress, time left, layer, temperatures, filament used and a Printing sensor. With `STATUS_PORT` set, add `http://<nas>:<port>/snapshot.jpg` as a generic camera.
 
+**Alert history**: Tools → Away from home → Alert history shows the bridge's last 100 alerts (ntfy only keeps 12 hours). Each rule shows when it last ran.
+
 **Bridge log**: Tools → Away from home → Bridge log shows its last 200 lines; Check bridge version tells you when it's older than the app.
 
 ### Updating the bridge

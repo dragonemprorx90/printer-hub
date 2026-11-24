@@ -49,6 +49,8 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - iPhone: quick actions, `printerhub://` links, open G-code from Files, Siri Shortcuts. Mac: a menu-bar menu of printers, Dock badge, open at login, keyboard shortcuts.
 - Text size, high contrast, bold text, larger buttons, °F, 12-hour time, grams, side-by-side on wide screens, VoiceOver labels, and a search for any setting.
 - Home Assistant: MQTT with auto-discovery, a camera still and a status page from the home bridge.
+- Time left learns from your printer: it allows for how its real prints compare with the slicer, in the Overview, queue, files and slice editor.
+- Find models on every site at once, "while you were away" on opening the app, alert history, and when each rule last ran.
 
 **From anywhere: free and end-to-end encrypted**
 - A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.
