@@ -293,6 +293,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('twelveHour', '12-hour time', 'Shows 6:42 PM instead of 18:42'),
                   ('reduceMotion', 'Reduce motion', 'No sliding and fading, whatever the system setting'),
                   ('bigButtons', 'Larger buttons', 'More room around everything you tap'),
+                  ('awakePrinting', 'Keep the screen on during a print', 'While a printing printer is open'),
                   ('boldText', 'Bold text', 'Heavier text everywhere'),
                   ('splitView', 'Side by side on wide screens', 'iPad landscape or a wide Mac window: printers on the left, the printer on the right'),
                 ])

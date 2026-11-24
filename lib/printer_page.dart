@@ -1349,7 +1349,14 @@ class _AwakeChip extends StatefulWidget {
 }
 
 class _AwakeChipState extends State<_AwakeChip> {
-  bool _on = false;
+  // Settings → Appearance can turn it on for every print you open.
+  bool _on = settings.flag('awakePrinting', false);
+
+  @override
+  void initState() {
+    super.initState();
+    if (_on) WakelockPlus.enable();
+  }
 
   @override
   void dispose() {
