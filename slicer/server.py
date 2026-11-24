@@ -265,10 +265,17 @@ def mesh(q, body):
         out = os.path.join(work, 'out')
         # ponytail: no lock, so editing isn't stuck behind a long slice; Orca
         # instances only read the data dir.
-        r = subprocess.run(ORCA + ['--datadir', DATA, '--load-settings', machine,
-                                   *(['--orient', '1'] if q.get('orient') == '1' else []),
-                                   '--arrange', '1', '--export-stl', '--outputdir', out, model],
-                           capture_output=True, text=True, timeout=600)
+        # A 3MF whose own process settings don't fit this machine makes Orca
+        # refuse (-17) with the machine loaded; the app re-centres the mesh
+        # anyway, so try again without it.
+        for settings in (['--load-settings', machine], []):
+            shutil.rmtree(out, ignore_errors=True)
+            r = subprocess.run(ORCA + ['--datadir', DATA, *settings,
+                                       *(['--orient', '1'] if q.get('orient') == '1' else []),
+                                       '--arrange', '1', '--export-stl', '--outputdir', out, model],
+                               capture_output=True, text=True, timeout=600)
+            if r.returncode == 0:
+                break
         tris = []
         for root, _, names in os.walk(out):
             for n in sorted(names):
@@ -277,7 +284,7 @@ def mesh(q, body):
                         b = f.read()
                     tris.append(b[84:84 + 50 * int.from_bytes(b[80:84], 'little')])
         if not tris:
-            raise RuntimeError(why(r.stdout + r.stderr) if r.returncode else 'No mesh in this model')
+            raise RuntimeError(orca_result(out) or (why(r.stdout + r.stderr, r.returncode) if r.returncode else 'No mesh in this model'))
         data = b''.join(tris)
         return b'Printer Hub'.ljust(80, b' ') + (len(data) // 50).to_bytes(4, 'little') + data
     finally:
@@ -326,7 +333,7 @@ def why(out, code=None):
         return f'OrcaSlicer crashed (signal {-code}) on this model'
     if code:
         return f'OrcaSlicer stopped with error {code} and said nothing'
-    return 'OrcaSlicer made no G-code (nothing on the plate?)'
+    return 'OrcaSlicer made nothing from this model (nothing on the plate?)'
 
 
 def run(job, args, model, name, folder):
