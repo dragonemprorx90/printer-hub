@@ -82,6 +82,18 @@ class _ConsoleTabState extends State<ConsoleTab> {
             l,
       ];
 
+  /// Macros and common commands that start with what's typed (first word only).
+  List<String> _suggestions() {
+    final t = _ctl.text.trim().toUpperCase();
+    if (t.isEmpty || t.contains(' ')) return const [];
+    const common = ['G28', 'M84', 'M105', 'M114', 'M115', 'QUERY_ENDSTOPS', 'TURN_OFF_HEATERS', 'BED_MESH_CALIBRATE',
+      'SAVE_CONFIG', 'STATUS', 'HELP', 'GET_POSITION', 'SET_PRESSURE_ADVANCE', 'SET_VELOCITY_LIMIT', 'FIRMWARE_RESTART'];
+    return [
+      for (final m in {...widget.client.macros, ...common})
+        if (m.toUpperCase().startsWith(t) && m.toUpperCase() != t) m,
+    ].take(8).toList();
+  }
+
   Future<void> _save() async {
     final text = widget.client.console.map((l) => '${fmtClock(l.time)}  ${l.kind == ConsoleKind.sent ? '> ' : ''}${l.text}').join('\n');
     try {
@@ -230,6 +242,28 @@ class _ConsoleTabState extends State<ConsoleTab> {
               ],
             ),
           ),
+          if (_suggestions().isNotEmpty)
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                children: [
+                  for (final m in _suggestions())
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: InputChip(
+                        label: Text(m, style: mono.copyWith(fontSize: 12)),
+                        onPressed: () {
+                          _ctl.value = TextEditingValue(text: '$m ', selection: TextSelection.collapsed(offset: m.length + 1));
+                          _focus.requestFocus();
+                          setState(() {});
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(children: [
@@ -252,6 +286,7 @@ class _ConsoleTabState extends State<ConsoleTab> {
                     prefixIcon: Icon(Icons.chevron_right_rounded),
                   ),
                   onSubmitted: (_) => _send(),
+                  onChanged: (_) => setState(() {}), // refresh the suggestions
                 ),
                 ),
               ),
