@@ -190,7 +190,10 @@ void watchPrinter(Printer p, MoonrakerClient c) {
       // No Spoolman: take this print's filament off the on-device spool in use.
       if (state == 'complete' || state == 'cancelled' || state == 'error') _useLocalSpool(p.key, s.filamentUsed);
       if (state == 'complete' && settings.flag('notifyDone')) {
-        _say(p.key, '${p.name}: print finished', '$file · ${_short(s.printDuration)}');
+        final cost = gramsFromMm(s.filamentUsed) / 1000 * settings.pricePerKg('${s.jobMeta['filament_type'] ?? ''}') +
+            s.printDuration / 3600 * settings.number('printerWatts', 350) / 1000 * settings.number('kwhPrice', 0.30);
+        _say(p.key, '${p.name}: print finished',
+            '$file · ${_short(s.printDuration)} · about ${settings.text('currency', r'$')}${cost.toStringAsFixed(2)}');
       } else if (state == 'error' && settings.flag('notifyError')) {
         _say(p.key, urgent: true, '${p.name}: print failed', s.message ?? file);
       } else if (state == 'cancelled' && settings.flag('notifyError')) {

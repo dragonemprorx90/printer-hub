@@ -903,6 +903,9 @@ class _ModelDetailPageState extends State<_ModelDetailPage> {
                 ),
               const SizedBox(height: 16),
               Text(d.title, style: T.title),
+              Text('${d.files.length} file${d.files.length == 1 ? '' : 's'}'
+                  '${d.files.any((f) => f.size > 0) ? ' · ${fmtBytes(d.files.fold(0, (a, f) => a + f.size))}' : ''}',
+                  style: T.caption.copyWith(color: C.muted)),
               if (widget.hit.author.isNotEmpty)
                 Text('by ${widget.hit.author} on ${widget.source.name}', style: T.small.copyWith(color: C.muted)),
               if (plainText(d.summary).isNotEmpty) ...[

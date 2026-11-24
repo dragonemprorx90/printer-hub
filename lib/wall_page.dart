@@ -181,6 +181,8 @@ class _WallTile extends StatelessWidget {
     final client = clientFor(printer);
     return GestureDetector(
       onDoubleTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterPage(printer: printer))),
+      onLongPress: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => CameraFullscreen(client: client, cameraUrl: printer.cameraUrl, title: printer.name))),
       child: Panel(
       padding: const EdgeInsets.all(8),
       child: Column(children: [

@@ -1250,8 +1250,8 @@ class _FileSheetState extends State<_FileSheet> {
                 StatTile(label: 'Slicer', value: '${m['slicer'] ?? '—'}'),
                 if (m['filament_weight_total'] is num)
                   StatTile(
-                      label: 'Filament cost',
-                      value: '${settings.text('currency', r'$')}${((m['filament_weight_total'] as num) / 1000 * settings.number('filamentPrice', 20)).toStringAsFixed(2)}'),
+                      label: 'Cost (filament + power)',
+                      value: '${settings.text('currency', r'$')}${((m['filament_weight_total'] as num) / 1000 * settings.pricePerKg('${m['filament_type'] ?? ''}') + ((m['estimated_time'] as num?) ?? 0) / 3600 * settings.number('printerWatts', 350) / 1000 * settings.number('kwhPrice', 0.30)).toStringAsFixed(2)}'),
                 if (toolChanges(m) case final n? when n > 0) StatTile(label: 'Tool changes', value: '$n'),
                 if (fileRecord(c.lastHistory?.$1 ?? const [], f.path) case (final n, final ok, final avg) when n > 0) ...[
                   StatTile(label: 'Printed before', value: '$n× ($ok finished)'),
