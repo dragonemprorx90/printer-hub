@@ -63,7 +63,7 @@ Future<void> main(List<String> argv) async {
   }
   if (args.containsKey('help')) {
     stdout.writeln('Usage: bridge --relay <url> --printer <ip> [--port 7125] '
-        '[--data <dir>] [--show-code] [--reset] [--version]');
+        '[--data <dir>] [--show-code] [--reset] [--check] [--test-alert] [--version]');
     return;
   }
   final env = Platform.environment;
@@ -152,6 +152,45 @@ Future<void> main(List<String> argv) async {
               : null,
           pictures: env['ALERT_PICTURES'] != 'off',
           minPriority: (int.tryParse(env['ALERTS_MIN_PRIORITY'] ?? '') ?? 1).clamp(1, 5));
+  if (args['check'] == 'true') {
+    // Setup check: what this bridge can reach, then exit.
+    Future<String> probe(String what, Future<Object?> Function() f) async {
+      try {
+        final r = await f().timeout(const Duration(seconds: 8));
+        return '✓ $what${r == null ? '' : ': $r'}';
+      } catch (e) {
+        return "✗ $what: ${'$e'.contains('Connection refused') || '$e'.contains('Failed host lookup') ? "can't connect" : e}";
+      }
+    }
+    final lines = await Future.wait([
+      probe('Printer (Moonraker $printer:$port)', () async {
+        final r = await http.get(Uri.parse('http://$printer:$port/server/info'));
+        return 'Klipper ${jsonDecode(r.body)['result']?['klippy_state']}';
+      }),
+      probe('Camera', () async => camera == null ? 'not set (CAMERA_URL)' : '${(await camera.frame(quiet: true)).length} bytes'),
+      probe('Slicer', () async {
+        final r = await http.get(Uri.parse('http://127.0.0.1:${env['SLICER_PORT'] ?? '7070'}/slicer/presets'));
+        return r.statusCode == 200 ? 'ready' : 'HTTP ${r.statusCode}';
+      }),
+      probe('Failure detector', () async {
+        final u = env['DETECTOR_URL'] ?? 'http://127.0.0.1:7072';
+        if (u == 'off') return 'off';
+        final r = await http.get(Uri.parse(u));
+        return 'answers (HTTP ${r.statusCode})';
+      }),
+      probe('Alerts topic', () async => topic ?? 'off for this pairing'),
+      probe('MQTT', () async {
+        final m = env['MQTT_URL'] ?? '';
+        if (!m.startsWith('mqtt://')) return 'not set';
+        final u = Uri.parse(m);
+        final sock = await Socket.connect(u.host, u.hasPort ? u.port : 1883);
+        sock.destroy();
+        return 'broker at ${u.host} answers';
+      }),
+    ]);
+    stdout.writeln(lines.join('\n'));
+    return;
+  }
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');

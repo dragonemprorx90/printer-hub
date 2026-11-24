@@ -150,6 +150,10 @@ More rule triggers: *print reaches layer N*, *printer has been idle for N minute
 
 **Bridge log**: Tools → Away from home → Bridge log shows its last 200 lines; Check bridge version tells you when it's older than the app.
 
+### Checking the bridge
+
+`docker compose run --rm bridge --check` tests what the bridge can reach (printer, camera, slicer, failure detector, alerts, MQTT) and prints ✓ or ✗ for each.
+
 ### Updating the bridge
 
 ```bash
