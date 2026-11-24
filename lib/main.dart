@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hub_link/hub_link.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'discovery.dart';
 import 'gcode.dart';
@@ -287,6 +288,10 @@ class _PrinterListPageState extends State<PrinterListPage> {
       builder: (_) => PrinterDialog(initial: existing ?? prefill, editing: existing != null),
     );
     if (p == null) return;
+    if (existing == null && _printers.any((x) => x.key == p.key)) {
+      if (mounted) toast(context, '${p.host}:${p.port} is already in your list', error: true);
+      return;
+    }
     setState(() {
       if (existing == null) {
         _printers.add(p);
@@ -473,6 +478,8 @@ class _PrinterListPageState extends State<PrinterListPage> {
                                       : () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterPage(printer: p))),
                                   onEdit: () => _edit(existing: p),
                                   onDelete: () => _delete(p),
+                                  onDuplicate: () => _edit(
+                                      prefill: Printer.fromJson({...p.toJson(), 'name': '${p.name} copy'})),
                                 )),
                               ),
                             );
@@ -555,12 +562,13 @@ Future<int?> pickPrinterColor(BuildContext context) => showDialog<int>(
 
 class _PrinterCard extends StatelessWidget {
   final Printer printer;
-  final VoidCallback onOpen, onEdit, onDelete;
+  final VoidCallback onOpen, onEdit, onDelete, onDuplicate;
   const _PrinterCard({
     required this.printer,
     required this.onOpen,
     required this.onEdit,
     required this.onDelete,
+    required this.onDuplicate,
   });
 
   @override
@@ -666,9 +674,27 @@ class _PrinterCard extends StatelessWidget {
               ),
               PopupMenuButton<String>(
                 icon: Icon(Icons.more_vert_rounded, color: C.muted),
-                onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
+                onSelected: (v) async {
+                  switch (v) {
+                    case 'edit':
+                      onEdit();
+                    case 'delete':
+                      onDelete();
+                    case 'copy':
+                      Clipboard.setData(ClipboardData(text: '${printer.host}:${printer.port}'));
+                      toast(context, 'Address copied');
+                    case 'web':
+                      // The printer's own web page (Mainsail, Fluidd or Creality's).
+                      await launchUrl(Uri.parse('http://${printer.host}'), mode: LaunchMode.externalApplication);
+                    case 'duplicate':
+                      onDuplicate();
+                  }
+                },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
+                  PopupMenuItem(value: 'copy', child: Text('Copy address')),
+                  PopupMenuItem(value: 'web', child: Text('Open its web page')),
                   PopupMenuItem(value: 'delete', child: Text('Remove')),
                 ],
               ),
@@ -684,8 +710,8 @@ class _PrinterCard extends StatelessWidget {
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 4),
         Text(
-          '${t.toStringAsFixed(0)}°'
-          '${target > 0 ? ' / ${target.toStringAsFixed(0)}°' : ''}',
+          '${Units.deg(t)}'
+          '${target > 0 ? ' / ${Units.deg(target)}' : ''}',
           style: const TextStyle(fontSize: 13),
         ),
       ]);
