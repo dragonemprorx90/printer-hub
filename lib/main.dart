@@ -86,9 +86,11 @@ class _PrinterHubAppState extends State<PrinterHubApp> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
-    final palette = _palette;
+    final palette = settings.flag('highContrast', false) ? _palette.contrast() : _palette;
+    Units.fahrenheit = settings.flag('fahrenheit', false);
+    Units.twelveHour = settings.flag('twelveHour', false);
     final accent = accents[settings.accent] ?? accents['Mint']!;
-    final look = '${identical(palette, Palette.dark)}-${settings.accent}';
+    final look = '${palette.bg.toARGB32()}-${palette.muted.toARGB32()}-${settings.accent}-${Units.fahrenheit}-${Units.twelveHour}';
     final theme = buildTheme(palette, accent);
     if (_lastLook != null && _lastLook != look) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildAll());
@@ -98,6 +100,16 @@ class _PrinterHubAppState extends State<PrinterHubApp> with WidgetsBindingObserv
       title: 'Printer Hub',
       debugShowCheckedModeBanner: false,
       theme: theme,
+      // In-app text size (Settings → Appearance) on top of the system's.
+      builder: (context, child) {
+        final scale = settings.number('textScale', 1);
+        if (scale == 1) return child!;
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale)),
+          child: child!,
+        );
+      },
       home: const PrinterListPage(),
     );
   }
@@ -117,11 +129,57 @@ class _PrinterListPageState extends State<PrinterListPage> {
     for (final s in settings.strings('printers')) Printer.fromJson(jsonDecode(s)),
   ];
 
+  static const _launch = MethodChannel('printerhub/launch');
+
+  /// `printerhub://printer/NAME`, `printerhub://wall`, or `file:PATH` (a
+  /// G-code / 3MF opened with Printer Hub). The Mac menu sends a printer key.
+  Future<void> _handleLaunch(String what) async {
+    if (!mounted || _printers.isEmpty) return;
+    if (what.startsWith('file:')) {
+      final f = File(what.substring(5));
+      if (!f.existsSync()) return;
+      final bytes = await f.readAsBytes();
+      return _fromOrca((name: f.uri.pathSegments.last, bytes: bytes, print: false, printer: null));
+    }
+    final u = Uri.tryParse(what);
+    if (u != null && u.scheme == 'printerhub') {
+      if (u.host == 'wall') {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => WallPage(printers: _printers)));
+      } else if (u.host == 'printer' && u.pathSegments.isNotEmpty) {
+        final name = u.pathSegments.first.toLowerCase();
+        final p = _printers.where((p) => p.name.toLowerCase() == name || printerSlug(p.name) == name).firstOrNull;
+        if (p != null) _open(p);
+      }
+      return;
+    }
+    final p = _printers.where((p) => p.key == what).firstOrNull;
+    if (p != null) _open(p);
+  }
+
+  void _open(Printer p) {
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PrinterPage(printer: p)));
+  }
+
   @override
   void initState() {
     super.initState();
     for (final p in _printers) {
       watchPrinter(p, clientFor(p));
+    }
+    const MethodChannel('printerhub/statusbar').setMethodCallHandler((call) async {
+      if (call.method == 'openPrinter') await _handleLaunch('${call.arguments}');
+    });
+    if (Platform.isIOS) {
+      _launch.setMethodCallHandler((call) async {
+        if (call.method == 'open') await _handleLaunch('${call.arguments}');
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final pending = await _launch.invokeListMethod<String>('pending').catchError((_) => null);
+        for (final w in pending ?? const <String>[]) {
+          await _handleLaunch(w);
+        }
+      });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await showWhatsNewIfUpdated(context, freshInstall: _printers.isEmpty);
@@ -266,6 +324,22 @@ class _PrinterListPageState extends State<PrinterListPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Keyboard: ⌘/Ctrl 1–9 open a printer, L the camera wall, comma Settings.
+    final mod = Platform.isMacOS;
+    return CallbackShortcuts(
+      bindings: {
+        for (var i = 0; i < _printers.length && i < 9; i++)
+          SingleActivator(LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i), meta: mod, control: !mod):
+              () => _open(_printers[i]),
+        SingleActivator(LogicalKeyboardKey.keyL, meta: mod, control: !mod): () => _handleLaunch('printerhub://wall'),
+        SingleActivator(LogicalKeyboardKey.comma, meta: mod, control: !mod): () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => SettingsPage(printers: _printers, onImport: _import))),
+      },
+      child: Focus(autofocus: true, child: _scaffold()),
+    );
+  }
+
+  Widget _scaffold() {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 76,

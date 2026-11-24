@@ -17,6 +17,41 @@ const _statusBar = MethodChannel('printerhub/statusbar');
 final _barText = <String, String>{};
 String? _lastBar;
 
+/// iPhone: quick actions, Siri status text (see SceneDelegate.swift).
+const _launch = MethodChannel('printerhub/launch');
+final _menu = <String, ({String name, String line, bool attention})>{};
+String? _lastMenu;
+
+/// One line per printer for the Mac menu and Siri ("Printing 42% · 1h03 left").
+@visibleForTesting
+String statusLine(PrinterStatus s) {
+  if (!s.online) return 'offline';
+  final busy = s.state == 'printing' || s.state == 'paused';
+  if (!busy) return s.state;
+  final eta = s.eta;
+  return '${s.state == 'paused' ? 'Paused' : 'Printing'} ${(s.progress * 100).round()}%'
+      '${eta == null ? '' : ' · ${_short(eta)} left'}';
+}
+
+void _publishMenu() {
+  final json = _menu.entries.map((e) => '${e.key}|${e.value.name}|${e.value.line}|${e.value.attention}').join(';');
+  if (json == _lastMenu) return;
+  _lastMenu = json;
+  final attention = _menu.values.where((m) => m.attention).length;
+  if (Platform.isMacOS) {
+    _statusBar.invokeMethod('setMenu', {
+      'printers': [for (final e in _menu.entries) {'key': e.key, 'name': e.value.name, 'line': e.value.line}],
+      'attention': attention,
+    }).catchError((_) => null);
+  }
+  if (Platform.isIOS) {
+    _launch.invokeMethod('setShortcuts', [for (final m in _menu.values) m.name]).catchError((_) => null);
+    _launch
+        .invokeMethod('setStatus', [for (final m in _menu.values) '${m.name}: ${m.line}'].join('. '))
+        .catchError((_) => null);
+  }
+}
+
 Future<void> initNotifications() async {
   try {
     const darwin = DarwinInitializationSettings();
@@ -78,6 +113,12 @@ void watchPrinter(Printer p, MoonrakerClient c) {
   var sent = <String>{};
   final humidityAlerted = <String, DateTime>{};
   c.stream.listen((s) {
+    _menu[p.key] = (
+      name: p.name,
+      line: statusLine(s),
+      attention: !s.online || s.state == 'paused' || s.state == 'error' || s.failureWatch?['failing'] == true,
+    );
+    _publishMenu();
     if (!s.online) return;
     final state = s.state, file = s.filename ?? '';
     if (file != milestoneFile) {

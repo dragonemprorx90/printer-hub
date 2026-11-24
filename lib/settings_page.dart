@@ -200,6 +200,39 @@ class _SettingsPageState extends State<SettingsPage> {
                     _refresh();
                   },
                 ),
+                const SizedBox(height: 8),
+                for (final (key, label, sub) in const [
+                  ('highContrast', 'High contrast', 'Brighter secondary text and borders'),
+                  ('fahrenheit', 'Temperatures in °F', 'Display only; the printer still uses °C'),
+                  ('twelveHour', '12-hour time', 'Shows 6:42 PM instead of 18:42'),
+                ])
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(label),
+                    subtitle: Text(sub, style: T.caption.copyWith(color: C.muted)),
+                    value: settings.flag(key, false),
+                    onChanged: (v) {
+                      settings.setFlag(key, v);
+                      settings.theme = settings.theme; // rebuild the app with the new look
+                      _refresh();
+                    },
+                  ),
+                Row(children: [
+                  const Text('Text size'),
+                  Expanded(
+                    child: Slider(
+                      min: 0.85,
+                      max: 1.4,
+                      divisions: 11,
+                      label: '${(settings.number('textScale', 1) * 100).round()}%',
+                      value: settings.number('textScale', 1).clamp(0.85, 1.4),
+                      onChanged: (v) {
+                        settings.setNumber('textScale', v);
+                        _refresh();
+                      },
+                    ),
+                  ),
+                ]),
                 const SizedBox(height: 16),
                 Text('Accent colour', style: TextStyle(color: C.muted, fontSize: 12)),
                 const SizedBox(height: 8),

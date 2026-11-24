@@ -33,6 +33,29 @@ class Palette {
   );
 }
 
+extension Contrast on Palette {
+  /// Higher-contrast variant: brighter secondary text and borders.
+  Palette contrast() => Palette(
+        bg: bg,
+        surface: surface,
+        surfaceHi: surfaceHi,
+        border: Color.lerp(border, text, 0.45)!,
+        text: text,
+        muted: Color.lerp(muted, text, 0.5)!,
+      );
+}
+
+/// Display units, set from Settings at the app root.
+class Units {
+  static bool fahrenheit = false, twelveHour = false;
+
+  /// "215°" or "419°" (Fahrenheit when set); [unit] adds the C/F letter.
+  static String deg(num c, {bool unit = false}) {
+    final v = fahrenheit ? c * 9 / 5 + 32 : c;
+    return '${v.toStringAsFixed(0)}°${unit ? (fahrenheit ? 'F' : 'C') : ''}';
+  }
+}
+
 const accents = <String, Color>{
   'Mint': Color(0xFF2EE6A6),
   'Blue': Color(0xFF4C8DFF),
@@ -392,7 +415,11 @@ class TempGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final heating = target > 0;
-    return Tile(
+    return Semantics(
+      label: '$label ${Units.deg(temp, unit: true)}${heating ? ', heating to ${Units.deg(target, unit: true)}' : ', off'}',
+      excludeSemantics: onTap == null,
+      button: onTap != null,
+      child: Tile(
       radius: R.xl,
       onTap: onTap,
       child: Padding(
@@ -418,14 +445,14 @@ class TempGauge extends StatelessWidget {
                   child: Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Text(
-                        '${t.toStringAsFixed(0)}°',
+                        Units.deg(t),
                         style: TextStyle(
                             fontSize: d > 90 ? 26 : 20,
                             fontWeight: FontWeight.w800,
                             fontFeatures: const [FontFeature.tabularFigures()]),
                       ),
                       Text(
-                        heating ? '→ ${target.toStringAsFixed(0)}°' : 'off',
+                        heating ? '→ ${Units.deg(target)}' : 'off',
                         style: TextStyle(
                             fontSize: 12, color: heating ? color : C.muted),
                       ),
@@ -447,7 +474,7 @@ class TempGauge extends StatelessWidget {
           ]);
         }),
       ),
-    );
+    ));
   }
 }
 
@@ -507,7 +534,9 @@ class ProgressRing extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => Semantics(
+      label: '${(value.clamp(0.0, 1.0) * 100).round()} percent done',
+      child: SizedBox(
         width: size,
         height: size,
         child: TweenAnimationBuilder<double>(
@@ -532,7 +561,7 @@ class ProgressRing extends StatelessWidget {
             ),
           ]),
         ),
-      );
+      ));
 }
 
 (Color, String) statusStyle(String state, bool online) {
@@ -754,7 +783,9 @@ String fmtClock(DateTime t) =>
 /// "18:42" today, "Tue 18:42" on another day.
 String fmtTime(DateTime t) {
   final now = DateTime.now();
-  final hm = '${_two(t.hour)}:${_two(t.minute)}';
+  final hm = Units.twelveHour
+      ? '${t.hour % 12 == 0 ? 12 : t.hour % 12}:${_two(t.minute)} ${t.hour < 12 ? 'AM' : 'PM'}'
+      : '${_two(t.hour)}:${_two(t.minute)}';
   final sameDay =
       t.year == now.year && t.month == now.month && t.day == now.day;
   return sameDay ? hm : '${_days[t.weekday - 1]} $hm';
