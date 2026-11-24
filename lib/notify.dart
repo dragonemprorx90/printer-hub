@@ -54,6 +54,9 @@ void _publishMenu() {
   }
 }
 
+/// Set by the printer list: opens a printer from a tapped notification.
+void Function(String printerKey)? onOpenFromNotification;
+
 Future<void> initNotifications() async {
   try {
     const darwin = DarwinInitializationSettings();
@@ -63,6 +66,10 @@ Future<void> initNotifications() async {
         iOS: darwin,
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
+      onDidReceiveNotificationResponse: (r) {
+        final key = r.payload;
+        if (key != null && key.isNotEmpty) onOpenFromNotification?.call(key);
+      },
     );
     await _plugin
         .resolvePlatformSpecificImplementation<
@@ -75,12 +82,13 @@ Future<void> initNotifications() async {
   _setBar('');
 }
 
-Future<void> notify(String title, String body) async {
+Future<void> notify(String title, String body, {String? printerKey}) async {
   if (!_ready) return;
   await _plugin.show(
     id: _nextId++,
     title: title,
     body: body,
+    payload: printerKey,
     notificationDetails: const NotificationDetails(
       macOS: DarwinNotificationDetails(),
       iOS: DarwinNotificationDetails(),
@@ -222,7 +230,7 @@ void _say(String key, String title, String body, {bool urgent = false}) {
   if (alertsMuted(key)) return;
   final from = settings.text('quietFrom'), to = settings.text('quietTo');
   if (!urgent && from.isNotEmpty && to.isNotEmpty && inWindow(DateTime.now(), from: from, to: to)) return;
-  notify(title, body);
+  notify(title, body, printerKey: key);
 }
 
 /// Muted with "Mute alerts" on the printer page, until a time.

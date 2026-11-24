@@ -176,6 +176,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
     for (final p in _printers) {
       watchPrinter(p, clientFor(p));
     }
+    onOpenFromNotification = (key) => _handleLaunch(key);
     const MethodChannel('printerhub/statusbar').setMethodCallHandler((call) async {
       if (call.method == 'openPrinter') await _handleLaunch('${call.arguments}');
     });
