@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'moonraker.dart';
 import 'settings.dart';
@@ -98,8 +99,14 @@ class _ControlTabState extends State<ControlTab> {
     return Panel(
       title: 'Move',
       icon: Icons.open_with_rounded,
-      trailing: Text('X ${p(0)}  Y ${p(1)}  Z ${p(2)}',
-          style: mono.copyWith(color: C.muted, fontSize: 12)),
+      trailing: InkWell(
+        // Tap to copy the position (for notes or a macro).
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: 'X${p(0)} Y${p(1)} Z${p(2)}'));
+          toast(context, 'Position copied');
+        },
+        child: Text('X ${p(0)}  Y ${p(1)}  Z ${p(2)}',
+          style: mono.copyWith(color: C.muted, fontSize: 12))),
       child: Column(children: [
         if (busy)
           const Hint('Movement is locked while a print is running.')

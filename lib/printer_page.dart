@@ -657,6 +657,8 @@ class _JobPanel extends StatelessWidget {
                       label: 'Cost so far',
                       value: '${settings.text('currency', r'$')}${_cost(gramsFromMm(s.filamentUsed), s.printDuration).toStringAsFixed(2)}'
                           '${s.jobMeta['filament_weight_total'] is num && s.jobMeta['estimated_time'] is num ? ' of ${_cost((s.jobMeta['filament_weight_total'] as num).toDouble(), (s.jobMeta['estimated_time'] as num).toDouble()).toStringAsFixed(2)}' : ''}'),
+                if (s.fans.where((f) => f.label.startsWith('Part')).firstOrNull case final f? when active)
+                  StatTile(label: 'Part fan', value: '${(f.value * 100).round()}%'),
                 if (active && s.liveSpeed != null)
                   StatTile(label: 'Speed now', value: '${s.liveSpeed!.round()} mm/s'),
                 if (active && (s.liveFlow ?? 0) > 0.1)
@@ -906,6 +908,9 @@ class _Temps extends StatelessWidget {
           color: C.chamber,
           onTap: s.chamberHeatable
               ? () => _set(context, 'chamber', 'chamber', client.setChamber)
+              : null,
+          onLongPress: s.chamberHeatable && s.chamberTarget > 0 && s.state != 'printing' && s.state != 'paused'
+              ? () => run(context, () => client.setChamber(0), done: 'Chamber heater off')
               : null,
         ),
     ];
