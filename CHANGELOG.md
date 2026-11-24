@@ -3,7 +3,19 @@
 Every release of Printer Hub (app, home bridge, relay and Orca plugin ship together).
 Downloads: [GitHub releases](https://github.com/dragonemprorx90/printer-hub/releases).
 
-## 1.28.0 — unreleased
+## 1.29.0 — unreleased
+
+- Workshop (Tools → Workshop, or the Overview): stats and records, a calendar of print days, why prints failed, a maintenance log with ready-made tasks and nozzle wear, spare parts, filament inventory (also without Spoolman), a shopping list, notes, a price quote and calibration calculators.
+- Needs you: the bell on the printer list gathers everything paused, failed, offline, damp, due or running low. All printers shows combined stats and every queue.
+- Queue: reorder, finish time per job, "Bed is clear, start next". Files: tags, tidy up, grid view, finish-at scheduling, several at once, and what each file cost and how often it printed.
+- Overview: pause at a height, print again, pace against the slicer, cost so far, live speed and flow, a pinned note, Remind me, keep screen on. Camera: brightness, grid, stamped snapshots, remembered zoom.
+- Alerts: quiet hours, mute a printer, nozzle temperature drift, filament dry. Your home bridge adds run-out, chamber ready, offline, still paused, still heating, overrun, stuck layer, bed cooled, queue finished, daily and weekly summaries, webhooks, Discord, family topics and Home Assistant (MQTT).
+- Rules: days and hours, templates, a test run, holiday mode, copy and paste, idle and layer triggers, power devices, macros and alerts as actions.
+- iPhone: quick actions, printerhub:// links, open G-code from Files, Siri Shortcuts. Mac: menu-bar and Dock menus, Dock badge, open at login, keep on top, watch a folder, keyboard shortcuts.
+- Settings: find a setting, text size, bold text, larger buttons, high contrast, reduce motion, °F, 12-hour time, grams, prices per material, a monthly budget, side by side on wide screens.
+- Orca plugin 3.5: Needs you, queue, stats, inventory, thumbnails, pace, pause at a height, fold cards, lights off and pause all.
+
+## 1.28.0 — 2026-11-22
 
 - Time left is more accurate: early in a print it trusts the slicer's estimate, then shifts to the measured pace as the print goes on.
 - Slicing on the U1 no longer fails for models near the front or left edge of the plate. A model that really is off the plate now says so.
