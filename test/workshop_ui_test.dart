@@ -68,6 +68,7 @@ void main() {
       'printers': [jsonEncode(const Printer(name: 'K2 Plus', host: '127.0.0.1', port: 1).toJson())],
       'seenVersion': '99.0.0',
       'updateAuto': false,
+      'orcaLink': false, // CI Macs would bind its ports and leave timers
     });
     await settings.load();
     t.view.physicalSize = const Size(390 * 3, 844 * 3);
