@@ -302,12 +302,31 @@ def shift_stl(path, dx, dy):
         f.write(b)
 
 
-def why(out):
+def orca_result(out_dir):
+    """Orca's own reason, from the result.json it writes next to the G-code."""
+    try:
+        with open(os.path.join(out_dir, 'result.json')) as f:
+            r = json.load(f)
+    except (OSError, ValueError):
+        return None
+    msg = str(r.get('error_string') or '').strip()
+    if r.get('return_code') == -50:
+        return 'Part of the model is outside the printable area. Move it in from the edge.'
+    return msg[:300] if msg and msg != 'Success.' else None
+
+
+def why(out, code=None):
     """The useful line of Orca's output when a slice fails."""
     if 'return -50' in out:
         return 'Part of the model is outside the printable area. Move it in from the edge.'
     lines = [l.strip() for l in out.splitlines() if l.strip() and 'run found error' not in l]
-    return (lines[-1] if lines else 'Slicing failed')[:300]
+    if lines:
+        return lines[-1][:300]
+    if code is not None and code < 0:
+        return f'OrcaSlicer crashed (signal {-code}) on this model'
+    if code:
+        return f'OrcaSlicer stopped with error {code} and said nothing'
+    return 'OrcaSlicer made no G-code (nothing on the plate?)'
 
 
 def run(job, args, model, name, folder):
@@ -325,7 +344,9 @@ def run(job, args, model, name, folder):
                                capture_output=True, text=True, timeout=1800)
         plates = sorted(f for f in os.listdir(out_dir) if f.endswith('.gcode'))
         if r.returncode != 0 or not plates:
-            raise RuntimeError(why(r.stdout + r.stderr))
+            # In `docker logs`, so a failure can be looked into later.
+            print(f'Slice {job} ({name}) failed, exit {r.returncode}:\n{(r.stdout + r.stderr)[-3000:]}', flush=True)
+            raise RuntimeError(orca_result(out_dir) or why(r.stdout + r.stderr, r.returncode))
         stem = os.path.splitext(name)[0]
         j['state'] = 'uploading'
         files, secs, grams = [], 0.0, 0.0

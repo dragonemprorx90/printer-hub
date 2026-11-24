@@ -74,6 +74,19 @@ def slice_job(query, model=None):
 
 
 if __name__ == '__main__':
+    # Failure reasons: Orca's result.json first, then its output, then the exit code.
+    d = tempfile.mkdtemp()
+    assert server.orca_result(d) is None
+    with open(f'{d}/result.json', 'w') as f:
+        json.dump({'return_code': -100, 'error_string': 'Nothing to be sliced'}, f)
+    assert server.orca_result(d) == 'Nothing to be sliced'
+    with open(f'{d}/result.json', 'w') as f:
+        json.dump({'return_code': 0, 'error_string': 'Success.'}, f)
+    assert server.orca_result(d) is None
+    assert server.why('', -11) == 'OrcaSlicer crashed (signal 11) on this model'
+    assert server.why('', 3) == 'OrcaSlicer stopped with error 3 and said nothing'
+    assert server.why('a\nreal reason\n', 1) == 'real reason'
+
     for port, h in ((7199, FakeMoonraker), (7198, server.Handler)):
         threading.Thread(target=ThreadingHTTPServer(('127.0.0.1', port), h).serve_forever, daemon=True).start()
 
