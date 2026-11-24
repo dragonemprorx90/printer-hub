@@ -173,6 +173,15 @@ void main() {
     expect(turnsText(2.3), 'about 2.3 turns');
   });
 
+  test('calculators', () {
+    expect(rotationDistance(7.5, 100, 95), closeTo(7.125, 1e-9));
+    expect(flowFix(100, 0.45, 0.5), closeTo(90, 1e-9));
+    expect(towerValue(0, 0.005, 12.3), closeTo(0.06, 1e-9));
+    expect(towerValue(230, -5, 22, every: 10), 220);
+    expect(shrinkScale(100, 99.2), closeTo(100.806, 0.001));
+    expect(metresFromGrams(1000), closeTo(335, 1));
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

@@ -46,7 +46,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 5,
+        length: 6,
         child: Scaffold(
           appBar: AppBar(
             title: Text('Workshop · ${widget.printer.name}'),
@@ -56,6 +56,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
               Tab(text: 'Filament'),
               Tab(text: 'Notes'),
               Tab(text: 'Quote'),
+              Tab(text: 'Calculators'),
             ]),
           ),
           body: _error != null
@@ -68,6 +69,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
                       _list(_filament()),
                       _list(_notes()),
                       _QuoteTab(client: widget.client),
+                      const _CalcTab(),
                     ]),
         ),
       );
@@ -978,6 +980,125 @@ class _QuoteTabState extends State<_QuoteTab> {
           ]),
         ]),
       ),
+    ]);
+  }
+}
+
+/// Calibration maths. Nothing here talks to the printer: you type what you
+/// measured and copy the answer into your config or slicer.
+class _CalcTab extends StatefulWidget {
+  const _CalcTab();
+  @override
+  State<_CalcTab> createState() => _CalcTabState();
+}
+
+class _CalcTabState extends State<_CalcTab> {
+  final _v = <String, double>{
+    'rd': 7.5, 'req': 100, 'act': 100, //
+    'flow': 100, 'exp': 0.45, 'meas': 0.45,
+    'paStart': 0, 'paStep': 0.005, 'paH': 10,
+    'tStart': 230, 'tStep': -5, 'tEvery': 10, 'tH': 15,
+    'des': 100, 'got': 100,
+    'g': 1000, 'dens': 1.24,
+  };
+
+  Widget _f(String k, String label, {String suffix = ''}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: TextFormField(
+          initialValue: '${_v[k]}',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+          decoration: InputDecoration(labelText: label, suffixText: suffix, isDense: true),
+          onChanged: (t) {
+            final n = double.tryParse(t.replaceAll(',', '.'));
+            if (n != null) setState(() => _v[k] = n);
+          },
+        ),
+      );
+
+  Widget _answer(String label, String value) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+          SelectableText(value, style: T.value),
+          IconButton(
+            tooltip: 'Copy',
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: value));
+              toast(context, 'Copied $value');
+            },
+          ),
+        ]),
+      );
+
+  String _num(double v, [int dp = 3]) => v.isFinite ? v.toStringAsFixed(dp) : '—';
+
+  @override
+  Widget build(BuildContext context) {
+    final v = _v;
+    final panels = [
+      Panel(
+        title: 'Extruder: rotation distance',
+        icon: Icons.straighten_rounded,
+        child: Column(children: [
+          _f('rotation_distance now', 'rd'),
+          _f('Asked to extrude', 'req', suffix: 'mm'),
+          _f('Actually extruded', 'act', suffix: 'mm'),
+          _answer('New rotation_distance', _num(rotationDistance(v['rd']!, v['req']!, v['act']!))),
+        ]),
+      ),
+      Panel(
+        title: 'Flow from a single wall',
+        icon: Icons.opacity_rounded,
+        child: Column(children: [
+          _f('Flow now', 'flow', suffix: '%'),
+          _f('Wall should be', 'exp', suffix: 'mm'),
+          _f('Wall measures', 'meas', suffix: 'mm'),
+          _answer('New flow', '${_num(flowFix(v['flow']!, v['exp']!, v['meas']!), 1)}%'),
+        ]),
+      ),
+      Panel(
+        title: 'Pressure advance tower',
+        icon: Icons.stacked_line_chart_rounded,
+        child: Column(children: [
+          _f('Start value', 'paStart'),
+          _f('Added per mm', 'paStep'),
+          _f('Best-looking height', 'paH', suffix: 'mm'),
+          _answer('Pressure advance', _num(towerValue(v['paStart']!, v['paStep']!, v['paH']!), 4)),
+        ]),
+      ),
+      Panel(
+        title: 'Temperature tower',
+        icon: Icons.thermostat_rounded,
+        child: Column(children: [
+          _f('Bottom temperature', 'tStart', suffix: '°C'),
+          _f('Change per block', 'tStep', suffix: '°C'),
+          _f('Block height', 'tEvery', suffix: 'mm'),
+          _f('Best-looking height', 'tH', suffix: 'mm'),
+          _answer('Print at', '${_num(towerValue(v['tStart']!, v['tStep']!, v['tH']!, every: v['tEvery']!), 0)}°C'),
+        ]),
+      ),
+      Panel(
+        title: 'Shrinkage',
+        icon: Icons.photo_size_select_small_rounded,
+        child: Column(children: [
+          _f('Designed size', 'des', suffix: 'mm'),
+          _f('Printed size', 'got', suffix: 'mm'),
+          _answer('Scale the model to', '${_num(shrinkScale(v['des']!, v['got']!), 2)}%'),
+        ]),
+      ),
+      Panel(
+        title: 'Filament weight to length',
+        icon: Icons.linear_scale_rounded,
+        child: Column(children: [
+          _f('Weight', 'g', suffix: 'g'),
+          _f('Density', 'dens', suffix: 'g/cm³'),
+          _answer('Length (1.75 mm)', '${_num(metresFromGrams(v['g']!, density: v['dens']!), 0)} m'),
+        ]),
+      ),
+    ];
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      for (final (i, p) in panels.indexed) ...[if (i > 0) const SizedBox(height: 12), p],
     ]);
   }
 }

@@ -226,6 +226,25 @@ String jobKey(PrintJob j) => '${j.filename}@${j.start.millisecondsSinceEpoch ~/ 
   return (fil, power, wear, labour, cost * (1 + markupPct / 100));
 }
 
+// ---------------------------------------------------------------- calculators
+
+/// Klipper rotation_distance after asking for [requested] mm and measuring [actual].
+double rotationDistance(double old, double requested, double actual) => old * actual / requested;
+
+/// New flow % from a single-wall test: expected vs measured wall thickness.
+double flowFix(double flowPct, double expected, double measured) => flowPct * expected / measured;
+
+/// Value on a tower at [height] mm: start + (height / every) steps of [step].
+double towerValue(double start, double step, double height, {double every = 1}) =>
+    start + (height / every).floor() * step;
+
+/// Scale % to make a part come out at its designed size.
+double shrinkScale(double designed, double measured) => designed / measured * 100;
+
+/// Filament length (m) for grams, and the other way (1.75 mm unless given).
+double metresFromGrams(double g, {double density = 1.24, double diameter = 1.75}) =>
+    g / (density * math.pi * math.pow(diameter / 20, 2) * 100);
+
 // ---------------------------------------------------------------- queue
 
 /// When each queued job will finish, one after another, starting [from]
