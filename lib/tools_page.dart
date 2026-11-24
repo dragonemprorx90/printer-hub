@@ -695,6 +695,11 @@ class _ToolsTabState extends State<ToolsTab> {
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
               ActionChip(
+                avatar: const Icon(Icons.notifications_outlined, size: 16),
+                label: const Text('Alert history'),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _AlertHistory(client: c))),
+              ),
+              ActionChip(
                 avatar: const Icon(Icons.article_outlined, size: 16),
                 label: const Text('Bridge log'),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _BridgeLog(client: c))),
@@ -882,6 +887,36 @@ class _BridgeLogState extends State<_BridgeLog> {
               padding: const EdgeInsets.all(16),
               itemCount: lines.length,
               itemBuilder: (_, i) => SelectableText(lines[i], style: mono.copyWith(fontSize: 12)),
+            );
+          },
+        ),
+      );
+}
+
+/// The last 100 alerts your home bridge sent (kept in the printer's database).
+class _AlertHistory extends StatelessWidget {
+  final MoonrakerClient client;
+  const _AlertHistory({required this.client});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Alert history')),
+        body: FutureBuilder<dynamic>(
+          future: client.dbGet('alerts_log'),
+          builder: (context, snap) {
+            if (snap.hasError) return StateView.error('${snap.error}');
+            if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+            final list = [for (final a in (snap.data as List?) ?? const []) if (a is Map) a].reversed.toList();
+            if (list.isEmpty) {
+              return const StateView.empty(Icons.notifications_none_rounded, 'No alerts yet. A home bridge from 1.29 keeps the last 100.');
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: list.length,
+              itemBuilder: (_, i) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('${list[i]['title']}'),
+                subtitle: Text('${fmtAgo(DateTime.fromMillisecondsSinceEpoch(((list[i]['at'] as num?) ?? 0).toInt() * 1000))} · ${list[i]['message']}'),
+              ),
             );
           },
         ),

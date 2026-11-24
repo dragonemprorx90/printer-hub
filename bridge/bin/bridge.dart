@@ -324,6 +324,8 @@ class Alerts {
   final _idleRan = <String>{}; // idle rules already run in this idle stretch
   final _lastRan = <String, int>{}; // rule signature -> when it last ran (s), shown in the app
   bool _lastRanDirty = false;
+  final _alertLog = <Map<String, Object>>[]; // last 100 alerts, kept in Moonraker for the app
+  bool _alertLogDirty = false;
   final double bedCool; // °C; "take the print off" below this, 0 = off
   final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
   String? get state => _state;
@@ -372,6 +374,9 @@ class Alerts {
       return;
     }
     counters['alerts'] = counters['alerts']! + 1;
+    _alertLog.add({'at': DateTime.now().millisecondsSinceEpoch ~/ 1000, 'title': title, 'message': message});
+    if (_alertLog.length > 100) _alertLog.removeAt(0);
+    _alertLogDirty = true;
     unawaited(_fanOut(title, message, priority));
     final server = topic.replace(path: '', query: null);
     final name = topic.pathSegments.last;
@@ -796,6 +801,13 @@ extension on Alerts {
   /// Rules come from Moonraker's database (the app edits them). Reloaded each
   /// minute, when daily ones are due too.
   Future<void> _rulesLoop() async {
+    // Keep the alert history across bridge restarts: load what's saved, then append.
+    try {
+      final r = await _client.get(Uri.parse('http://$host:$port/server/database/item?namespace=printer_hub&key=alerts_log'));
+      final saved = r.statusCode == 200 ? (jsonDecode(r.body)['result']?['value'] as List?) ?? const [] : const [];
+      _alertLog.insertAll(0, [for (final a in saved) if (a is Map) Map<String, Object>.from(a)]);
+      if (_alertLog.length > 100) _alertLog.removeRange(0, _alertLog.length - 100);
+    } catch (_) {}
     while (true) {
       try {
         final r = await _client.get(Uri.parse(
@@ -839,6 +851,14 @@ extension on Alerts {
       if (_state == 'printing' && mins > 0) {
         await _runRules((r) => r['on'] == 'interval' && (int.tryParse('${r['at']}') ?? 0) > 0 &&
             mins % int.parse('${r['at']}') == 0);
+      }
+      if (_alertLogDirty) {
+        _alertLogDirty = false;
+        try {
+          await _client.post(Uri.parse('http://$host:$port/server/database/item'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'namespace': 'printer_hub', 'key': 'alerts_log', 'value': _alertLog}));
+        } catch (_) {}
       }
       if (_lastRanDirty) {
         _lastRanDirty = false;
