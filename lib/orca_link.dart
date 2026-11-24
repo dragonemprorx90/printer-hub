@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'camera.dart';
+import 'gcode.dart';
 import 'insights.dart';
 import 'moonraker.dart';
 import 'settings.dart';
@@ -421,6 +422,13 @@ class OrcaLink {
             });
           case '/hub/rules':
             json(200, await c.rules());
+          case '/hub/thumbnail':
+            final png = await Thumbs.of(c, req.uri.queryParameters['file'] ?? '');
+            if (png == null) return json(404, {'error': 'no thumbnail'});
+            res.headers
+              ..contentType = ContentType('image', 'png')
+              ..set('cache-control', 'max-age=600');
+            res.add(png);
           case '/hub/queue':
             final (jobs, state) = await c.queue();
             json(200, {

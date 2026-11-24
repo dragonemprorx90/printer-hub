@@ -143,7 +143,7 @@ PAGE = r"""
       '<button onclick="ph.act(' + slug + ',\'preheat\',{nozzle:210,bed:60})">PLA</button>' +
       '<button onclick="ph.act(' + slug + ',\'preheat\',{nozzle:240,bed:75})">PETG</button>' +
       '<button onclick="ph.act(' + slug + ',\'preheat\',{nozzle:260,bed:100,chamber:50})">ABS</button>' +
-      '<button onclick="ph.act(' + slug + ',\'cooldown\')">Cool down</button></div>';
+      '<button onclick="ph.act(' + slug + ',\'cooldown\')">Heaters off</button></div>';
     out += '<div class="line"><span class="lbl">Motion</span>' +
       '<button onclick="ph.act(' + slug + ',\'home\')">Home</button>' +
       '<button onclick="ph.act(' + slug + ',\'motors_off\')">Motors off</button>' +
@@ -229,7 +229,9 @@ PAGE = r"""
     if (!r.length) return '<div class="sec muted">No rules. Add them in the Printer Hub app (Tools → Rules).</div>';
     return '<div class="sec">' + r.map(function (x, i) {
       return '<div class="line"><input type="checkbox" ' + (x.off ? "" : "checked") + ' onchange="ph.act(' + q(p.slug) + ',\'rule_toggle\',{index:' + i + '})"> ' +
-        esc((x.on === "time" ? "Daily " + x.at : x.on + (x.at ? " " + x.at : "")) + " → " + (x.label || x["do"])) + '</div>';
+        esc((x.on === "time" ? "Daily " + x.at : x.on.replace(/_/g, " ") + (x.at ? " " + x.at : "")) + " → " + (x.label || x["do"]) +
+          ((x.days && x.days.length) || x.from ? " (" + [(x.days || []).map(function (d) { return ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][d - 1]; }).join(" "),
+            x.from ? x.from + "–" + x.to : ""].filter(Boolean).join(", ") + ")" : "")) + '</div>';
     }).join("") + '</div>';
   }
 
@@ -293,6 +295,8 @@ PAGE = r"""
     h += '<div class="muted">Nozzle ' + t(p.hotend, p.hotendTarget) + ' · Bed ' + t(p.bed, p.bedTarget) +
       (p.chamber != null ? ' · Chamber ' + t(p.chamber, p.chamberTarget) : '') + '</div>';
     if (p.heater) h += '<div class="' + (p.heater.fault ? "err" : "muted") + ' detail">Heater: ' + (p.heater.fault ? "fault " + esc(p.heater.faultReason || "") : esc(p.heater.mode || "off")) + '</div>';
+    if (active && p.file) h += '<img class="thumbnail" style="float:right;width:48px;height:48px;object-fit:contain;border-radius:8px" src="' + HUB +
+      '/hub/thumbnail?printer=' + encodeURIComponent(p.slug) + '&file=' + encodeURIComponent(p.file) + '" onerror="this.remove()" alt="">';
     if (active) h += '<div class="muted">' + esc((p.file || "").split("/").pop()) + '</div><div class="muted">' +
       (p.layer ? "Layer " + p.layer + (p.layers ? "/" + p.layers : "") + " · " : "") + Math.round(p.progress * 100) + "%" +
       (p.eta ? " · " + dur(p.eta) + " left, done " + clock(p.eta) : "") + '</div>' +
