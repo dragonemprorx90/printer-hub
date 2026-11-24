@@ -101,8 +101,9 @@ Future<void> notify(String title, String body, {String? printerKey}) async {
     payload: printerKey,
     notificationDetails: NotificationDetails(
       // "Silent alerts" in Settings: a banner without the sound.
-      macOS: DarwinNotificationDetails(presentSound: !settings.flag('notifySilent', false)),
-      iOS: DarwinNotificationDetails(presentSound: !settings.flag('notifySilent', false)),
+      // threadIdentifier groups each printer's alerts together in Notification Center.
+      macOS: DarwinNotificationDetails(presentSound: !settings.flag('notifySilent', false), threadIdentifier: printerKey),
+      iOS: DarwinNotificationDetails(presentSound: !settings.flag('notifySilent', false), threadIdentifier: printerKey),
       android: const AndroidNotificationDetails('prints', 'Print alerts',
           importance: Importance.high, priority: Priority.high),
     ),
