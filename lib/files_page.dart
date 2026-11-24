@@ -1338,6 +1338,8 @@ class _FileSheetState extends State<_FileSheet> {
                   Hint(w),
                 if (cfsWarning('${m['filament_type'] ?? ''}'.split(';').first, hasCfs: c.status.cfs.isNotEmpty) case final w?)
                   Hint(w),
+                if (bedWarning('${m['filament_type'] ?? ''}'.split(';').first, m['first_layer_bed_temp'] as num?) case final w?)
+                  Hint(w),
                 for (final n in settings.jsonList('materialNotes'))
                   if ('${m['filament_type'] ?? ''}'.toUpperCase().contains('${n['m']}'.toUpperCase()) ||
                       '${n['m']}'.toUpperCase().contains('${m['filament_type'] ?? '~'}'.split(';').first.toUpperCase()))

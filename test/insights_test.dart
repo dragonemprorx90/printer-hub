@@ -242,6 +242,12 @@ void main() {
     expect(tempWarning('XYZ', 999), isNull);
   });
 
+  test('bed temperature for the material', () {
+    expect(bedWarning('ABS', 60), contains('usually 85–115'));
+    expect(bedWarning('PLA', 55), isNull);
+    expect(bedWarning('PLA', 0), isNull);
+  });
+
   test('CFS and flexible filament', () {
     expect(cfsWarning('TPU 95A', hasCfs: true), contains('external spool'));
     expect(cfsWarning('TPU', hasCfs: false), isNull);

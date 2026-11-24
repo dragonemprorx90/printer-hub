@@ -528,6 +528,27 @@ String? tempWarning(String? material, num? temp) {
   return null;
 }
 
+/// Usual bed ranges (°C) per material.
+const bedRanges = {
+  'PETG': (60, 90), 'PLA': (40, 70), 'ABS': (85, 115), 'ASA': (85, 115),
+  'TPU': (30, 65), 'PA': (60, 110), 'PC': (90, 120),
+};
+
+/// A note when the file's bed temperature is outside the material's usual range.
+String? bedWarning(String? material, num? temp) {
+  if (temp == null || temp <= 0) return null;
+  final m = (material ?? '').toUpperCase();
+  for (final e in bedRanges.entries) {
+    if (!m.contains(e.key)) continue;
+    final (lo, hi) = e.value;
+    if (temp < lo || temp > hi) {
+      return 'The bed is set to ${temp.round()}°C for $m (usually $lo–$hi°C). Check the first layer sticks.';
+    }
+    return null;
+  }
+  return null;
+}
+
 /// Drying presets: (material, °C, hours).
 const dryPresets = [
   ('PLA', 50, 4),
