@@ -39,7 +39,7 @@ class _FilesTabState extends State<FilesTab> {
   String? _error;
   String _query = '';
   _Sort _sort = _Sort.newest;
-  bool _favOnly = false, _dragging = false, _uploading = false;
+  bool _favOnly = false, _dragging = false, _uploading = false, _recentOnly = false;
   List<QueuedJob> _queue = const [];
   final _sel = <String>{}; // long-press to select several files
   String _queueState = '';
@@ -275,10 +275,15 @@ class _FilesTabState extends State<FilesTab> {
   List<GcodeFile> get _visible {
     final favs = settings.favourites(_favScope);
     final q = _query.toLowerCase();
-    final source = (_query.isNotEmpty || _favOnly) ? (_all ?? const []) : (_files ?? const []);
+    final source = (_query.isNotEmpty || _favOnly || _recentOnly) ? (_all ?? const []) : (_files ?? const []);
+    final recent = {
+      for (final j in c.lastHistory?.$1 ?? const <PrintJob>[])
+        if (DateTime.now().difference(j.start).inDays < 30) j.filename,
+    };
     final list = [
       for (final f in source)
         if ((!_favOnly || favs.contains(f.path)) &&
+            (!_recentOnly || recent.contains(f.path)) &&
             (q.isEmpty ||
                 f.path.toLowerCase().contains(q) ||
                 (q.startsWith('#') && settings.text('tags.$_favScope.${f.path}').toLowerCase().contains(q.substring(1)))))
@@ -484,7 +489,7 @@ class _FilesTabState extends State<FilesTab> {
 
   @override
   Widget build(BuildContext context) {
-    final browsing = _query.isEmpty && !_favOnly;
+    final browsing = _query.isEmpty && !_favOnly && !_recentOnly;
     final files = _visible;
     final crumbs = _path.isEmpty ? <String>[] : _path.split('/');
 
@@ -510,6 +515,16 @@ class _FilesTabState extends State<FilesTab> {
           onPressed: () {
             setState(() => _favOnly = !_favOnly);
             if (_favOnly) _ensureAll();
+          },
+        ),
+        IconButton(
+          tooltip: _recentOnly ? 'Showing files printed in the last 30 days' : 'Printed in the last 30 days',
+          isSelected: _recentOnly,
+          icon: const Icon(Icons.history_rounded),
+          selectedIcon: Icon(Icons.history_rounded, color: C.accent),
+          onPressed: () {
+            setState(() => _recentOnly = !_recentOnly);
+            if (_recentOnly) _ensureAll();
           },
         ),
         PopupMenuButton<_Sort>(
