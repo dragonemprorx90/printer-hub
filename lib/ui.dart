@@ -593,7 +593,10 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final (color, label) = statusStyle(state, online);
     final live = online && state == 'printing';
-    return AnimatedContainer(
+    return Semantics(
+      label: 'Status: $label',
+      excludeSemantics: true,
+      child: AnimatedContainer(
       duration: M.base,
       curve: M.curve,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -620,7 +623,7 @@ class StatusPill extends StatelessWidget {
         const SizedBox(width: 6),
         Text(label, style: T.label.copyWith(color: color)),
       ]),
-    );
+    ));
   }
 }
 
@@ -673,15 +676,18 @@ class StatTile extends StatelessWidget {
   final String label, value;
   const StatTile({super.key, required this.label, required this.value});
 
+  // Read as one "Elapsed: 1h 2m" rather than two separate bits of text.
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: TextStyle(color: C.muted, fontSize: 12)),
-          const SizedBox(height: 2),
-          Text(value, style: T.value),
-        ],
+  Widget build(BuildContext context) => MergeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: TextStyle(color: C.muted, fontSize: 12)),
+            const SizedBox(height: 2),
+            Text(value, style: T.value),
+          ],
+        ),
       );
 }
 

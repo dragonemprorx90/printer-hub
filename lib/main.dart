@@ -668,7 +668,11 @@ class _PrinterCard extends StatelessWidget {
         final s = snap.data!;
         final active = s.online && (s.state == 'printing' || s.state == 'paused');
         final eta = s.eta;
-        return Tile(
+        return Semantics(
+          label: '${printer.name}, ${s.online ? s.state : 'offline'}'
+              '${active ? ', ${(s.progress * 100).round()} percent${eta == null ? '' : ', ${fmtDuration(eta)} left'}' : ''}',
+          hint: 'Opens the printer. Long-press for quick actions.',
+          child: Tile(
           radius: 20,
           onTap: onOpen,
           onLongPress: () => _quick(context, client, s),
@@ -788,7 +792,7 @@ class _PrinterCard extends StatelessWidget {
               ),
             ]),
           ),
-        );
+        ));
       },
     );
   }
