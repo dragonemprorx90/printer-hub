@@ -554,6 +554,7 @@ class _JobPanel extends StatelessWidget {
         icon: Icons.layers_outlined,
         child: Column(children: [
           banner,
+          _QueueHint(client: client, printing: false),
           Row(children: [
             Container(
               width: 44,
@@ -722,6 +723,7 @@ class _JobPanel extends StatelessWidget {
           ),
         ]),
         if (active && s.failureWatch != null) _FailureWatch(watch: s.failureWatch!, client: client),
+        _QueueHint(client: client, printing: active),
       ]),
     );
   }
@@ -1363,6 +1365,54 @@ class _AwakeChipState extends State<_AwakeChip> {
         onSelected: (v) {
           setState(() => _on = v);
           v ? WakelockPlus.enable() : WakelockPlus.disable();
+        },
+      );
+}
+
+/// "Next in the queue: …", and on an idle printer a button to start it.
+class _QueueHint extends StatefulWidget {
+  final MoonrakerClient client;
+  final bool printing;
+  const _QueueHint({required this.client, required this.printing});
+  @override
+  State<_QueueHint> createState() => _QueueHintState();
+}
+
+class _QueueHintState extends State<_QueueHint> {
+  late var _q = widget.client.queue().catchError((_) => (<QueuedJob>[], ''));
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<(List<QueuedJob>, String)>(
+        future: _q,
+        builder: (context, snap) {
+          final jobs = snap.data?.$1 ?? const <QueuedJob>[];
+          if (jobs.isEmpty) return const SizedBox.shrink();
+          final next = jobs.first.filename.split('/').last;
+          return Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 4),
+            child: Row(children: [
+              Icon(Icons.queue_rounded, size: 18, color: C.muted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Next in the queue: $next${jobs.length > 1 ? ' (+${jobs.length - 1} more)' : ''}',
+                    style: T.small.copyWith(color: C.muted), overflow: TextOverflow.ellipsis),
+              ),
+              if (!widget.printing && snap.data?.$2 != 'ready')
+                TextButton(
+                  onPressed: () async {
+                    if (!await confirm(context, 'Start the queue?', message: '$next starts printing now. Is the plate clear?', action: 'Start') ||
+                        !context.mounted ||
+                        !await preflight(context) ||
+                        !context.mounted) {
+                      return;
+                    }
+                    await run(context, widget.client.startQueue, done: 'Queue started');
+                    setState(() => _q = widget.client.queue().catchError((_) => (<QueuedJob>[], '')));
+                  },
+                  child: const Text('Start'),
+                ),
+            ]),
+          );
         },
       );
 }
