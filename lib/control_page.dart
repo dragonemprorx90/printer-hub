@@ -518,6 +518,36 @@ class _ControlTabState extends State<ControlTab> {
             icon: const Icon(Icons.restart_alt_rounded),
             label: const Text('Firmware restart'),
           ),
+          OutlinedButton.icon(
+            onPressed: () async {
+              if (c.status.state == 'printing' || c.status.state == 'paused') {
+                return toast(context, 'Wait for the print to finish first');
+              }
+              if (await confirm(context, 'Restart Moonraker?',
+                      message: 'The app loses the printer for a few seconds, then reconnects.', action: 'Restart') &&
+                  mounted) {
+                run(context, c.restartMoonraker, done: 'Moonraker is restarting');
+              }
+            },
+            icon: const Icon(Icons.dns_outlined),
+            label: const Text('Restart Moonraker'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () async {
+              if (c.status.state == 'printing' || c.status.state == 'paused') {
+                return toast(context, 'Wait for the print to finish first');
+              }
+              if (await confirm(context, "Restart the printer's computer?",
+                      message: 'It takes a minute or two to come back.', action: 'Restart', danger: true) &&
+                  mounted &&
+                  await confirmAway(context, c.viaRelay, "restart the printer's computer") &&
+                  mounted) {
+                run(context, c.rebootHost, done: 'Restarting');
+              }
+            },
+            icon: const Icon(Icons.power_settings_new_rounded),
+            label: const Text("Restart the printer's computer"),
+          ),
         ]),
       );
 }

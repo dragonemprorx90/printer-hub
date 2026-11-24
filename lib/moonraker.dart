@@ -1016,6 +1016,13 @@ class MoonrakerClient {
   Future<void> resume() => _call('printer.print.resume');
   Future<void> cancel() => _call('printer.print.cancel');
   Future<void> emergencyStop() => _call('printer.emergency_stop');
+  /// Restarts the Moonraker service (the app reconnects by itself).
+  Future<void> restartMoonraker() async =>
+      _check(await _http.post(_uri(['machine', 'services', 'restart'], {'service': 'moonraker'}), headers: authHeaders));
+
+  /// Reboots the printer's computer.
+  Future<void> rebootHost() async => _check(await _http.post(_uri(['machine', 'reboot']), headers: authHeaders));
+
   Future<void> firmwareRestart() => _call('printer.firmware_restart');
   Future<void> restartKlipper() => _call('printer.restart');
   Future<void> startPrint(String filename) =>
