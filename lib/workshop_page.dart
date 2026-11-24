@@ -1252,7 +1252,33 @@ class _QuoteTabState extends State<_QuoteTab> {
     final each = step > 0 ? (q.$5 / step).ceil() * step : q.$5;
     final text = '${_file ?? 'Print'}: ${_grams.round()} g, ${fmtDuration(_hours * 3600)}. '
         '${copies > 1 ? '$copies × ${m(each)} = ${m(each * copies)}' : 'Price ${m(each)}'}.';
+    final saved = settings.jsonList('quotes');
     return ListView(padding: const EdgeInsets.all(16), children: [
+      if (saved.isNotEmpty) ...[
+        Panel(
+          title: 'Saved quotes',
+          icon: Icons.receipt_long_outlined,
+          child: Column(children: [
+            for (final (i, q) in saved.indexed.toList().reversed.take(10))
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text('${q['text']}'),
+                subtitle: Text(fmtDate(DateTime.fromMillisecondsSinceEpoch(q['at'] as int))),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: '${q['text']}'));
+                  toast(context, 'Quote copied');
+                },
+                trailing: IconButton(
+                  tooltip: 'Remove',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () => setState(() => settings.setJsonList('quotes', [...saved]..removeAt(i))),
+                ),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 12),
+      ],
       Panel(
         title: 'The print',
         icon: Icons.description_outlined,
@@ -1280,13 +1306,26 @@ class _QuoteTabState extends State<_QuoteTab> {
       Panel(
         title: 'Price',
         icon: Icons.sell_outlined,
-        trailing: TextButton(
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: text));
-            toast(context, 'Quote copied');
-          },
-          child: const Text('Copy'),
-        ),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          TextButton(
+            onPressed: () {
+              settings.setJsonList('quotes', [
+                ...settings.jsonList('quotes'),
+                {'text': text, 'at': DateTime.now().millisecondsSinceEpoch},
+              ]);
+              setState(() {});
+              toast(context, 'Quote saved');
+            },
+            child: const Text('Save'),
+          ),
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: text));
+              toast(context, 'Quote copied');
+            },
+            child: const Text('Copy'),
+          ),
+        ]),
         child: Column(children: [
           for (final (l, v) in [('Filament', q.$1), ('Power', q.$2), ('Machine wear', q.$3), ('Your time', q.$4)])
             Row(children: [Expanded(child: Text(l)), Text(m(v), style: T.value.copyWith(fontSize: 14))]),
