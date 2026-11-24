@@ -160,6 +160,10 @@ class _PrinterListPageState extends State<PrinterListPage> {
     if (u != null && u.scheme == 'printerhub') {
       if (u.host == 'wall') {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => WallPage(printers: _printers)));
+      } else if (u.host == 'fleet') {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => FleetPage(printers: _printers)));
+      } else if (u.host == 'settings') {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => SettingsPage(printers: _printers, onImport: _import)));
       } else if (u.host == 'printer' && u.pathSegments.isNotEmpty) {
         final name = u.pathSegments.first.toLowerCase();
         // printerhub://printer/NAME/files (or overview, control, tools, history, workshop)
