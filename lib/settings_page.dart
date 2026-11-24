@@ -408,13 +408,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('notifyDrift', 'Nozzle temperature far off its target'),
                   ('notifyStart', 'Print started'),
                   ('notifyBedCool', 'Bed has cooled after a print'),
+                  ('notifySilent', 'Silent alerts (no sound)'),
                   ('notifyQuarters', 'At 25%, 50% and 75%'),
                   ('feedback', 'Vibrate and sound while the app is open'),
                 ])
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(label),
-                    value: settings.flag(key, !const {'notifyStart', 'notifyQuarters', 'notifyBedCool'}.contains(key)), // these start off
+                    value: settings.flag(key, !const {'notifyStart', 'notifyQuarters', 'notifyBedCool', 'notifySilent'}.contains(key)), // these start off
                     onChanged: (v) {
                       settings.setFlag(key, v);
                       _refresh();

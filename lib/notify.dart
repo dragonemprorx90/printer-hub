@@ -99,10 +99,11 @@ Future<void> notify(String title, String body, {String? printerKey}) async {
     title: title,
     body: body,
     payload: printerKey,
-    notificationDetails: const NotificationDetails(
-      macOS: DarwinNotificationDetails(),
-      iOS: DarwinNotificationDetails(),
-      android: AndroidNotificationDetails('prints', 'Print alerts',
+    notificationDetails: NotificationDetails(
+      // "Silent alerts" in Settings: a banner without the sound.
+      macOS: DarwinNotificationDetails(presentSound: !settings.flag('notifySilent', false)),
+      iOS: DarwinNotificationDetails(presentSound: !settings.flag('notifySilent', false)),
+      android: const AndroidNotificationDetails('prints', 'Print alerts',
           importance: Importance.high, priority: Priority.high),
     ),
   );
