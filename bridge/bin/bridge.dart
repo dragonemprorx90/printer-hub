@@ -895,6 +895,7 @@ extension on Alerts {
         final h = await _client.get(Uri.parse('http://$host:$port/server/history/list?limit=30&order=desc'));
         factor = historyFactor((jsonDecode(h.body)['result']?['jobs'] as List?) ?? const []);
       } catch (_) {}
+      _estimate = est * factor; // "taking longer than planned" compares with this
       final at = DateTime.now().add(Duration(seconds: (est * factor).round()));
       return '$file, done about ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
     } catch (_) {
