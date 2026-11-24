@@ -760,6 +760,23 @@ class _JobPanel extends StatelessWidget {
         ]),
         if (active && s.failureWatch != null) _FailureWatch(watch: s.failureWatch!, client: client),
         _QueueHint(client: client, printing: active),
+        // Just finished: rate it here (also in History).
+        if (s.state == 'complete')
+          if (client.lastHistory?.$1.firstOrNull case final j? when j.filename == s.filename)
+            StatefulBuilder(builder: (context, set) {
+              final k = 'rating.${client.host}:${client.port}.${jobKey(j)}';
+              final r = settings.number(k, 0).round();
+              return Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+                Text('How did it turn out?  ', style: T.small.copyWith(color: C.muted)),
+                for (var i = 1; i <= 5; i++)
+                  IconButton(
+                    tooltip: '$i of 5',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(i <= r ? Icons.star_rounded : Icons.star_outline_rounded, color: i <= r ? C.warn : C.muted),
+                    onPressed: () => set(() => settings.setNumber(k, i == r ? 0 : i.toDouble())),
+                  ),
+              ]);
+            }),
       ]),
     );
   }
