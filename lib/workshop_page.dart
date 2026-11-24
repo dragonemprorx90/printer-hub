@@ -87,7 +87,16 @@ class _WorkshopPageState extends State<WorkshopPage> {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
           Expanded(child: Text(a, overflow: TextOverflow.ellipsis)),
-          Text(b, style: T.value.copyWith(fontSize: 14, color: color)),
+          const SizedBox(width: 12),
+          // Long values (costs with a breakdown, "in about 12 days") get the
+          // room they need but never push the row off a phone screen.
+          Flexible(
+            child: Text(b,
+                textAlign: TextAlign.end,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: T.value.copyWith(fontSize: 14, color: color)),
+          ),
         ]),
       );
 

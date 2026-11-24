@@ -324,7 +324,10 @@ class Panel extends StatelessWidget {
         boxShadow: _softShadow,
       ),
       padding: padding,
-      child: Column(
+      // Transparent Material so list rows and buttons inside show their ink.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -349,7 +352,7 @@ class Panel extends StatelessWidget {
           child,
         ],
       ),
-    );
+    ));
   }
 }
 
