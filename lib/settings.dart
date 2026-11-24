@@ -35,7 +35,7 @@ class AppSettings extends ChangeNotifier {
 
   static const lookKeys = [
     'theme', 'accent', 'highContrast', 'fahrenheit', 'twelveHour', 'textScale', 'splitView', 'openTab', 'reduceMotion',
-    'wallSort', 'wallBusyOnly', 'wallCols', 'hideOffline', 'listSort', 'filesGrid', 'wallCycle',
+    'wallSort', 'wallBusyOnly', 'wallCols', 'hideOffline', 'listSort', 'filesGrid', 'wallCycle', 'bigButtons', 'boldText',
   ];
 
   /// Puts the look and layout back to how a new install starts. Printers,

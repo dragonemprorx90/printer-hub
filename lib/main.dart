@@ -94,8 +94,13 @@ class _PrinterHubAppState extends State<PrinterHubApp> with WidgetsBindingObserv
     Units.fahrenheit = settings.flag('fahrenheit', false);
     Units.twelveHour = settings.flag('twelveHour', false);
     final accent = accents[settings.accent] ?? accents['Mint']!;
-    final look = '${palette.bg.toARGB32()}-${palette.muted.toARGB32()}-${settings.accent}-${Units.fahrenheit}-${Units.twelveHour}';
-    final theme = buildTheme(palette, accent);
+    final look = '${palette.bg.toARGB32()}-${palette.muted.toARGB32()}-${settings.accent}-${Units.fahrenheit}-${Units.twelveHour}'
+        '-${settings.flag('bigButtons', false)}-${settings.flag('boldText', false)}';
+    var theme = buildTheme(palette, accent);
+    if (settings.flag('bigButtons', false)) {
+      // Bigger touch targets everywhere.
+      theme = theme.copyWith(visualDensity: VisualDensity.comfortable, materialTapTargetSize: MaterialTapTargetSize.padded);
+    }
     if (_lastLook != null && _lastLook != look) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildAll());
     }
@@ -107,13 +112,14 @@ class _PrinterHubAppState extends State<PrinterHubApp> with WidgetsBindingObserv
       // In-app text size (Settings → Appearance) on top of the system's.
       builder: (context, child) {
         final scale = settings.number('textScale', 1);
-        final still = settings.flag('reduceMotion', false);
-        if (scale == 1 && !still) return child!;
+        final still = settings.flag('reduceMotion', false), bold = settings.flag('boldText', false);
+        if (scale == 1 && !still && !bold) return child!;
         final mq = MediaQuery.of(context);
         return MediaQuery(
           data: mq.copyWith(
             textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale),
             disableAnimations: still || mq.disableAnimations,
+            boldText: bold || mq.boldText,
           ),
           child: child!,
         );
