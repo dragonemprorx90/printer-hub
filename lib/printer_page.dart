@@ -882,7 +882,15 @@ class _CfsPanel extends StatelessWidget {
                   if (b.temperature != null)
                     Text('${b.temperature!.toStringAsFixed(0)}°C',
                         style: TextStyle(fontSize: 12, color: C.muted)),
-                  if (b.humidity != null)
+                  if (b.humidity != null) ...[
+                    Builder(builder: (_) {
+                      final k = '${client.host} ${b.name}';
+                      _sampleHumidity(k, b.humidity!);
+                      return Semantics(
+                        label: '${b.name} humidity over the last hours',
+                        child: _Sparkline([for (final x in _humidity[k]!) x.$2], b.humidity! >= limit ? C.warn : C.muted),
+                      );
+                    }),
                     Row(mainAxisSize: MainAxisSize.min, children: [
                       if (b.humidity! >= limit)
                         const Icon(Icons.water_drop_rounded,
@@ -895,6 +903,7 @@ class _CfsPanel extends StatelessWidget {
                                   ? FontWeight.w700
                                   : null)),
                     ]),
+                  ],
                 ]),
               ]),
             ),
@@ -912,9 +921,13 @@ class _SlotDot extends StatelessWidget {
   Widget build(BuildContext context) {
     final tip = slot.empty
         ? 'Slot ${slot.label} · empty'
-        : 'Slot ${slot.label}${slot.remain == null ? '' : ' · ${slot.remain!.toStringAsFixed(0)} left'}';
+        : 'Slot ${slot.label} · ${colorName(slot.color!)} ${slot.material}'
+            '${slot.remain == null ? '' : ' · ${slot.remain!.toStringAsFixed(0)} left'}';
     return Tooltip(
       message: tip,
+      excludeFromSemantics: true,
+      child: Semantics(
+      label: tip,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 30,
@@ -933,8 +946,53 @@ class _SlotDot extends StatelessWidget {
         const SizedBox(height: 4),
         Text(slot.label, style: T.caption.copyWith(color: C.muted)),
       ]),
-    );
+    ));
   }
+}
+
+/// Humidity samples per CFS box (one a minute, last 6 hours), while the app runs.
+final _humidity = <String, List<(DateTime, double)>>{};
+
+void _sampleHumidity(String key, double h) {
+  final l = _humidity.putIfAbsent(key, () => []);
+  final now = DateTime.now();
+  if (l.isNotEmpty && now.difference(l.last.$1).inSeconds < 60) return;
+  l.add((now, h));
+  l.removeWhere((x) => now.difference(x.$1).inHours >= 6);
+}
+
+/// A small line of recent values.
+class _Sparkline extends StatelessWidget {
+  final List<double> values;
+  final Color color;
+  const _Sparkline(this.values, this.color);
+  @override
+  Widget build(BuildContext context) => values.length < 2
+      ? const SizedBox.shrink()
+      : SizedBox(width: 60, height: 18, child: CustomPaint(painter: _SparkPainter(values, color)));
+}
+
+class _SparkPainter extends CustomPainter {
+  final List<double> v;
+  final Color color;
+  _SparkPainter(this.v, this.color);
+  @override
+  void paint(Canvas canvas, Size s) {
+    final lo = v.reduce((a, b) => a < b ? a : b), hi = v.reduce((a, b) => a > b ? a : b);
+    final span = (hi - lo).abs() < 1 ? 1 : hi - lo;
+    final path = Path();
+    for (var i = 0; i < v.length; i++) {
+      final p = Offset(s.width * i / (v.length - 1), s.height - (v[i] - lo) / span * s.height);
+      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+    }
+    canvas.drawPath(path, Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5);
+  }
+
+  @override
+  bool shouldRepaint(_SparkPainter old) => old.v.length != v.length || old.v.last != v.last;
 }
 
 class _Actions extends StatelessWidget {

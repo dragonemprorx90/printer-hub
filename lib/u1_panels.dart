@@ -29,13 +29,38 @@ class HeaterPanel extends StatelessWidget {
   }
 
   Future<void> _dry(BuildContext context) async {
-    final t = await askNumber(context, 'Drying temperature', presets: const [40, 45, 50, 55, 60, 65]);
-    if (t == null || !context.mounted) return;
-    final h = await askNumber(context, 'Drying time', presets: const [2, 4, 6, 8, 12], unit: ' h');
-    if (h == null || !context.mounted) return;
+    // A material preset (the heater tops out at 70°C), or your own numbers.
+    final preset = await showModalBottomSheet<(String, int, int)>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: ListView(shrinkWrap: true, children: [
+          const ListTile(title: Text('Dry which filament?')),
+          for (final (m, t, h) in dryPresets)
+            ListTile(
+              title: Text(m),
+              trailing: Text('${t.clamp(30, 70)}°C · $h h${t > 70 ? ' (heater max)' : ''}'),
+              onTap: () => Navigator.pop(ctx, (m, t, h)),
+            ),
+          ListTile(title: const Text('Choose temperature and time…'), onTap: () => Navigator.pop(ctx, ('', 0, 0))),
+        ]),
+      ),
+    );
+    if (preset == null || !context.mounted) return;
+    int? t = preset.$2, h = preset.$3;
+    if (preset.$1.isEmpty) {
+      t = await askNumber(context, 'Drying temperature', presets: const [40, 45, 50, 55, 60, 65]);
+      if (t == null || !context.mounted) return;
+      h = await askNumber(context, 'Drying time', presets: const [2, 4, 6, 8, 12], unit: ' h');
+      if (h == null || !context.mounted) return;
+    }
     final tc = t.clamp(30, 70), hc = h.clamp(1, 12);
+    if (!await confirm(context, 'Start drying at $tc°C for $hc h?', action: 'Start') || !context.mounted) return;
     await run(context, () => client.heaterCommand('drying_start', {'target_c': tc, 'hours': hc}),
         done: 'Drying at $tc°C for $hc h');
+    settings.setJsonList('dryLog', [
+      ...settings.jsonList('dryLog'),
+      {'spool': preset.$1.isEmpty ? 'DragonBreath $tc°C' : 'DragonBreath ${preset.$1}', 'at': DateTime.now().millisecondsSinceEpoch},
+    ]);
   }
 
   @override
@@ -685,6 +710,19 @@ class _HealthPanelState extends State<HealthPanel> {
           final d = snap.data;
           if (d == null || d.$1.isEmpty) return const SizedBox.shrink();
           final (rows, problems) = d;
+          // Version changes since last time (Klipper, Moonraker, firmware…), kept on this device.
+          final key = 'health.versions.${widget.client.host}:${widget.client.port}';
+          final now = {for (final (k, v) in rows) if (k.toLowerCase().contains('version') || k == 'Klipper' || k == 'Moonraker') k: v};
+          final before = {
+            for (final e in (jsonDecode(settings.text(key, '{}')) as Map).entries) '${e.key}': '${e.value}',
+          };
+          final changes = versionChanges(before, now);
+          if (changes.isNotEmpty) {
+            final log = settings.strings('$key.log');
+            settings.setStrings('$key.log', [...log, for (final c in changes) '${fmtDate(DateTime.now())} $c'].reversed.take(20).toList().reversed.toList());
+          }
+          if (now.isNotEmpty && jsonEncode(now) != jsonEncode(before)) settings.setText(key, jsonEncode(now));
+          final log = settings.strings('$key.log');
           return Panel(
             title: 'Printer health',
             icon: Icons.monitor_heart_outlined,
@@ -711,6 +749,11 @@ class _HealthPanelState extends State<HealthPanel> {
               Wrap(spacing: 28, runSpacing: 12, children: [
                 for (final (k, v) in rows) StatTile(label: k, value: v),
               ]),
+              if (log.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('Updates seen', style: T.label.copyWith(color: C.muted)),
+                for (final l in log.reversed.take(5)) Text(l, style: T.small),
+              ],
             ]),
           );
         },
@@ -1029,8 +1072,21 @@ class _MeshHistoryState extends State<MeshHistory> {
         future: _list,
         builder: (context, snap) {
           final list = (snap.data ?? const []).reversed.take(5).toList();
+          final drift = list.isNotEmpty && meshDrifted((list.first['range'] as num).toDouble(), widget.range);
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const SizedBox(height: 8),
+            if (drift)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(children: [
+                  const Icon(Icons.warning_amber_rounded, size: 18, color: C.warn),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text('The bed is more uneven than the mesh you saved on '
+                        '${fmtDate(DateTime.parse('${list.first['at']}'))}. Check the bed screws and that the plate sits flat.'),
+                  ),
+                ]),
+              ),
             Row(children: [
               Text('History', style: TextStyle(color: C.muted, fontSize: 12)),
               const Spacer(),

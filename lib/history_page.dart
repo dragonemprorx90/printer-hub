@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'charts.dart';
+import 'insights.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 import 'ui.dart';
@@ -96,6 +97,8 @@ class _HistoryTabState extends State<HistoryTab> {
   HistoryTotals? _totals;
   String? _error;
   String _filter = 'all';
+  String _query = '', _material = '';
+  int _days = 0; // 0 = all time
 
   @override
   void initState() {
@@ -143,12 +146,13 @@ class _HistoryTabState extends State<HistoryTab> {
     if (jobs == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final shown = [
+    final shown = filterJobs([
       for (final j in jobs)
         if (_filter == 'all' ||
             (_filter == 'failed' ? (j.status == 'error' || j.status == 'klippy_shutdown') : j.status == _filter))
           j,
-    ];
+    ], text: _query, material: _material, from: _days == 0 ? null : DateTime.now().subtract(Duration(days: _days)));
+    final materials = {for (final j in jobs) ?j.material}.toList()..sort();
     return RefreshIndicator(
       onRefresh: _load,
       child: Center(
@@ -193,6 +197,35 @@ class _HistoryTabState extends State<HistoryTab> {
                       onSelected: (_) => setState(() => _filter = key),
                     ),
                 ]),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  for (final (d, label) in const [(0, 'All time'), (7, '7 days'), (30, '30 days'), (90, '90 days')])
+                    ChoiceChip(label: Text(label), selected: _days == d, onSelected: (_) => setState(() => _days = d)),
+                  if (materials.length > 1)
+                    DropdownButton<String>(
+                      value: _material,
+                      underline: const SizedBox(),
+                      items: [
+                        const DropdownMenuItem(value: '', child: Text('Any material')),
+                        for (final m in materials) DropdownMenuItem(value: m, child: Text(m)),
+                      ],
+                      onChanged: (v) => setState(() => _material = v ?? ''),
+                    ),
+                ]),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: const InputDecoration(
+                      isDense: true, hintText: 'Search prints', prefixIcon: Icon(Icons.search_rounded)),
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+                if (shown.length != jobs.length)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                        '${shown.length} of ${jobs.length} prints · ${fmtDuration(shown.fold<double>(0, (a, j) => a + j.duration))} · '
+                        '${money(shown.fold<double>(0, (a, j) => a + jobCost(j)))}',
+                        style: T.small.copyWith(color: C.muted)),
+                  ),
                 const SizedBox(height: 12),
               ]);
             },
@@ -395,6 +428,11 @@ class _JobTile extends StatelessWidget {
     );
   }
 
+  String? _reason(PrintJob j) {
+    final m = jsonDecode(settings.text('failReasons.${client.host}:${client.port}', '{}')) as Map;
+    return m[jobKey(j)] as String?;
+  }
+
   @override
   Widget build(BuildContext context) {
     final (icon, color) = switch (job.status) {
@@ -418,6 +456,8 @@ class _JobTile extends StatelessWidget {
             fmtFilament(job.filament),
             ?job.material,
             money(jobCost(job)),
+            if (_reason(job) case final r?) '⚑ $r',
+            if (settings.text('jobNote.${client.host}:${client.port}.${jobKey(job)}') case final n when n.isNotEmpty) '✎ $n',
           ].join(' · '),
           style: TextStyle(color: C.muted, fontSize: 12),
         ),
