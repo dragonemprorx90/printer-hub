@@ -116,6 +116,7 @@ PAGE = r"""
       send({ command: "action", printer: slug, action: action, params: params || {} });
     },
     val: function (id) { var e = document.getElementById(id); return e ? e.value : ""; },
+    fold: function (slug) { store("ph.fold." + slug, store("ph.fold." + slug) === "1" ? "0" : "1"); render(true); },
     // The layer printing at a height (same maths as the app's Pause at height).
     layerAt: function (mm, layer, first) { mm = parseFloat(mm); return mm <= first ? 1 : Math.ceil((mm - first) / layer) + 1; },
     toggle: function (slug, what) {
@@ -292,12 +293,15 @@ PAGE = r"""
         var f = (p.filaments || []).filter(function (x) { return x.tool === i; })[0];
         if (f && f.material && m && f.material.toUpperCase() !== m.toUpperCase()) mismatch.push("Orca slot " + (i + 1) + " is " + m + ", " + f.label + " has " + f.material);
       });
-    var h = '<div class="p' + look + '"><div class="row"><span class="name">' + esc(p.name) +
+    var folded = store("ph.fold." + p.slug) === "1";
+    var h = '<div class="p' + look + '"><div class="row"><span class="name" style="cursor:pointer" title="Click to fold or unfold" onclick="ph.fold(' + slug + ')">' +
+      (folded ? "▸ " : "▾ ") + esc(p.name) +
       (inOrca ? ' <span class="badge">in Orca</span>' : '') +
       (p.maintenanceDue ? ' <span class="badge" title="Maintenance due (Workshop in the app)">🔧 ' + p.maintenanceDue + '</span>' : '') + '</span><span>' +
       (p.away ? '<span class="muted">away' + (p.delayMs ? " " + p.delayMs + " ms" : "") + '</span> ' : '') +
       '<span class="pill">' + (p.online ? esc(p.state) : "offline") + '</span></span></div>';
     if (p.note) h += '<div class="warn detail">📌 ' + esc(p.note) + '</div>';
+    if (folded) return h + (active ? '<div class="muted">' + Math.round(p.progress * 100) + "%" + (p.eta ? " · done " + clock(p.eta) : "") + '</div>' : '') + '</div>';
     h += '<div class="muted">Nozzle ' + t(p.hotend, p.hotendTarget) + ' · Bed ' + t(p.bed, p.bedTarget) +
       (p.chamber != null ? ' · Chamber ' + t(p.chamber, p.chamberTarget) : '') + '</div>';
     if (p.heater) h += '<div class="' + (p.heater.fault ? "err" : "muted") + ' detail">Heater: ' + (p.heater.fault ? "fault " + esc(p.heater.faultReason || "") : esc(p.heater.mode || "off")) + '</div>';
