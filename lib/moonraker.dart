@@ -1485,6 +1485,13 @@ class MoonrakerClient {
     return j['result']['response'];
   }
 
+  /// Grams left on a spool (after weighing it, say).
+  Future<void> setSpoolGrams(int id, double grams) =>
+      _spoolman('PATCH', '/v1/spool/$id', {'remaining_weight': grams});
+
+  /// Hides a used-up spool in Spoolman (it isn't deleted).
+  Future<void> archiveSpool(int id) => _spoolman('PATCH', '/v1/spool/$id', {'archived': true});
+
   Future<List<Spool>> spools() async => [
         for (final s in (await _spoolman('GET', '/v1/spool')) as List)
           if (s['archived'] != true) Spool.fromJson(s as Map<String, dynamic>),

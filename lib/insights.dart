@@ -114,6 +114,22 @@ DateTime? lastPrintEnd(Iterable<PrintJob> jobs) {
   return best;
 }
 
+/// The day with the most prints: (day, prints), or null.
+(DateTime, int)? bestDay(Iterable<PrintJob> jobs) {
+  final m = <String, (DateTime, int)>{};
+  for (final j in jobs) {
+    final k = dayKey(j.start);
+    final (d, n) = m[k] ?? (DateTime(j.start.year, j.start.month, j.start.day), 0);
+    m[k] = (d, n + 1);
+  }
+  if (m.isEmpty) return null;
+  return m.values.reduce((a, b) => b.$2 > a.$2 ? b : a);
+}
+
+/// Success rate of the newest [n] finished prints (jobs newest first).
+double recentSuccess(List<PrintJob> jobs, {int n = 10}) =>
+    successRate(jobs.where((j) => j.status != 'in_progress').take(n));
+
 String dayKey(DateTime t) => '${t.year}-${t.month}-${t.day}';
 
 /// Prints per day for the last [days] days, oldest first (calendar heat-map).

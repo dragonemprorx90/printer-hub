@@ -516,6 +516,18 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
             onTap: () => Navigator.pop(ctx, 'qr'),
           ),
           ListTile(
+            leading: const Icon(Icons.scale_outlined),
+            title: const Text('Set grams left'),
+            subtitle: const Text('Weigh it and take off the empty spool'),
+            onTap: () => Navigator.pop(ctx, 'grams'),
+          ),
+          if ((sp.remaining ?? 1) <= 5)
+            ListTile(
+              leading: const Icon(Icons.archive_outlined),
+              title: const Text('Archive this empty spool'),
+              onTap: () => Navigator.pop(ctx, 'archive'),
+            ),
+          ListTile(
             leading: Icon(sp.id == active ? Icons.radio_button_checked : Icons.radio_button_off),
             title: Text(sp.id == active ? 'Stop using this spool' : 'Use as the active spool'),
             onTap: () => Navigator.pop(ctx, 'active'),
@@ -531,6 +543,21 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
     );
     if (choice == null || !mounted) return;
     if (choice == 'qr') return _label(sp);
+    if (choice == 'grams') {
+      final g = await askNumber(context, 'Grams left on ${sp.name.isEmpty ? 'the spool' : sp.name}',
+          presets: const [100, 250, 500, 750, 1000], unit: ' g');
+      if (g == null || g < 0 || !mounted) return;
+      await run(context, () => c.setSpoolGrams(sp.id, g.toDouble()), done: 'Updated');
+      return _reload();
+    }
+    if (choice == 'archive') {
+      if (!await confirm(context, 'Archive this spool?', message: 'It is hidden in Spoolman, not deleted.', action: 'Archive') ||
+          !mounted) {
+        return;
+      }
+      await run(context, () => c.archiveSpool(sp.id), done: 'Archived');
+      return _reload();
+    }
     if (choice == 'active') {
       await run(context, () => c.setActiveSpool(sp.id == active ? null : sp.id), done: 'Active spool updated');
     } else {

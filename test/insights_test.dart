@@ -127,6 +127,12 @@ void main() {
     expect(nextDone([('A', PrinterStatus()..online = true)]), isNull);
   });
 
+  test('best day and recent success', () {
+    expect(bestDay(jobs)!.$2, 2);
+    expect(bestDay(const []), isNull);
+    expect(recentSuccess([job('error', 9), job('completed', 8)], n: 1), 0);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

@@ -148,6 +148,8 @@ class _WorkshopPageState extends State<WorkshopPage> {
           if (r.heaviest != null)
             _row('Heaviest: ${r.heaviest!.filename}', '${gramsFromMm(r.heaviest!.filament).round()} g'),
           _row('Best run of good prints', '${r.bestStreak}'),
+          if (bestDay(jobs) case (final d, final n)) _row('Busiest day: ${fmtDate(d)}', '$n prints'),
+          _row('Success of the last 10', pct(recentSuccess(jobs))),
           _row('Current run', '${r.currentStreak}', color: r.currentStreak > 0 ? C.ink(C.accent) : null),
         ]),
       ),
