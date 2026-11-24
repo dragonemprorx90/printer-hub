@@ -559,6 +559,17 @@ class _SliceEditorState extends State<SliceEditor> {
           const SizedBox(height: 12),
           const Hint('Uses the colours painted in the 3MF, in toolhead order.'),
         ],
+        if (_values.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          // What you changed on top of the preset, at a glance.
+          Text(
+            '${_values.length} change${_values.length == 1 ? '' : 's'} from the preset: '
+            '${[for (final e in _values.entries) '${e.key.replaceAll('_', ' ')} ${e.value}'].join(', ')}',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: T.caption.copyWith(color: C.muted),
+          ),
+        ],
       ]),
     );
   }
