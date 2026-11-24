@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'insights.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 
@@ -112,7 +113,12 @@ void watchPrinter(Printer p, MoonrakerClient c) {
   var failureAlerted = '';
   var sent = <String>{};
   final humidityAlerted = <String, DateTime>{};
+  var remindersChecked = false;
   c.stream.listen((s) {
+    if (s.online && !remindersChecked) {
+      remindersChecked = true;
+      _dailyReminders(p, c);
+    }
     _menu[p.key] = (
       name: p.name,
       line: statusLine(s),
@@ -188,6 +194,25 @@ void watchPrinter(Printer p, MoonrakerClient c) {
     }
     _setBar(_barText.values.join('   '));
   });
+}
+
+/// Once a day per printer: maintenance that's due and spare parts running low.
+Future<void> _dailyReminders(Printer p, MoonrakerClient c) async {
+  if (!settings.flag('notifyMaintenance')) return;
+  final today = DateTime.now().toIso8601String().substring(0, 10);
+  final key = 'reminded.${p.key}';
+  if (settings.text(key) == today) return;
+  try {
+    final hours = (await c.historyTotals()).printTime / 3600;
+    final due = dueTasks(settings.jsonList('maint.${p.key}'), hours);
+    final low = [
+      for (final part in settings.jsonList('parts.${p.key}'))
+        if ((part['n'] as int) <= (part['low'] as int? ?? 1)) '${part['name']}',
+    ];
+    settings.setText(key, today);
+    if (due.isNotEmpty) notify('${p.name}: maintenance due', due.join(', '));
+    if (low.isNotEmpty) notify('${p.name}: spare parts low', low.join(', '));
+  } catch (_) {}
 }
 
 String _short(double secs) {

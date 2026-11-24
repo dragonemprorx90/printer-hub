@@ -339,7 +339,24 @@ class _PrinterListPageState extends State<PrinterListPage> {
     );
   }
 
+  /// Side by side on wide screens (iPad landscape, a big Mac window), when on.
+  Printer? _side;
+
   Widget _scaffold() {
+    return LayoutBuilder(builder: (context, box) {
+      final split = box.maxWidth >= 1100 && _printers.isNotEmpty && settings.flag('splitView', false);
+      final list = _listScaffold(split);
+      if (!split) return list;
+      final sel = _printers.contains(_side) ? _side! : _printers.first;
+      return Row(children: [
+        SizedBox(width: 380, child: list),
+        VerticalDivider(width: 1, color: C.border),
+        Expanded(child: PrinterPage(key: ValueKey(sel.key), printer: sel)),
+      ]);
+    });
+  }
+
+  Widget _listScaffold(bool split) {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 76,
@@ -390,8 +407,9 @@ class _PrinterListPageState extends State<PrinterListPage> {
                     final p = _printers[i];
                     return Reveal(index: i, child: _PrinterCard(
                       printer: p,
-                      onOpen: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => PrinterPage(printer: p))),
+                      onOpen: split
+                          ? () => setState(() => _side = p)
+                          : () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterPage(printer: p))),
                       onEdit: () => _edit(existing: p),
                       onDelete: () => _delete(p),
                     ));

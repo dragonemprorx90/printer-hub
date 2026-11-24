@@ -281,6 +281,16 @@ const dryPresets = [
   ('PVA', 55, 6),
 ];
 
+/// Tool changes in a multi-tool print, from slicer metadata when it says.
+int? toolChanges(Map<String, dynamic> meta) {
+  for (final k in ['tool_changes', 'total_toolchanges', 'filament_change_count']) {
+    final v = meta[k];
+    if (v is num) return v.toInt();
+    if (v is String && int.tryParse(v) != null) return int.parse(v);
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------- files
 
 /// Groups of paths with the same file name and size (likely copies).

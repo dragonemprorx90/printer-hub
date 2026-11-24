@@ -1899,5 +1899,8 @@ Map<String, dynamic> gcodeMeta(String text) {
   final layer = double.tryParse(kv['layer_height'] ??
       RegExp(r'^;Layer height: ([\d.]+)', multiLine: true).firstMatch(text)?[1] ?? '');
   if (layer != null) m['layer_height'] = layer;
+  // Orca / Prusa write "; total toolchanges = N" (or filament change) on multi-tool prints.
+  final changes = int.tryParse(kv['total toolchanges'] ?? kv['total filament change'] ?? '');
+  if (changes != null) m['tool_changes'] = changes;
   return m;
 }

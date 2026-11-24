@@ -85,6 +85,12 @@ void main() {
     expect(materialWarning('PLA', hasChamber: false), isNull);
   });
 
+  test('tool changes from metadata', () {
+    expect(toolChanges({'tool_changes': 4}), 4);
+    expect(toolChanges({'total_toolchanges': '7'}), 7);
+    expect(toolChanges({}), isNull);
+  });
+
   test('files', () {
     final f = [
       GcodeFile('a/x.gcode', 10, DateTime(2026, 1, 1)),

@@ -242,7 +242,9 @@ class _FilesTabState extends State<FilesTab> {
     final list = [
       for (final f in source)
         if ((!_favOnly || favs.contains(f.path)) &&
-            (q.isEmpty || f.path.toLowerCase().contains(q)))
+            (q.isEmpty ||
+                f.path.toLowerCase().contains(q) ||
+                (q.startsWith('#') && settings.text('tags.$_favScope.${f.path}').toLowerCase().contains(q.substring(1)))))
           f,
     ];
     switch (_sort) {
@@ -444,7 +446,7 @@ class _FilesTabState extends State<FilesTab> {
         Expanded(
           child: TextField(
             decoration: const InputDecoration(
-                hintText: 'Search all files', prefixIcon: Icon(Icons.search_rounded)),
+                hintText: 'Search all files, or #tag', prefixIcon: Icon(Icons.search_rounded)),
             onChanged: (v) {
               setState(() => _query = v);
               if (v.isNotEmpty) _ensureAll();
@@ -888,8 +890,19 @@ class _FileSheetState extends State<_FileSheet> {
     nav.pop();
   }
 
+  String get _tagKey => 'tags.${widget.favScope}.${f.path}';
+
+  Future<void> _tags() async {
+    final t = await askText(context, 'Tags', initial: settings.text(_tagKey), hint: 'e.g. gifts, spare parts', action: 'Save');
+    if (t == null || !mounted) return;
+    setState(() => settings.setText(_tagKey, t.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).join(', ')));
+    widget.onChanged();
+  }
+
   Future<void> _later() async {
     final now = DateTime.now();
+    final est = ((await _meta.catchError((_) => <String, dynamic>{}))['estimated_time'] as num?)?.toDouble();
+    if (!mounted) return;
     final at = await showDialog<DateTime>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -904,6 +917,24 @@ class _FileSheetState extends State<_FileSheet> {
               ('In 8 h', Duration(hours: 8)),
             ])
               ActionChip(label: Text(label), onPressed: () => Navigator.pop(ctx, now.add(d))),
+            if (est != null && est > 0)
+              ActionChip(
+                avatar: const Icon(Icons.flag_outlined, size: 16),
+                label: const Text('Finish at…'),
+                onPressed: () async {
+                  final t = await showTimePicker(
+                      context: ctx, initialTime: TimeOfDay.fromDateTime(now.add(Duration(seconds: est.round() + 3600))));
+                  if (t == null || !ctx.mounted) return;
+                  var end = DateTime(now.year, now.month, now.day, t.hour, t.minute);
+                  if (end.isBefore(now)) end = end.add(const Duration(days: 1));
+                  final start = startForFinish(end, est);
+                  if (start == null) {
+                    toast(ctx, 'Too soon: the print takes ${fmtDuration(est)}', error: true);
+                    return;
+                  }
+                  Navigator.pop(ctx, start);
+                },
+              ),
             ActionChip(
               avatar: const Icon(Icons.schedule_rounded, size: 16),
               label: const Text('Pick a time…'),
@@ -992,6 +1023,13 @@ class _FileSheetState extends State<_FileSheet> {
           ]),
           Text('${fmtBytes(f.size)} · ${fmtAgo(f.modified)}${f.dir.isEmpty ? '' : ' · ${f.dir}'}',
               style: TextStyle(color: C.muted)),
+          if (settings.text(_tagKey).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(spacing: 6, children: [
+                for (final t in settings.text(_tagKey).split(', ')) Chip(label: Text('#$t'), visualDensity: VisualDensity.compact),
+              ]),
+            ),
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(R.md),
@@ -1024,7 +1062,16 @@ class _FileSheetState extends State<_FileSheet> {
                     label: 'Layer height',
                     value: m['layer_height'] != null ? '${m['layer_height']} mm' : '—'),
                 StatTile(label: 'Slicer', value: '${m['slicer'] ?? '—'}'),
+                if (m['filament_weight_total'] is num)
+                  StatTile(
+                      label: 'Filament cost',
+                      value: '${settings.text('currency', r'$')}${((m['filament_weight_total'] as num) / 1000 * settings.number('filamentPrice', 20)).toStringAsFixed(2)}'),
+                if (toolChanges(m) case final n? when n > 0) StatTile(label: 'Tool changes', value: '$n'),
                 FilamentCheck(meta: m, client: c),
+                for (final n in settings.jsonList('materialNotes'))
+                  if ('${m['filament_type'] ?? ''}'.toUpperCase().contains('${n['m']}'.toUpperCase()) ||
+                      '${n['m']}'.toUpperCase().contains('${m['filament_type'] ?? '~'}'.split(';').first.toUpperCase()))
+                    Hint('Your note for ${n['m']}: ${n['t']}'),
               ]);
             },
           ),
@@ -1053,6 +1100,10 @@ class _FileSheetState extends State<_FileSheet> {
                 avatar: const Icon(Icons.schedule_rounded, size: 16),
                 label: const Text('Start later'),
                 onPressed: _later),
+            ActionChip(
+                avatar: const Icon(Icons.sell_outlined, size: 16),
+                label: const Text('Tags'),
+                onPressed: _tags),
             if (_others.isNotEmpty)
               ActionChip(
                 avatar: const Icon(Icons.send_rounded, size: 16),
