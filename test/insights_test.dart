@@ -123,6 +123,18 @@ void main() {
     expect(daysOfFilament(100, const [], now: DateTime(2026, 11, 20)), isNull);
   });
 
+  test('attention list', () {
+    final off = PrinterStatus();
+    final paused = PrinterStatus()
+      ..online = true
+      ..raw['print_stats'] = {'state': 'paused'};
+    final items = attentionItems([
+      ('A', off, const [], null, const []),
+      ('B', paused, [{'name': 'Belts', 'hours': 10, 'since': 0}], 20, [{'name': 'Nozzle', 'n': 0, 'low': 1}]),
+    ]);
+    expect(items, ['A is offline', 'B is paused', 'B: Belts is due', 'B: Nozzle running low (0)']);
+  });
+
   test('next printer done', () {
     expect(nextDone([('A', PrinterStatus()..online = true)]), isNull);
   });

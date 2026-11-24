@@ -371,6 +371,17 @@ class _PrinterListPageState extends State<PrinterListPage> {
     return _fleetStream!;
   }
 
+  List<String> _attention() => attentionItems([
+        for (final p in _printers)
+          (
+            p.name,
+            clientFor(p).status,
+            settings.jsonList('maint.${p.key}'),
+            clientFor(p).lastHistory == null ? null : clientFor(p).lastHistory!.$2.printTime / 3600,
+            settings.jsonList('parts.${p.key}'),
+          ),
+      ], humidityLimit: settings.number('humidityLimit', 45));
+
   /// Side by side on wide screens (iPad landscape, a big Mac window), when on.
   Printer? _side;
 
@@ -399,6 +410,31 @@ class _PrinterListPageState extends State<PrinterListPage> {
               tooltip: 'Find printers on this network',
               icon: const Icon(Icons.radar_rounded),
               onPressed: _scan),
+          if (_printers.isNotEmpty)
+            StreamBuilder<void>(
+              stream: _fleet,
+              builder: (context, _) {
+                final items = _attention();
+                return IconButton(
+                  tooltip: items.isEmpty ? 'Nothing needs you' : '${items.length} things need you',
+                  icon: Badge(
+                    isLabelVisible: items.isNotEmpty,
+                    label: Text('${items.length}'),
+                    child: const Icon(Icons.notifications_none_rounded),
+                  ),
+                  onPressed: () => showModalBottomSheet<void>(
+                    context: context,
+                    showDragHandle: true,
+                    builder: (ctx) => ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), shrinkWrap: true, children: [
+                      Text('Needs you', style: T.title),
+                      if (items.isEmpty) const Hint('All good: nothing paused, failed, offline, damp or due.'),
+                      for (final i in items)
+                        ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.chevron_right_rounded), title: Text(i)),
+                    ]),
+                  ),
+                );
+              },
+            ),
           if (_printers.length > 1)
             IconButton(
               tooltip: 'All printers: stats',

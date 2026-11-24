@@ -530,6 +530,35 @@ String? suggestPrinter(List<(String, bool, double, double)> printers, {double ne
   return fit.isEmpty ? null : fit.first.$1;
 }
 
+/// Everything that needs you across the printers, most urgent first.
+/// Each printer: (name, status, maintenance items, print hours or null, spare parts).
+List<String> attentionItems(
+    List<(String, PrinterStatus, List<Map<String, dynamic>>, double?, List<Map<String, dynamic>>)> all,
+    {double humidityLimit = 45}) {
+  final urgent = <String>[], later = <String>[];
+  for (final (name, s, maint, hours, parts) in all) {
+    if (!s.online) {
+      urgent.add('$name is offline');
+      continue;
+    }
+    if (s.state == 'error') urgent.add('$name: print failed');
+    if (s.state == 'paused') urgent.add('$name is paused${s.message == null ? '' : ': ${s.message}'}');
+    if (s.failureWatch?['failing'] == true) urgent.add('$name: possible print failure');
+    for (final b in s.cfs) {
+      if ((b.humidity ?? 0) >= humidityLimit) later.add('$name ${b.name}: humidity ${b.humidity!.round()}%');
+    }
+    if (hours != null) {
+      for (final t in dueTasks(maint, hours)) {
+        later.add('$name: $t is due');
+      }
+    }
+    for (final p in parts) {
+      if ((p['n'] as int) <= (p['low'] as int? ?? 1)) later.add('$name: ${p['name']} running low (${p['n']})');
+    }
+  }
+  return [...urgent, ...later];
+}
+
 /// The printer that finishes soonest and when: (name, seconds left), or null.
 (String, double)? nextDone(List<(String, PrinterStatus)> all) {
   (String, double)? best;
