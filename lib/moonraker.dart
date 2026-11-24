@@ -1834,6 +1834,33 @@ class MoonrakerClient {
     return r.bodyBytes;
   }
 
+  /// The last [bytes] of a Moonraker log ("klippy.log", "moonraker.log").
+  Future<String> logTail(String name, {int bytes = 24000}) async {
+    final r = await _http.get(
+      _uri(['server', 'files', 'logs', name]),
+      headers: {...authHeaders, 'Range': 'bytes=-$bytes'},
+    ).timeout(const Duration(seconds: 20));
+    _check(r);
+    final text = utf8.decode(r.bodyBytes, allowMalformed: true);
+    final nl = text.indexOf('\n');
+    return r.statusCode == 206 && nl > 0 ? text.substring(nl + 1) : text; // drop the cut-off first line
+  }
+
+  /// Printer software with updates waiting (Moonraker's update manager): (name, now, available).
+  Future<List<(String, String, String)>> updatesWaiting() async {
+    final r = await _http.get(_uri(['machine', 'update', 'status']), headers: authHeaders);
+    if (r.statusCode != 200) return const [];
+    final info = (jsonDecode(r.body)['result']?['version_info'] as Map?) ?? const {};
+    return [
+      for (final e in info.entries)
+        if (e.value is Map &&
+            '${(e.value as Map)['remote_version'] ?? ''}'.isNotEmpty &&
+            (e.value as Map)['version'] != (e.value as Map)['remote_version'] &&
+            '${(e.value as Map)['remote_version']}' != '?')
+          ('${e.key}', '${(e.value as Map)['version']}', '${(e.value as Map)['remote_version']}'),
+    ];
+  }
+
   Future<Uint8List> download(String path) async {
     final r = await _http
         .get(_uri(['server', 'files', 'gcodes', ...path.split('/')]),

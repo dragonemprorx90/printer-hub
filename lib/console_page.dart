@@ -69,12 +69,14 @@ class _ConsoleTabState extends State<ConsoleTab> {
   late final _history = CommandHistory(settings.strings('console.history'));
   String _find = '';
   bool _errorsOnly = false, _hideTemps = true;
+  DateTime? _clearedAt; // "Clear" hides what came before, it doesn't delete it
 
   /// Lines shown with the search box, "errors only" and the "hide
   /// temperature reports" switches applied.
   List<ConsoleLine> _filter(List<ConsoleLine> all) => [
         for (final l in all)
-          if ((!_errorsOnly || l.kind == ConsoleKind.error) &&
+          if ((_clearedAt == null || l.time.isAfter(_clearedAt!)) &&
+              (!_errorsOnly || l.kind == ConsoleKind.error) &&
               (!_hideTemps || !isTempReport(l.text)) &&
               (_find.isEmpty || l.text.toLowerCase().contains(_find.toLowerCase())))
             l,
@@ -155,6 +157,16 @@ class _ConsoleTabState extends State<ConsoleTab> {
               FilterChip(
                   label: const Text('Hide temps'), selected: _hideTemps, onSelected: (v) => setState(() => _hideTemps = v)),
               IconButton(tooltip: 'Save to a file', icon: const Icon(Icons.save_alt_rounded), onPressed: _save),
+              IconButton(
+                tooltip: 'Clear the view',
+                icon: const Icon(Icons.clear_all_rounded),
+                onPressed: () => setState(() => _clearedAt = DateTime.now()),
+              ),
+              IconButton(
+                tooltip: settings.flag('console.times', true) ? 'Hide times' : 'Show times',
+                icon: Icon(settings.flag('console.times', true) ? Icons.schedule_rounded : Icons.schedule_outlined),
+                onPressed: () => setState(() => settings.setFlag('console.times', !settings.flag('console.times', true))),
+              ),
             ]),
           ),
           Expanded(
@@ -270,9 +282,10 @@ class _Line extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(fmtClock(line.time),
-            style: mono.copyWith(color: C.muted, fontSize: 11)),
-        const SizedBox(width: 10),
+        if (settings.flag('console.times', true)) ...[
+          Text(fmtClock(line.time), style: mono.copyWith(color: C.muted, fontSize: 11)),
+          const SizedBox(width: 10),
+        ],
         Expanded(
           child: SelectableText(
             line.kind == ConsoleKind.sent ? '> ${line.text}' : line.text,

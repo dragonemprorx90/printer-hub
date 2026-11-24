@@ -817,6 +817,29 @@ class _HealthPanelState extends State<HealthPanel> {
               Wrap(spacing: 28, runSpacing: 12, children: [
                 for (final (k, v) in rows) StatTile(label: k, value: v),
               ]),
+              FutureBuilder<List<(String, String, String)>>(
+                future: widget.client.updatesWaiting().catchError((_) => <(String, String, String)>[]),
+                builder: (_, u) => (u.data ?? const []).isEmpty
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          Text('Updates waiting (install them from the printer\'s web page)', style: T.label.copyWith(color: C.muted)),
+                          for (final (n, now, next) in u.data!) Text('$n: $now → $next', style: T.small),
+                        ]),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(spacing: 8, children: [
+                  for (final l in const ['klippy.log', 'moonraker.log'])
+                    ActionChip(
+                      avatar: const Icon(Icons.article_outlined, size: 16),
+                      label: Text(l),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _LogPage(client: widget.client, name: l))),
+                    ),
+                ]),
+              ),
               if (log.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text('Updates seen', style: T.label.copyWith(color: C.muted)),
@@ -1384,4 +1407,59 @@ Color _onColor(int? argb) {
   if (argb == null) return C.text;
   final r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
   return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? Colors.black : Colors.white;
+}
+
+/// The end of a printer log, newest at the top, with a search box.
+class _LogPage extends StatefulWidget {
+  final MoonrakerClient client;
+  final String name;
+  const _LogPage({required this.client, required this.name});
+  @override
+  State<_LogPage> createState() => _LogPageState();
+}
+
+class _LogPageState extends State<_LogPage> {
+  late Future<String> _text = widget.client.logTail(widget.name);
+  String _find = '';
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: Text(widget.name), actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => setState(() => _text = widget.client.logTail(widget.name)),
+          ),
+        ]),
+        body: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: TextField(
+              decoration: const InputDecoration(isDense: true, hintText: 'Find (e.g. error, shutdown)', prefixIcon: Icon(Icons.search_rounded)),
+              onChanged: (v) => setState(() => _find = v.toLowerCase()),
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<String>(
+              future: _text,
+              builder: (_, snap) {
+                if (snap.hasError) return StateView.error('${snap.error}');
+                if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                final lines = [
+                  for (final l in snap.data!.split('\n').reversed)
+                    if (l.trim().isNotEmpty && (_find.isEmpty || l.toLowerCase().contains(_find))) l,
+                ];
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: lines.length,
+                  itemBuilder: (_, i) => SelectableText(lines[i],
+                      style: mono.copyWith(
+                          fontSize: 12,
+                          color: RegExp('error|shutdown|exception', caseSensitive: false).hasMatch(lines[i]) ? C.ink(C.danger) : null)),
+                );
+              },
+            ),
+          ),
+        ]),
+      );
 }
