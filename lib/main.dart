@@ -185,6 +185,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
       watchPrinter(p, clientFor(p));
     }
     onOpenFromNotification = (key) => _handleLaunch(key);
+    _whileAway();
     const MethodChannel('printerhub/statusbar').setMethodCallHandler((call) async {
       if (call.method == 'openPrinter') await _handleLaunch('${call.arguments}');
     });
@@ -401,6 +402,22 @@ class _PrinterListPageState extends State<PrinterListPage> {
     );
   }
 
+  /// "While you were away…", worked out a few seconds after opening.
+  String _away = '';
+
+  Future<void> _whileAway() async {
+    final since = DateTime.fromMillisecondsSinceEpoch(settings.number('lastOpen', 0).toInt());
+    settings.setNumber('lastOpen', DateTime.now().millisecondsSinceEpoch.toDouble());
+    if (since.millisecondsSinceEpoch == 0) return;
+    await Future.delayed(const Duration(seconds: 6)); // History loads when each printer connects
+    if (!mounted) return;
+    final text = awaySummary([
+      for (final p in _printers)
+        if (clientFor(p).lastHistory case final h?) (p.name, h.$1),
+    ], since);
+    if (text.isNotEmpty && mounted) setState(() => _away = text);
+  }
+
   Stream<void>? _fleetStream;
   String _fleetKeys = '';
 
@@ -571,6 +588,18 @@ class _PrinterListPageState extends State<PrinterListPage> {
                     }
                     final next = nextDone([for (final p in _printers) (p.name, clientFor(p).status)]);
                     return Column(children: [
+                      if (_away.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: Row(children: [
+                            Expanded(child: Hint(_away)),
+                            IconButton(
+                              tooltip: 'Dismiss',
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: () => setState(() => _away = ''),
+                            ),
+                          ]),
+                        ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
                         child: Row(children: [

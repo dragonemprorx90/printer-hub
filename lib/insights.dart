@@ -661,6 +661,28 @@ List<String> attentionItems(
   return [...urgent, ...later];
 }
 
+/// "While you were away: 2 finished, 1 failed (K2: Benchy)" for jobs that
+/// ended after [since]; empty when nothing happened.
+String awaySummary(List<(String, List<PrintJob>)> printers, DateTime since) {
+  var ok = 0, bad = 0;
+  final failed = <String>[];
+  for (final (name, jobs) in printers) {
+    for (final j in jobs) {
+      final end = j.start.add(Duration(seconds: j.duration.round()));
+      if (!end.isAfter(since) || j.status == 'in_progress') continue;
+      if (jobOk(j)) {
+        ok++;
+      } else if (jobFailed(j)) {
+        bad++;
+        failed.add('$name: ${j.filename.split('/').last}');
+      }
+    }
+  }
+  if (ok == 0 && bad == 0) return '';
+  return 'While you were away: ${[if (ok > 0) '$ok finished', if (bad > 0) '$bad failed'].join(', ')}'
+      '${failed.isEmpty ? '' : ' (${failed.take(2).join('; ')})'}';
+}
+
 /// The printer that finishes soonest and when: (name, seconds left), or null.
 (String, double)? nextDone(List<(String, PrinterStatus)> all) {
   (String, double)? best;

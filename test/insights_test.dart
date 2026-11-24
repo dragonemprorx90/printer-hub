@@ -136,6 +136,14 @@ void main() {
     expect(items, ['A is offline', 'B is paused', 'B: Belts is due', 'B: Nozzle running low (0)']);
   });
 
+  test('away summary', () {
+    final since = DateTime(2026, 11, 3);
+    final s = awaySummary([('K2', jobs)], since);
+    expect(s, startsWith('While you were away: 2 finished, 1 failed'));
+    expect(s, contains('K2: f3.gcode'));
+    expect(awaySummary([('K2', jobs)], DateTime(2027)), '');
+  });
+
   test('next printer done', () {
     expect(nextDone([('A', PrinterStatus()..online = true)]), isNull);
   });
