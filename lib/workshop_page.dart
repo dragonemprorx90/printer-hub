@@ -467,7 +467,15 @@ class _WorkshopPageState extends State<WorkshopPage> {
                 (s['price'] as num?)?.toDouble()),
         ];
     final cur = settings.text('currency', r'$');
-    final list = shoppingList(spools, limit: settings.number('shopLimit', 200));
+    final lowParts = [
+      for (final part in _parts)
+        if ((part['n'] as int) <= (part['low'] as int? ?? 1)) '- ${part['name']} (${part['n']} left)',
+    ];
+    final spoolList = shoppingList(spools, limit: settings.number('shopLimit', 200));
+    final list = [
+      if (spoolList.isNotEmpty) spoolList,
+      if (lowParts.isNotEmpty) ['Spare parts to buy:', ...lowParts].join('\n'),
+    ].join('\n\n');
     return [
       Panel(
         title: 'Inventory',

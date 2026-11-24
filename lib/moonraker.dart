@@ -1798,6 +1798,9 @@ class MoonrakerClient {
       _uri(['server', 'files', 'move'],
           {'source': 'gcodes/$from', 'dest': 'gcodes/$to'}),
       headers: authHeaders));
+  Future<void> copyFile(String from, String to) async => _check(await _http.post(
+      _uri(['server', 'files', 'copy'], {'source': 'gcodes/$from', 'dest': 'gcodes/$to'}),
+      headers: authHeaders));
   Future<void> createDir(String path) async => _check(await _http.post(
       _uri(['server', 'files', 'directory'], {'path': 'gcodes/$path'}),
       headers: authHeaders));

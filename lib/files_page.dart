@@ -100,6 +100,26 @@ class _FilesTabState extends State<FilesTab> {
               label: const Text('Queue'),
             ),
             OutlinedButton.icon(
+              onPressed: () async {
+                final picked = _sel.toList();
+                final dir = await askText(context, 'Move ${picked.length} files to folder',
+                    hint: 'folder/sub-folder (empty = top level)', action: 'Move');
+                if (dir == null || !mounted) return;
+                final clean = dir.replaceAll(RegExp(r'^/+|/+$'), '');
+                await run(context, () async {
+                  for (final p in picked) {
+                    final name = p.split('/').last;
+                    await c.moveFile(p, clean.isEmpty ? name : '$clean/$name');
+                  }
+                }, done: 'Moved ${picked.length} files');
+                setState(_sel.clear);
+                _all = null;
+                _load();
+              },
+              icon: const Icon(Icons.drive_file_move_outlined),
+              label: const Text('Move'),
+            ),
+            OutlinedButton.icon(
               style: OutlinedButton.styleFrom(foregroundColor: C.danger),
               onPressed: () async {
                 final picked = _sel.toList();
@@ -556,6 +576,25 @@ class _FilesTabState extends State<FilesTab> {
                     : (st.state == 'complete' || st.state == 'cancelled' ? 'Bed is clear, start next' : 'Start queue')),
               ),
               child: Column(children: [
+                if (_queue.length > 1)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () async {
+                        if (!await confirm(context, 'Clear the queue?', message: 'The files stay; only the queue is emptied.', action: 'Clear') ||
+                            !context.mounted) {
+                          return;
+                        }
+                        await run(context, () async {
+                          for (final j in [..._queue]) {
+                            await c.dequeue(j.id);
+                          }
+                        }, done: 'Queue cleared');
+                        _loadQueue();
+                      },
+                      child: const Text('Clear queue'),
+                    ),
+                  ),
                 for (final (i, j) in _queue.indexed)
                   Row(children: [
                     if (_queueState != 'ready')
@@ -1155,6 +1194,41 @@ class _FileSheetState extends State<_FileSheet> {
                 avatar: const Icon(Icons.sell_outlined, size: 16),
                 label: const Text('Tags'),
                 onPressed: _tags),
+            ActionChip(
+                avatar: const Icon(Icons.repeat_rounded, size: 16),
+                label: const Text('Queue several'),
+                onPressed: () async {
+                  final n = await askNumber(context, 'How many copies in the queue?', presets: const [2, 3, 5, 10], unit: '');
+                  if (n == null || n < 1 || !context.mounted) return;
+                  final nav = Navigator.of(context);
+                  await run(context, () async {
+                    for (var i = 0; i < n.clamp(1, 50); i++) {
+                      await c.enqueue(f.path);
+                    }
+                  }, done: 'Added $n to the queue');
+                  widget.onChanged();
+                  nav.pop();
+                }),
+            ActionChip(
+                avatar: const Icon(Icons.copy_all_rounded, size: 16),
+                label: const Text('Duplicate'),
+                onPressed: () async {
+                  final stem = f.name.replaceAll(RegExp(r'\.[^.]+$'), '');
+                  final ext = f.name.contains('.') ? f.name.substring(f.name.lastIndexOf('.')) : '';
+                  final n = await askText(context, 'Name of the copy', initial: '$stem copy$ext', action: 'Copy');
+                  if (n == null || n.isEmpty || !context.mounted) return;
+                  final nav = Navigator.of(context);
+                  await run(context, () => c.copyFile(f.path, f.dir.isEmpty ? n : '${f.dir}/$n'), done: 'Copied');
+                  widget.onChanged();
+                  nav.pop();
+                }),
+            ActionChip(
+                avatar: const Icon(Icons.save_alt_rounded, size: 16),
+                label: const Text('Save to this device'),
+                onPressed: () => run(context, () async {
+                      final bytes = await c.download(f.path);
+                      await FilePicker.saveFile(fileName: f.name, bytes: bytes);
+                    })),
             if (_others.isNotEmpty)
               ActionChip(
                 avatar: const Icon(Icons.send_rounded, size: 16),
