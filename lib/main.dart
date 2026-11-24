@@ -436,17 +436,40 @@ class _PrinterListPageState extends State<PrinterListPage> {
                   stream: _fleet,
                   builder: (context, _) {
                     final hideOff = settings.flag('hideOffline', false);
+                    final problemsFirst = settings.flag('listSort', false);
                     final shown = [
                       for (final p in _printers)
                         if (!hideOff || clientFor(p).status.online) p,
                     ];
+                    if (problemsFirst) {
+                      final idx = {for (final (i, p) in shown.indexed) p: i};
+                      shown.sort((a, b) {
+                        int rank(Printer p) {
+                          final s = clientFor(p).status;
+                          return !s.online || s.state == 'error' || s.state == 'paused' ? 0 : s.state == 'printing' ? 1 : 2;
+                        }
+                        final r = rank(a).compareTo(rank(b));
+                        return r != 0 ? r : idx[a]!.compareTo(idx[b]!);
+                      });
+                    }
+                    final next = nextDone([for (final p in _printers) (p.name, clientFor(p).status)]);
                     return Column(children: [
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
                         child: Row(children: [
                           Expanded(
-                            child: Text(fleetSummary([for (final p in _printers) clientFor(p).status]),
+                            child: Text(
+                                [
+                                  fleetSummary([for (final p in _printers) clientFor(p).status]),
+                                  if (next != null)
+                                    'next done ${fmtTime(DateTime.now().add(Duration(seconds: next.$2.round())))} (${next.$1})',
+                                ].where((x) => x.isNotEmpty).join(' · '),
                                 style: T.small.copyWith(color: C.muted)),
+                          ),
+                          IconButton(
+                            tooltip: problemsFirst ? 'Sorted: problems first' : 'Your order',
+                            icon: Icon(Icons.sort_rounded, size: 20, color: problemsFirst ? C.accent : null),
+                            onPressed: () => setState(() => settings.setFlag('listSort', !problemsFirst)),
                           ),
                           IconButton(
                             tooltip: hideOff ? 'Show offline printers' : 'Hide offline printers',

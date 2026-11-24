@@ -626,9 +626,32 @@ class _JobPanel extends StatelessWidget {
                 if (active && ((s.speedFactor - 1).abs() > 0.01 || (s.flowFactor - 1).abs() > 0.01))
                   StatTile(label: 'Speed / flow', value: '${(s.speedFactor * 100).round()}% / ${(s.flowFactor * 100).round()}%'),
               ]),
+              if (active && [s.jobMeta['filament_type'], s.jobMeta['layer_height'], s.jobMeta['slicer']].any((x) => x != null))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                      [
+                        if (s.jobMeta['filament_type'] != null) '${s.jobMeta['filament_type']}'.split(';').toSet().join(' + '),
+                        if (s.jobMeta['layer_height'] != null) '${s.jobMeta['layer_height']} mm layers',
+                        if (s.jobMeta['slicer'] != null) 'sliced in ${s.jobMeta['slicer']}',
+                      ].join(' · '),
+                      style: T.caption.copyWith(color: C.muted)),
+                ),
               if (active) ...[
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 8, children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.edit_note_rounded, size: 16),
+                    label: const Text('Note'),
+                    onPressed: () async {
+                      // Saved on this print's History entry (Workshop → Notes).
+                      final job = client.lastHistory?.$1.where((j) => j.status == 'in_progress').firstOrNull;
+                      if (job == null) return toast(context, 'Open History once so the app knows this print', error: true);
+                      final key = 'jobNote.${client.host}:${client.port}.${jobKey(job)}';
+                      final t = await askText(context, 'Note on this print', initial: settings.text(key), action: 'Save');
+                      if (t != null) settings.setText(key, t);
+                    },
+                  ),
                   ActionChip(
                     avatar: const Icon(Icons.copy_rounded, size: 16),
                     label: const Text('Copy status'),

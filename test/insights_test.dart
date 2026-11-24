@@ -123,6 +123,10 @@ void main() {
     expect(daysOfFilament(100, const [], now: DateTime(2026, 11, 20)), isNull);
   });
 
+  test('next printer done', () {
+    expect(nextDone([('A', PrinterStatus()..online = true)]), isNull);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

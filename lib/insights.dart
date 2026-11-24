@@ -505,6 +505,17 @@ String? suggestPrinter(List<(String, bool, double, double)> printers, {double ne
   return fit.isEmpty ? null : fit.first.$1;
 }
 
+/// The printer that finishes soonest and when: (name, seconds left), or null.
+(String, double)? nextDone(List<(String, PrinterStatus)> all) {
+  (String, double)? best;
+  for (final (n, s) in all) {
+    final eta = s.eta;
+    if (!s.online || s.state != 'printing' || eta == null) continue;
+    if (best == null || eta < best.$2) best = (n, eta);
+  }
+  return best;
+}
+
 /// "2 printing · 1 idle · 1 offline".
 String fleetSummary(List<PrinterStatus> all) {
   final printing = all.where((s) => s.online && s.state == 'printing').length;
