@@ -592,6 +592,19 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
                     icon: const Icon(Icons.qr_code_scanner_rounded),
                     onPressed: () => _scan(spools, active)),
               IconButton(tooltip: 'Add spool', icon: const Icon(Icons.add_rounded), onPressed: _add),
+              IconButton(
+                tooltip: 'Copy the spool list',
+                icon: const Icon(Icons.copy_rounded),
+                onPressed: all.isEmpty
+                    ? null
+                    : () {
+                        Clipboard.setData(ClipboardData(text: [
+                          for (final sp in all)
+                            '${sp.material} ${sp.name}${sp.color == null ? '' : ' (${colorName(sp.color!)})'}: ${(sp.remaining ?? 0).round()} g',
+                        ].join('\n')));
+                        toast(context, 'Spool list copied');
+                      },
+              ),
               IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: _reload),
             ]),
             child: spools.isEmpty
