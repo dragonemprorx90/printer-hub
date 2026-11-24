@@ -38,6 +38,7 @@ class _FilesTabState extends State<FilesTab> {
   List<GcodeFile>? _all; // every file in every folder, for search/favourites
   String? _error;
   String _query = '';
+  final _searchCtl = TextEditingController();
   _Sort _sort = _Sort.newest;
   bool _favOnly = false, _dragging = false, _uploading = false, _recentOnly = false;
   List<QueuedJob> _queue = const [];
@@ -47,6 +48,12 @@ class _FilesTabState extends State<FilesTab> {
 
   MoonrakerClient get c => widget.client;
   String get _favScope => 'files.${widget.printer.key}';
+
+  @override
+  void dispose() {
+    _searchCtl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -253,6 +260,37 @@ class _FilesTabState extends State<FilesTab> {
       ..clear()
       ..addAll(pick.map((f) => f.path)));
     toast(context, '${pick.length} selected. Check them, then Delete.');
+  }
+
+  /// Every tag in use, with how many files carry it; tap one to show them.
+  Future<void> _tagList() async {
+    await _ensureAll();
+    if (!mounted) return;
+    final counts = <String, int>{};
+    for (final f in _all ?? const <GcodeFile>[]) {
+      for (final t in settings.text('tags.$_favScope.${f.path}').split(', ')) {
+        if (t.isNotEmpty) counts[t] = (counts[t] ?? 0) + 1;
+      }
+    }
+    final pick = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+        Text('Tags', style: T.title),
+        if (counts.isEmpty) const Hint('No tags yet. Open a file and tap Tags, or select several and tap Tag.'),
+        for (final e in (counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value))))
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.sell_outlined),
+            title: Text('#${e.key}'),
+            trailing: Text('${e.value}'),
+            onTap: () => Navigator.pop(ctx, e.key),
+          ),
+      ]),
+    );
+    if (pick == null || !mounted) return;
+    _searchCtl.text = '#$pick';
+    setState(() => _query = '#$pick');
   }
 
   Future<void> _ensureAll() async {
@@ -498,6 +536,7 @@ class _FilesTabState extends State<FilesTab> {
       child: Row(children: [
         Expanded(
           child: TextField(
+            controller: _searchCtl,
             decoration: const InputDecoration(
                 hintText: 'Search all files, or #tag', prefixIcon: Icon(Icons.search_rounded)),
             onChanged: (v) {
@@ -545,6 +584,10 @@ class _FilesTabState extends State<FilesTab> {
             tooltip: settings.flag('filesGrid', false) ? 'Show as a list' : 'Show as a grid',
             icon: Icon(settings.flag('filesGrid', false) ? Icons.view_list_rounded : Icons.grid_view_rounded),
             onPressed: () => setState(() => settings.setFlag('filesGrid', !settings.flag('filesGrid', false)))),
+        IconButton(
+            tooltip: 'Tags',
+            icon: const Icon(Icons.sell_outlined),
+            onPressed: _tagList),
         IconButton(
             tooltip: 'Tidy up',
             icon: const Icon(Icons.cleaning_services_outlined),
