@@ -12,6 +12,7 @@ import 'moonraker.dart';
 import 'settings.dart';
 import 'u1_panels.dart';
 import 'ui.dart';
+import 'workshop_page.dart';
 
 class ToolsTab extends StatefulWidget {
   final MoonrakerClient client;
@@ -181,7 +182,7 @@ class _ToolsTabState extends State<ToolsTab> {
       initialData: c.status,
       builder: (context, snap) {
         final s = snap.data!;
-        final left = [_meshPanel(s), _calibrationPanel()];
+        final left = [_workshopPanel(), _meshPanel(s), _calibrationPanel()];
         final right = [
           _filamentPanel(),
           _maintenancePanel(),
@@ -221,6 +222,18 @@ class _ToolsTabState extends State<ToolsTab> {
       },
     );
   }
+
+  Widget _workshopPanel() => Panel(
+        title: 'Workshop',
+        icon: Icons.handyman_outlined,
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Stats, records, maintenance log, spare parts, filament inventory and notes'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => WorkshopPage(client: c, printer: widget.printer))),
+        ),
+      );
 
   Widget _meshPanel(PrinterStatus s) {
     final mesh = s.mesh;

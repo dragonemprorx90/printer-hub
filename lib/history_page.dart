@@ -9,6 +9,7 @@ import 'charts.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 import 'ui.dart';
+import 'workshop_page.dart';
 
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -426,7 +427,7 @@ class _JobTile extends StatelessWidget {
                 icon: const Icon(Icons.replay_rounded),
                 onPressed: () async {
                   if (await confirm(context, 'Print $name again?', action: 'Print') &&
-                      context.mounted) {
+                      context.mounted && await preflight(context) && context.mounted) {
                     run(context, () => client.startPrint(job.filename),
                         done: 'Print started');
                   }

@@ -1,0 +1,338 @@
+// Pure logic behind the Workshop screens: stats, records, maintenance,
+// queue timing, inventory, units. No Flutter imports, so it's all testable.
+import 'dart:math' as math;
+
+import 'moonraker.dart';
+
+// ---------------------------------------------------------------- history
+
+bool jobOk(PrintJob j) => j.status == 'completed';
+bool jobFailed(PrintJob j) => j.status == 'error' || j.status == 'klippy_shutdown';
+
+/// Success rate in 0..1 of finished jobs (completed / completed+failed+cancelled).
+double successRate(Iterable<PrintJob> jobs) {
+  final done = jobs.where((j) => j.status != 'in_progress' && j.status != 'interrupted');
+  if (done.isEmpty) return 0;
+  return done.where(jobOk).length / done.length;
+}
+
+/// Success rate grouped by a key (material, month…), sorted by count, biggest first.
+List<(String, double, int)> rateBy(Iterable<PrintJob> jobs, String? Function(PrintJob) key) {
+  final m = <String, List<PrintJob>>{};
+  for (final j in jobs) {
+    m.putIfAbsent(key(j) ?? 'Unknown', () => []).add(j);
+  }
+  return [for (final e in m.entries) (e.key, successRate(e.value), e.value.length)]
+    ..sort((a, b) => b.$3.compareTo(a.$3));
+}
+
+String monthKey(DateTime t) => '${t.year}-${t.month.toString().padLeft(2, '0')}';
+
+class Records {
+  final PrintJob? longest, heaviest;
+  final int bestStreak, currentStreak, printDays;
+  Records(this.longest, this.heaviest, this.bestStreak, this.currentStreak, this.printDays);
+}
+
+/// Longest and heaviest completed print, best and current run of
+/// successful prints in a row, and how many different days had a print.
+Records records(List<PrintJob> jobs) {
+  final sorted = [...jobs]..sort((a, b) => a.start.compareTo(b.start));
+  PrintJob? longest, heaviest;
+  var best = 0, run = 0;
+  for (final j in sorted) {
+    if (jobOk(j)) {
+      run++;
+      best = math.max(best, run);
+      if (longest == null || j.duration > longest.duration) longest = j;
+      if (heaviest == null || j.filament > heaviest.filament) heaviest = j;
+    } else if (j.status != 'in_progress') {
+      run = 0;
+    }
+  }
+  final days = {for (final j in jobs) dayKey(j.start)}.length;
+  return Records(longest, heaviest, best, run, days);
+}
+
+String dayKey(DateTime t) => '${t.year}-${t.month}-${t.day}';
+
+/// Prints per day for the last [days] days, oldest first (calendar heat-map).
+List<int> printsPerDay(Iterable<PrintJob> jobs, {int days = 84, DateTime? now}) {
+  final today = now ?? DateTime.now();
+  final start = DateTime(today.year, today.month, today.day).subtract(Duration(days: days - 1));
+  final out = List.filled(days, 0);
+  for (final j in jobs) {
+    final d = DateTime(j.start.year, j.start.month, j.start.day).difference(start).inDays;
+    if (d >= 0 && d < days) out[d]++;
+  }
+  return out;
+}
+
+/// Grams of filament from a length in mm (1.75 mm, density in g/cm³).
+double gramsFromMm(double mm, [double density = 1.24]) =>
+    math.pi * math.pow(0.0875, 2) * (mm / 10) * density;
+
+/// Filament + electricity cost per month, newest first.
+List<(String, double, double)> monthlyCost(Iterable<PrintJob> jobs,
+    {required double pricePerKg, required double watts, required double pricePerKwh}) {
+  final m = <String, (double, double)>{};
+  for (final j in jobs) {
+    final k = monthKey(j.start);
+    final (f, e) = m[k] ?? (0.0, 0.0);
+    m[k] = (
+      f + gramsFromMm(j.filament) / 1000 * pricePerKg,
+      e + j.duration / 3600 * watts / 1000 * pricePerKwh,
+    );
+  }
+  return [for (final e in m.entries) (e.key, e.value.$1, e.value.$2)]
+    ..sort((a, b) => b.$1.compareTo(a.$1));
+}
+
+/// Jobs matching a History filter. Empty / null fields don't filter.
+List<PrintJob> filterJobs(Iterable<PrintJob> jobs,
+        {String? status, String? material, String? text, DateTime? from, DateTime? to}) =>
+    [
+      for (final j in jobs)
+        if ((status == null || status.isEmpty || j.status == status) &&
+            (material == null || material.isEmpty || (j.material ?? '').toUpperCase() == material.toUpperCase()) &&
+            (text == null || text.isEmpty || j.filename.toLowerCase().contains(text.toLowerCase())) &&
+            (from == null || !j.start.isBefore(from)) &&
+            (to == null || j.start.isBefore(to)))
+          j,
+    ];
+
+const failureReasons = [
+  'Bed adhesion',
+  'Spaghetti',
+  'Clog / under-extrusion',
+  'Layer shift',
+  'Ran out of filament',
+  'Warping',
+  'Power cut',
+  'Other',
+];
+
+/// Count of each tagged failure reason, biggest first.
+List<(String, int)> reasonBreakdown(Map<String, String> tags) {
+  final m = <String, int>{};
+  for (final r in tags.values) {
+    m[r] = (m[r] ?? 0) + 1;
+  }
+  return [for (final e in m.entries) (e.key, e.value)]..sort((a, b) => b.$2.compareTo(a.$2));
+}
+
+/// History key for a job, for notes and tags kept on the device.
+String jobKey(PrintJob j) => '${j.filename}@${j.start.millisecondsSinceEpoch ~/ 1000}';
+
+// ---------------------------------------------------------------- queue
+
+/// When each queued job will finish, one after another, starting [from]
+/// plus whatever is left of the current print.
+List<DateTime> queueFinishTimes(List<double?> durations, {required DateTime from, double currentLeft = 0}) {
+  var t = from.add(Duration(seconds: currentLeft.round()));
+  return [
+    for (final d in durations) t = t.add(Duration(seconds: (d ?? 0).round())),
+  ];
+}
+
+/// When to start a print of [seconds] so it ends at [finish]. Null if that's
+/// already past.
+DateTime? startForFinish(DateTime finish, double seconds, {DateTime? now}) {
+  final s = finish.subtract(Duration(seconds: seconds.round()));
+  return s.isBefore(now ?? DateTime.now()) ? null : s;
+}
+
+// ---------------------------------------------------------------- maintenance
+
+/// Abrasive filaments wear a brass nozzle faster: they count extra hours.
+double wearFactor(String? material) {
+  final m = (material ?? '').toUpperCase();
+  if (m.contains('CF') || m.contains('GF') || m.contains('GLOW') || m.contains('WOOD')) return 3;
+  if (m.contains('PA') || m.contains('PC')) return 1.5;
+  return 1;
+}
+
+/// Weighted nozzle hours since [since].
+double nozzleHours(Iterable<PrintJob> jobs, DateTime since) => jobs
+    .where((j) => !j.start.isBefore(since))
+    .fold(0.0, (a, j) => a + j.duration / 3600 * wearFactor(j.material));
+
+/// (name, every N print hours) to start a printer with.
+List<(String, double)> maintenanceTemplate(String printerName) {
+  final n = printerName.toLowerCase();
+  const common = [
+    ('Clean the nozzle', 25.0),
+    ('Clean the build plate', 25.0),
+    ('Check belt tension', 100.0),
+    ('Lubricate linear rails / rods', 200.0),
+    ('Check screws and frame', 200.0),
+    ('Replace the nozzle', 500.0),
+  ];
+  if (n.contains('k2') || n.contains('creality')) {
+    return [...common, ('Clean the CFS feeders', 100.0), ('Replace the cutter blade', 400.0), ('Clean the chamber fan filter', 150.0)];
+  }
+  if (n.contains('u1') || n.contains('snapmaker')) {
+    return [...common, ('Clean the toolhead docks', 100.0), ('Check toolhead offsets', 150.0), ('Wipe the purge area', 50.0)];
+  }
+  return [...common, ('Replace the PTFE tube', 300.0)];
+}
+
+/// Tasks due (used >= every), from maintenance items as saved by the Tools tab.
+List<String> dueTasks(List<Map<String, dynamic>> items, double hours) => [
+      for (final m in items)
+        if ((m['hours'] as num) > 0 && hours - (m['since'] as num) >= (m['hours'] as num)) '${m['name']}',
+    ];
+
+/// Mesh range grew by more than [limit] mm since a saved mesh.
+bool meshDrifted(double savedRange, double nowRange, {double limit = 0.1}) =>
+    nowRange - savedRange > limit;
+
+/// Lines like "Klipper: v0.12 → v0.13" for versions that changed.
+List<String> versionChanges(Map<String, String> before, Map<String, String> now) => [
+      for (final e in now.entries)
+        if (before[e.key] != null && before[e.key] != e.value) '${e.key}: ${before[e.key]} → ${e.value}',
+    ];
+
+// ---------------------------------------------------------------- filament
+
+/// Spools grouped by material, with total grams, biggest first.
+List<(String, double, int)> inventory(Iterable<Spool> spools) {
+  final m = <String, (double, int)>{};
+  for (final s in spools) {
+    final k = s.material.isEmpty ? 'Unknown' : s.material.toUpperCase();
+    final (g, n) = m[k] ?? (0.0, 0);
+    m[k] = (g + (s.remaining ?? 0), n + 1);
+  }
+  return [for (final e in m.entries) (e.key, e.value.$1, e.value.$2)]..sort((a, b) => b.$2.compareTo(a.$2));
+}
+
+/// Shopping list text for spools under [limit] grams.
+String shoppingList(Iterable<Spool> spools, {double limit = 200}) {
+  final low = [for (final s in spools) if ((s.remaining ?? 0) < limit) s];
+  if (low.isEmpty) return '';
+  return [
+    'Filament to buy:',
+    for (final s in low)
+      '- ${s.material} ${s.name} ${s.color == null ? '' : colorName(s.color!)} (${(s.remaining ?? 0).round()} g left)'
+          .replaceAll(RegExp(r'\s+'), ' ').trim(),
+  ].join('\n');
+}
+
+/// Price per gram, or null without a price.
+double? pricePerGram(Spool s) => s.pricePerKg == null ? null : s.pricePerKg! / 1000;
+
+const _names = <String, int>{
+  'black': 0x000000, 'white': 0xFFFFFF, 'grey': 0x808080, 'silver': 0xC0C0C0,
+  'red': 0xE53935, 'dark red': 0x8B0000, 'orange': 0xFF8C00, 'yellow': 0xFFD600,
+  'gold': 0xD4AF37, 'green': 0x43A047, 'dark green': 0x1B5E20, 'lime': 0xA4D600,
+  'teal': 0x008080, 'cyan': 0x00BCD4, 'blue': 0x1E88E5, 'navy': 0x1A237E,
+  'purple': 0x8E24AA, 'pink': 0xF06292, 'magenta': 0xD81B60, 'brown': 0x6D4C41,
+  'beige': 0xE8D9B5, 'skin': 0xF1C27D,
+};
+
+/// The nearest plain colour name for an ARGB or RGB value ("dark red").
+String colorName(int argb) {
+  int r(int c) => (c >> 16) & 0xFF;
+  int g(int c) => (c >> 8) & 0xFF;
+  int b(int c) => c & 0xFF;
+  var best = '';
+  num dist = double.infinity;
+  for (final e in _names.entries) {
+    final d = math.pow(r(argb) - r(e.value), 2) * 2 +
+        math.pow(g(argb) - g(e.value), 2) * 4 +
+        math.pow(b(argb) - b(e.value), 2) * 3;
+    if (d < dist) {
+      dist = d;
+      best = e.key;
+    }
+  }
+  return best;
+}
+
+/// A warning for materials that want a warm, closed chamber, or null.
+String? materialWarning(String? material, {required bool hasChamber, double? chamberTemp}) {
+  final m = (material ?? '').toUpperCase();
+  final hot = ['ABS', 'ASA', 'PC', 'PA', 'NYLON'].any(m.contains);
+  if (!hot) return null;
+  if (!hasChamber) return '$m prints best in a closed, heated chamber. This printer has none: expect warping.';
+  if (chamberTemp != null && chamberTemp < 35) {
+    return 'Chamber is ${chamberTemp.round()}°C. $m warps less if you heat it to 45–60°C first.';
+  }
+  return null;
+}
+
+/// Drying presets: (material, °C, hours).
+const dryPresets = [
+  ('PLA', 50, 4),
+  ('PETG', 65, 4),
+  ('TPU', 55, 6),
+  ('ABS', 70, 4),
+  ('ASA', 70, 4),
+  ('PA / Nylon', 80, 8),
+  ('PC', 75, 6),
+  ('PVA', 55, 6),
+];
+
+// ---------------------------------------------------------------- files
+
+/// Groups of paths with the same file name and size (likely copies).
+List<List<GcodeFile>> duplicates(Iterable<GcodeFile> files) {
+  final m = <String, List<GcodeFile>>{};
+  for (final f in files) {
+    m.putIfAbsent('${f.name}|${f.size}', () => []).add(f);
+  }
+  return [for (final v in m.values) if (v.length > 1) v];
+}
+
+List<GcodeFile> olderThan(Iterable<GcodeFile> files, int days, {DateTime? now}) {
+  final cut = (now ?? DateTime.now()).subtract(Duration(days: days));
+  return [for (final f in files) if (f.modified.isBefore(cut)) f];
+}
+
+int totalSize(Iterable<GcodeFile> files) => files.fold(0, (a, f) => a + f.size);
+
+// ---------------------------------------------------------------- units & rules
+
+double toF(double c) => c * 9 / 5 + 32;
+
+/// "215°C" or "419°F" depending on the setting.
+String fmtTemp(double c, {bool fahrenheit = false}) =>
+    fahrenheit ? '${toF(c).round()}°F' : '${c.round()}°C';
+
+/// "18:42" or "6:42 PM".
+String fmtHm(DateTime t, {bool twelve = false}) {
+  final m = t.minute.toString().padLeft(2, '0');
+  if (!twelve) return '${t.hour.toString().padLeft(2, '0')}:$m';
+  final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+  return '$h:$m ${t.hour < 12 ? 'AM' : 'PM'}';
+}
+
+/// Rule window: [days] are 1=Mon..7=Sun (empty = every day), [from]/[to]
+/// "HH:MM" (empty = all day; may wrap past midnight).
+bool inWindow(DateTime t, {List<int> days = const [], String from = '', String to = ''}) {
+  if (days.isNotEmpty && !days.contains(t.weekday)) return false;
+  if (from.isEmpty || to.isEmpty) return true;
+  int mins(String s) => int.parse(s.split(':')[0]) * 60 + int.parse(s.split(':')[1]);
+  final now = t.hour * 60 + t.minute, a = mins(from), b = mins(to);
+  return a <= b ? now >= a && now < b : now >= a || now < b;
+}
+
+/// Snooze until: 1 h from now, or tomorrow 08:00.
+DateTime snoozeUntil(String kind, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  return kind == 'tomorrow' ? DateTime(n.year, n.month, n.day + 1, 8) : n.add(const Duration(hours: 1));
+}
+
+/// Is a printer's alert snoozed (ms since epoch stored)?
+bool snoozed(int? untilMs, {DateTime? now}) =>
+    untilMs != null && (now ?? DateTime.now()).millisecondsSinceEpoch < untilMs;
+
+/// Best idle printer for a job: smallest bed that fits it, among idle ones.
+/// Each candidate is (name, idle, bedX, bedY).
+String? suggestPrinter(List<(String, bool, double, double)> printers, {double needX = 0, double needY = 0}) {
+  final fit = [
+    for (final p in printers)
+      if (p.$2 && p.$3 >= needX && p.$4 >= needY) p,
+  ]..sort((a, b) => (a.$3 * a.$4).compareTo(b.$3 * b.$4));
+  return fit.isEmpty ? null : fit.first.$1;
+}

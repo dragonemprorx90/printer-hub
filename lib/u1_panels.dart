@@ -10,6 +10,7 @@ import 'moonraker.dart';
 import 'scan.dart';
 import 'settings.dart';
 import 'ui.dart';
+import 'workshop_page.dart';
 
 /// DragonBreath chamber heater on a U1: status, filament drying, fault clear.
 class HeaterPanel extends StatelessWidget {
@@ -1075,7 +1076,7 @@ Future<bool> snapmakerPrintSetup(BuildContext context, MoonrakerClient c, String
       ),
     ),
   );
-  if (ok != true || !context.mounted) return false;
+  if (ok != true || !context.mounted || !await preflight(context) || !context.mounted) return false;
   settings
     ..setFlag('u1.bedLevel', bed)
     ..setFlag('u1.flow', flow)

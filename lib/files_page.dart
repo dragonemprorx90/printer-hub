@@ -14,6 +14,7 @@ import 'slice_where.dart';
 import 'slicer.dart';
 import 'u1_panels.dart';
 import 'ui.dart';
+import 'workshop_page.dart';
 
 enum _Sort { newest, name, size }
 
@@ -255,7 +256,7 @@ class _FilesTabState extends State<FilesTab> {
         final meta = await c.metadataWhenReady(dest);
         if (mounted) await snapmakerPrintSetup(context, c, dest, meta);
       } else {
-        run(context, () => c.startPrint(dest), done: 'Print started');
+        if (await preflight(context) && mounted) run(context, () => c.startPrint(dest), done: 'Print started');
       }
     }
   }
@@ -745,6 +746,7 @@ class _FileSheetState extends State<_FileSheet> {
     if (!await confirm(context, 'Print ${f.name}?', action: 'Print') || !mounted) {
       return;
     }
+    if (!await preflight(context) || !mounted) return;
     final nav = Navigator.of(context);
     await run(context, () => c.startPrint(f.path), done: 'Print started');
     nav.pop();

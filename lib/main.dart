@@ -18,6 +18,7 @@ import 'settings_page.dart';
 import 'slice_where.dart';
 import 'u1_panels.dart';
 import 'ui.dart';
+import 'workshop_page.dart';
 import 'update.dart';
 import 'wall_page.dart';
 import 'whats_new.dart';
@@ -207,7 +208,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
     if (c.isSnapmaker) {
       final meta = await c.metadataWhenReady(name);
       if (mounted) await snapmakerPrintSetup(context, c, name, meta);
-    } else if (await confirm(context, 'Print $name on ${to.name}?', action: 'Print') && mounted) {
+    } else if (await confirm(context, 'Print $name on ${to.name}?', action: 'Print') && mounted && await preflight(context) && mounted) {
       await run(context, () => c.startPrint(name), done: 'Printing on ${to.name}');
     }
   }
