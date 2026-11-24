@@ -1087,10 +1087,12 @@ class _FileSheetState extends State<_FileSheet> {
     final st = c.status;
     final warn = materialWarning('${meta['filament_type'] ?? ''}'.split(';').first,
         hasChamber: st.chamberHeatable, chamberTemp: st.hasChamber ? st.chamber : null);
+    final hot = tempWarning('${meta['filament_type'] ?? ''}'.split(';').first,
+        (meta['first_layer_extr_temp'] ?? meta['nozzle_temperature']) as num?);
     final soft = cfsWarning('${meta['filament_type'] ?? ''}'.split(';').first, hasCfs: st.cfs.isNotEmpty);
     final est = (meta['estimated_time'] as num?)?.toDouble();
     final when = est == null || est <= 0 ? null : 'Done about ${fmtTime(DateTime.now().add(Duration(seconds: est.round())))}.';
-    if (!await confirm(context, 'Print ${f.name}?', message: [?when, ?warn, ?soft].isEmpty ? null : [?when, ?warn, ?soft].join('\n\n'), action: 'Print') || !mounted) {
+    if (!await confirm(context, 'Print ${f.name}?', message: [?when, ?warn, ?soft, ?hot].isEmpty ? null : [?when, ?warn, ?soft, ?hot].join('\n\n'), action: 'Print') || !mounted) {
       return;
     }
     if (!await preflight(context) || !mounted) return;

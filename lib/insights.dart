@@ -508,6 +508,26 @@ String? cfsWarning(String? material, {required bool hasCfs}) {
   return '$m is too soft for the CFS. Load it from the external spool holder.';
 }
 
+/// Usual nozzle ranges (°C) per material.
+const nozzleRanges = {
+  'PETG': (215, 260), 'PLA': (180, 235), 'ABS': (230, 280), 'ASA': (235, 285),
+  'TPU': (200, 250), 'PA': (240, 300), 'PC': (250, 310),
+};
+
+/// A note when the file's nozzle temperature is outside the material's usual range.
+String? tempWarning(String? material, num? temp) {
+  if (temp == null || temp <= 0) return null;
+  final m = (material ?? '').toUpperCase();
+  for (final e in nozzleRanges.entries) {
+    if (!m.contains(e.key)) continue;
+    final (lo, hi) = e.value;
+    if (temp < lo) return 'The file prints $m at ${temp.round()}°C, cooler than usual ($lo–$hi°C). Check it was sliced for $m.';
+    if (temp > hi) return 'The file prints $m at ${temp.round()}°C, hotter than usual ($lo–$hi°C). Check it was sliced for $m.';
+    return null;
+  }
+  return null;
+}
+
 /// Drying presets: (material, °C, hours).
 const dryPresets = [
   ('PLA', 50, 4),

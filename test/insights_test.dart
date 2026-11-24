@@ -234,6 +234,14 @@ void main() {
     expect(fleetSummary([]), '');
   });
 
+  test('nozzle temperature for the material', () {
+    expect(tempWarning('PETG', 205), contains('cooler'));
+    expect(tempWarning('PLA', 250), contains('hotter'));
+    expect(tempWarning('PLA', 210), isNull);
+    expect(tempWarning('PETG', 240), isNull); // not mistaken for PLA
+    expect(tempWarning('XYZ', 999), isNull);
+  });
+
   test('CFS and flexible filament', () {
     expect(cfsWarning('TPU 95A', hasCfs: true), contains('external spool'));
     expect(cfsWarning('TPU', hasCfs: false), isNull);
