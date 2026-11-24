@@ -65,7 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
     ('Filament in grams', 'Appearance'), ('Compact printer cards', 'Appearance'), ('Keep the screen on during a print', 'Appearance'),
     ('Silent alerts / no sound', 'Notifications'), ('Which printers send alerts', 'Notifications'),
     ('Bed has cooled alert', 'Notifications'), ('Print started / 25% 50% 75%', 'Notifications'),
-    ('Nozzle temperature alert', 'Notifications'), ('Monthly budget', 'Cost estimate'),
+    ('Nozzle temperature alert', 'Notifications'),
   ];
 
   Future<void> _find() async {
