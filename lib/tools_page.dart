@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'charts.dart';
 import 'console_page.dart';
+import 'insights.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 import 'u1_panels.dart';
@@ -319,6 +320,22 @@ class _ToolsTabState extends State<ToolsTab> {
                     label: const Text('Copy mesh as CSV'),
                   ),
                 ),
+                if (hi - lo >= 0.1)
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('Bed screw helper'),
+                    subtitle: Text('If your bed has adjustment screws (M4, 0.7 mm a turn)', style: T.caption.copyWith(color: C.muted)),
+                    children: [
+                      for (final (corner, mm, turns) in screwHelp(mesh))
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(corner),
+                          trailing: Text(mm < 0.02 ? 'the lowest: leave it' : '${mm.toStringAsFixed(2)} mm high · lower it ${turnsText(turns)}'),
+                        ),
+                      Hint('Measured with the mesh you see. Home and re-run the mesh after turning, and check the first layer.'),
+                    ],
+                  ),
                 MeshHistory(client: c, range: hi - lo, profile: s.meshProfile),
               ],
             ),

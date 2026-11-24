@@ -324,6 +324,33 @@ List<String> dueTasks(List<Map<String, dynamic>> items, double hours) => [
         if ((m['hours'] as num) > 0 && hours - (m['since'] as num) >= (m['hours'] as num)) '${m['name']}',
     ];
 
+/// Bed screw help from a mesh (rows front to back, columns left to right):
+/// how far each corner sits above the lowest one, in mm and screw turns
+/// ([pitch] mm per turn, 0.7 for M4). Lowering the high corners to the
+/// lowest one keeps the nozzle clear of the bed.
+List<(String, double, double)> screwHelp(List<List<double>> mesh, {double pitch = 0.7}) {
+  if (mesh.isEmpty || mesh.first.isEmpty) return const [];
+  final corners = {
+    'Front left': mesh.first.first,
+    'Front right': mesh.first.last,
+    'Back left': mesh.last.first,
+    'Back right': mesh.last.last,
+  };
+  final low = corners.values.reduce(math.min);
+  return [for (final e in corners.entries) (e.key, e.value - low, (e.value - low) / pitch)];
+}
+
+/// "about 1/4 turn" for a fraction of a turn.
+String turnsText(double turns) {
+  final t = turns.abs();
+  if (t < 0.06) return 'leave it';
+  const steps = [(0.125, '1/8'), (0.25, '1/4'), (0.375, '3/8'), (0.5, '1/2'), (0.75, '3/4'), (1.0, '1')];
+  for (final (v, label) in steps) {
+    if (t <= v + 0.06) return 'about $label turn';
+  }
+  return 'about ${t.toStringAsFixed(1)} turns';
+}
+
 /// Mesh range grew by more than [limit] mm since a saved mesh.
 bool meshDrifted(double savedRange, double nowRange, {double limit = 0.1}) =>
     nowRange - savedRange > limit;

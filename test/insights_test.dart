@@ -161,6 +161,18 @@ void main() {
     expect(q.$5, 9);
   });
 
+  test('bed screw help', () {
+    final h = screwHelp([
+      [0.0, 0.175],
+      [0.35, 0.0],
+    ]);
+    expect(h.firstWhere((x) => x.$1 == 'Front right').$3, closeTo(0.25, 1e-9));
+    expect(h.firstWhere((x) => x.$1 == 'Back left').$2, closeTo(0.35, 1e-9));
+    expect(turnsText(0.25), 'about 1/4 turn');
+    expect(turnsText(0.02), 'leave it');
+    expect(turnsText(2.3), 'about 2.3 turns');
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));
