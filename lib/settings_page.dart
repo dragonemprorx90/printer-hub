@@ -9,6 +9,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'main.dart' show orcaLink;
 import 'models_page.dart' show CrealitySource;
 import 'moonraker.dart';
+import 'notify.dart';
 import 'orca_link.dart';
 import 'scan.dart';
 import 'settings.dart';
@@ -351,6 +352,14 @@ class _SettingsPageState extends State<SettingsPage> {
                     settings.setNumber('humidityLimit', v.roundToDouble());
                     _refresh();
                   },
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => notify('Printer Hub test', 'Alerts on this device look like this.'),
+                    icon: const Icon(Icons.notifications_active_outlined, size: 18),
+                    label: const Text('Send a test notification'),
+                  ),
                 ),
                 Row(children: [
                   const Expanded(child: Text('Quiet hours (failures still come)')),

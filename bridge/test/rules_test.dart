@@ -26,6 +26,13 @@ void main() {
     expect(bridgeOwn('/server/info'), isNull);
   });
 
+  test('weekly summary time', () {
+    expect(weeklyDue('Sun 20:00', DateTime(2026, 11, 29, 20, 0)), isTrue);
+    expect(weeklyDue('sun 20:00', DateTime(2026, 11, 29, 20, 1)), isFalse);
+    expect(weeklyDue('Mon 20:00', DateTime(2026, 11, 29, 20, 0)), isFalse);
+    expect(weeklyDue('', DateTime(2026, 11, 29, 20, 0)), isFalse);
+  });
+
   test('chamber ready, summary and metrics', () {
     expect(chamberReady(59.2, 60), isTrue);
     expect(chamberReady(50, 60), isFalse);

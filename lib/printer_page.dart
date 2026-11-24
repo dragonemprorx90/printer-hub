@@ -603,6 +603,12 @@ class _JobPanel extends StatelessWidget {
                 if (paceVsSlicer(s.printDuration, s.fileProgress, (s.jobMeta['estimated_time'] as num?)?.toDouble())
                     case final p? when active)
                   StatTile(label: 'Vs slicer', value: paceText(p)),
+                if (active && s.liveSpeed != null)
+                  StatTile(label: 'Speed now', value: '${s.liveSpeed!.round()} mm/s'),
+                if (active && (s.liveFlow ?? 0) > 0.1)
+                  StatTile(label: 'Flow now', value: '${s.liveFlow!.toStringAsFixed(1)} mm³/s'),
+                if (active && s.position.length > 2)
+                  StatTile(label: 'Height', value: '${s.position[2].toStringAsFixed(2)} mm'),
                 if (active && (s.currentLayer ?? 0) > 1)
                   StatTile(label: 'Per layer', value: fmtDuration(s.printDuration / s.currentLayer!)),
                 if (active && ((s.speedFactor - 1).abs() > 0.01 || (s.flowFactor - 1).abs() > 0.01))
@@ -811,8 +817,36 @@ class _Temps extends StatelessWidget {
           ? gauges.length
           : (c.maxWidth / 130).floor().clamp(2, gauges.length);
       final w = (c.maxWidth - gap * (cols - 1)) / cols;
-      return Wrap(spacing: gap, runSpacing: gap, children: [
-        for (final g in gauges) SizedBox(width: w, child: g),
+      final busy = s.state == 'printing' || s.state == 'paused';
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Wrap(spacing: gap, runSpacing: gap, children: [
+          for (final g in gauges) SizedBox(width: w, child: g),
+        ]),
+        if (!busy && s.online) ...[
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text('Preheat', style: T.small.copyWith(color: C.muted)),
+            for (final (m, n, b, ch) in preheatPresets)
+              ActionChip(
+                label: Text(m),
+                tooltip: 'Nozzle $n°, bed $b°${ch > 0 && s.chamberHeatable ? ', chamber $ch°' : ''}',
+                onPressed: () async {
+                  if (!await confirm(context, 'Preheat for $m?',
+                          message: 'Nozzle ${Units.deg(n, unit: true)}, bed ${Units.deg(b, unit: true)}'
+                              '${ch > 0 && s.chamberHeatable ? ', chamber ${Units.deg(ch, unit: true)}' : ''}.',
+                          action: 'Heat') ||
+                      !context.mounted) {
+                    return;
+                  }
+                  await run(context, () async {
+                    await client.setHotend(n);
+                    await client.setBed(b);
+                    if (ch > 0 && s.chamberHeatable) await client.setChamber(ch);
+                  }, done: 'Heating for $m');
+                },
+              ),
+          ]),
+        ],
       ]);
     });
   }

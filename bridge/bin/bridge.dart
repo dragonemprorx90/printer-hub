@@ -136,7 +136,9 @@ Future<void> main(List<String> argv) async {
           pauseRepeat: int.tryParse(env['PAUSE_REPEAT_MIN'] ?? '') ?? 15,
           offlineAfter: int.tryParse(env['OFFLINE_ALERT_MIN'] ?? '') ?? 10,
           summaryAt: env['DAILY_SUMMARY'] ?? '',
-          bedCool: double.tryParse(env['BED_COOL_C'] ?? '') ?? 35);
+          bedCool: double.tryParse(env['BED_COOL_C'] ?? '') ?? 35,
+          progressAlerts: [for (final v in (env['PROGRESS_ALERTS'] ?? '').split(',')) ?int.tryParse(v.trim())],
+          weeklyAt: env['WEEKLY_SUMMARY'] ?? '');
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -282,6 +284,8 @@ class Alerts {
   final int pauseRepeat; // minutes between "still paused" alerts, 0 = once
   final int offlineAfter; // minutes unreachable before an alert, 0 = never
   final String summaryAt; // "21:00" = daily summary then, '' = off
+  final List<int> progressAlerts; // e.g. [25, 50, 75]: alert at these percents
+  final String weeklyAt; // "Sun 20:00" = weekly summary then, '' = off
   DateTime? _pausedAt, _downSince;
   bool _offlineSent = false;
   int _snoozeUntil = 0; // ms; the app sets printer_hub/snooze
@@ -308,7 +312,9 @@ class Alerts {
       this.pauseRepeat = 15,
       this.offlineAfter = 10,
       this.summaryAt = '',
-      this.bedCool = 35})
+      this.bedCool = 35,
+      this.progressAlerts = const [],
+      this.weeklyAt = ''})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -562,6 +568,11 @@ class Alerts {
             tags: ['mag'], priority: 2, jpeg: await _keep('first'));
         unawaited(_runRules((r) => r['on'] == 'first_layer'));
       }
+      for (final at in progressAlerts) {
+        if (at > 0 && at < 100 && _progress * 100 >= at && _sent.add('pct $at')) {
+          await send('$_title: $at% done', file, tags: ['hourglass_flowing_sand'], priority: 2);
+        }
+      }
       for (final r in _rules.where((r) => r['on'] == 'progress')) {
         final at = double.tryParse('${r['at']}');
         if (at != null && _progress * 100 >= at && _sent.add('progress $at ${r['do']}')) {
@@ -667,6 +678,7 @@ extension on Alerts {
       final day = '${now.year}-${now.month}-${now.day}';
       await _runRules((r) => r['on'] == 'time' && r['at'] == hhmm && _ranToday.add('$day ${r['at']} ${r['do']}'));
       if (summaryAt == hhmm && _ranToday.add('$day summary')) unawaited(_summary(now));
+      if (weeklyDue(weeklyAt, now) && _ranToday.add('$day weekly')) unawaited(_summary(now, days: 7));
       final mins = _started == null ? 0 : now.difference(_started!).inMinutes;
       if (_state == 'printing' && mins > 0) {
         await _runRules((r) => r['on'] == 'interval' && (int.tryParse('${r['at']}') ?? 0) > 0 &&
@@ -677,12 +689,14 @@ extension on Alerts {
   }
 
   /// Today's prints, hours and failures, sent at [summaryAt].
-  Future<void> _summary(DateTime now) async {
+  Future<void> _summary(DateTime now, {int days = 1}) async {
     try {
-      final since = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch / 1000;
+      final since = DateTime(now.year, now.month, now.day - (days - 1)).millisecondsSinceEpoch / 1000;
       final r = await _client.get(Uri.parse('http://$host:$port/server/history/list?limit=100&since=$since'));
       final jobs = (jsonDecode(r.body)['result']?['jobs'] as List?) ?? const [];
-      await send('$_title: today', summaryText(jobs), tags: ['bar_chart'], priority: 2);
+      await send('$_title: ${days == 1 ? 'today' : 'this week'}',
+          summaryText(jobs).replaceFirst('No prints today.', days == 1 ? 'No prints today.' : 'No prints this week.'),
+          tags: ['bar_chart'], priority: 2);
     } catch (e) {
       log('Daily summary skipped: $e');
     }
@@ -994,6 +1008,14 @@ bool ruleAllowed(Map r, DateTime now) {
 Uri? webhookUri(String action) {
   final u = Uri.tryParse(action.replaceFirst('@webhook', '').trim());
   return u != null && (u.scheme == 'http' || u.scheme == 'https') && u.host.isNotEmpty ? u : null;
+}
+
+/// "Sun 20:00" matches Sunday at 20:00.
+bool weeklyDue(String spec, DateTime now) {
+  final m = RegExp(r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2}):(\d{2})$', caseSensitive: false).firstMatch(spec.trim());
+  if (m == null) return false;
+  const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  return days.indexOf(m[1]!.toLowerCase()) + 1 == now.weekday && int.parse(m[2]!) == now.hour && int.parse(m[3]!) == now.minute;
 }
 
 /// The chamber is within 1°C of a set target.

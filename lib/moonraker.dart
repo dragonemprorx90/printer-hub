@@ -374,6 +374,14 @@ class PrinterStatus {
     return slicer * (1 - p) + pace * p;
   }
 
+  /// Toolhead speed (mm/s) and volumetric flow (mm³/s, 1.75 mm filament)
+  /// right now; null without motion_report (or away from home).
+  double? get liveSpeed => (_f('motion_report', 'live_velocity') as num?)?.toDouble();
+  double? get liveFlow {
+    final e = (_f('motion_report', 'live_extruder_velocity') as num?)?.toDouble();
+    return e == null ? null : e * 2.405; // π × 0.875²
+  }
+
   double get speedFactor =>
       (_f('gcode_move', 'speed_factor') as num?)?.toDouble() ?? 1;
   double get flowFactor =>
@@ -855,6 +863,10 @@ class MoonrakerClient {
               RegExp(r'^extruder\d+$').hasMatch(o))
             o: null,
       };
+      // Live speed and flow change several times a second: at home only.
+      if (objs.contains('motion_report') && !viaRelay) {
+        sub['motion_report'] = ['live_velocity', 'live_extruder_velocity'];
+      }
       final res = await _call('printer.objects.subscribe', {'objects': sub});
       status.raw.clear();
       status.online = true;

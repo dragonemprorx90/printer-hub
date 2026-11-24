@@ -300,6 +300,18 @@ class _ToolsTabState extends State<ToolsTab> {
                       : 'Large variation. Check the bed is clean and seated properly.',
                   style: TextStyle(color: C.muted, fontSize: 12),
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(
+                          text: [for (final r in mesh) r.map((v) => v.toStringAsFixed(4)).join(',')].join('\n')));
+                      toast(context, 'Mesh copied as CSV (one row per line)');
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copy mesh as CSV'),
+                  ),
+                ),
                 MeshHistory(client: c, range: hi - lo, profile: s.meshProfile),
               ],
             ),

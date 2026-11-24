@@ -327,6 +327,15 @@ String? materialWarning(String? material, {required bool hasChamber, double? cha
   return null;
 }
 
+/// Preheat presets: (material, nozzle, bed, chamber; 0 = leave it).
+const preheatPresets = [
+  ('PLA', 210, 60, 0),
+  ('PETG', 240, 75, 0),
+  ('ABS', 255, 100, 50),
+  ('ASA', 260, 100, 50),
+  ('TPU', 225, 50, 0),
+];
+
 /// Drying presets: (material, °C, hours).
 const dryPresets = [
   ('PLA', 50, 4),
