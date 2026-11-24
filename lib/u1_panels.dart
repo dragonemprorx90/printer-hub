@@ -358,6 +358,7 @@ class SpoolmanPanel extends StatefulWidget {
 }
 
 class _SpoolmanPanelState extends State<SpoolmanPanel> {
+  String _spoolFind = '', _spoolSort = '';
   late Future<(List<Spool>, int?)?> _data = _load();
 
   Future<(List<Spool>, int?)?> _load() async {
@@ -572,7 +573,14 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
         builder: (context, snap) {
           final d = snap.data;
           if (d == null) return const SizedBox.shrink();
-          final (spools, active) = d;
+          final (all, active) = d;
+          final q = _spoolFind.toLowerCase();
+          final spools = [
+            for (final sp in all)
+              if (q.isEmpty || '${sp.name} ${sp.material} ${sp.color == null ? '' : colorName(sp.color!)}'.toLowerCase().contains(q)) sp,
+          ];
+          if (_spoolSort == 'left') spools.sort((a, b) => (a.remaining ?? 1e9).compareTo(b.remaining ?? 1e9));
+          if (_spoolSort == 'material') spools.sort((a, b) => a.material.compareTo(b.material));
           return Panel(
             title: 'Spools',
             icon: Icons.album_outlined,
@@ -591,9 +599,29 @@ class _SpoolmanPanelState extends State<SpoolmanPanel> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                          [for (final (m, g, n) in inventory(spools)) '$m ${(g / 1000).toStringAsFixed(1)} kg ($n)'].join(' · '),
+                          [for (final (m, g, n) in inventory(all)) '$m ${(g / 1000).toStringAsFixed(1)} kg ($n)'].join(' · '),
                           style: T.small.copyWith(color: C.muted)),
                     ),
+                    if (all.length > 5)
+                      Row(children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(isDense: true, hintText: 'Find a spool (brand, material, colour)', prefixIcon: Icon(Icons.search_rounded)),
+                            onChanged: (v) => setState(() => _spoolFind = v),
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: 'Sort',
+                          icon: const Icon(Icons.sort_rounded),
+                          initialValue: _spoolSort,
+                          onSelected: (v) => setState(() => _spoolSort = v),
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: '', child: Text('As in Spoolman')),
+                            PopupMenuItem(value: 'left', child: Text('Least left first')),
+                            PopupMenuItem(value: 'material', child: Text('By material')),
+                          ],
+                        ),
+                      ]),
                     for (final sp in spools)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -917,6 +945,7 @@ class _RulesPanelState extends State<RulesPanel> {
         if (s.raw.containsKey(PrinterStatus.dragonFilter)) ('Heater filter off', 'SET_PIN PIN=dragonbreath_filter VALUE=0'),
         ('Motors off', 'M84'),
         ('Send me an alert…', '@notify'),
+        ('Power device on or off…', '@power'),
         ('Call a webhook (Home Assistant…)…', '@webhook'),
       ];
 
@@ -984,6 +1013,24 @@ class _RulesPanelState extends State<RulesPanel> {
       );
       if (m == null || !mounted) return;
       (label, gcode) = ('Run $m', m);
+    }
+    if (gcode == '@power') {
+      final devices = await c.powerDevices().catchError((_) => <PowerDevice>[]);
+      if (!mounted) return;
+      if (devices.isEmpty) return toast(context, 'This printer has no power devices set up in Moonraker', error: true);
+      final pick = await showModalBottomSheet<(String, String)>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: ListView(shrinkWrap: true, children: [
+            for (final d in devices)
+              for (final a in const ['off', 'on'])
+                ListTile(title: Text('${d.name} $a'), onTap: () => Navigator.pop(ctx, (d.name, a))),
+          ]),
+        ),
+      );
+      if (pick == null || !mounted) return;
+      if (pick.$1.contains(' ')) return toast(context, 'Power device names with spaces can\'t be used in rules', error: true);
+      (label, gcode) = ('Power ${pick.$1} ${pick.$2}', '@power ${pick.$1} ${pick.$2}');
     }
     if (gcode == '@notify') {
       final t = await askText(context, 'Alert text', hint: 'e.g. Take the print off', action: 'Next');

@@ -597,7 +597,9 @@ class _ToolsTabState extends State<ToolsTab> {
                       !await confirm(
                         context,
                         'Turn off ${d.name}?',
-                        message: 'Anything powered by it stops immediately.',
+                        message: c.status.state == 'printing' || c.status.state == 'paused'
+                            ? 'A print is running: it will stop and be lost. Anything powered by it stops immediately.'
+                            : 'Anything powered by it stops immediately.',
                         action: 'Turn off',
                         danger: true,
                       )) {

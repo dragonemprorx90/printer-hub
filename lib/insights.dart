@@ -580,7 +580,9 @@ String ruleDryRun(Map r, Map<String, String> triggers, DateTime now) {
               ? 'start drying filament (${g.split(' ').skip(1).join('°C, ')} h)'
               : g.startsWith('@notify')
                   ? 'send you the alert "${g.substring(7).trim()}"'
-                  : g.startsWith('@webhook')
+                  : g.startsWith('@power')
+                      ? 'turn the power device ${g.split(' ').skip(1).join(' ')}'
+                      : g.startsWith('@webhook')
                       ? 'POST the printer state to ${g.substring(8).trim()}'
                       : 'run the G-code "$g" on the printer';
   final days = [for (final d in (r['days'] as List?) ?? const []) int.tryParse('$d') ?? 0];

@@ -916,6 +916,22 @@ extension on Alerts {
         }
         continue;
       }
+      if (g.startsWith('@power')) {
+        // "@power <device> on|off": a Moonraker power device (smart plug, relay).
+        final parts = g.split(RegExp(r'\s+'));
+        if (parts.length != 3 || !const {'on', 'off'}.contains(parts[2])) {
+          log('Rule: bad power action "$g"');
+          continue;
+        }
+        try {
+          await _client.post(Uri.parse('http://$host:$port/machine/device_power/device'
+              '?device=${Uri.encodeQueryComponent(parts[1])}&action=${parts[2]}'));
+          log('Rule: power ${parts[1]} ${parts[2]}');
+        } catch (e) {
+          log('Rule power failed: $e');
+        }
+        continue;
+      }
       if (g.startsWith('@notify')) {
         final text = g.substring(7).trim();
         await send('$_title: ${text.isEmpty ? 'rule' : text}', file.isEmpty ? 'From your rule' : file, tags: ['bell']);
