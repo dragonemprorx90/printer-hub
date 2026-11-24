@@ -796,7 +796,14 @@ class _FilesTabState extends State<FilesTab> {
                         ),
                         Padding(
                           padding: const EdgeInsets.all(8),
-                          child: Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: T.small),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: T.small),
+                            Text(
+                                '${DateTime.now().difference(f.modified).inHours < 24 ? 'new · ' : ''}${fmtBytes(f.size)} · ${fmtAgo(f.modified)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: T.caption.copyWith(color: C.muted)),
+                          ]),
                         ),
                       ]),
                     ),
