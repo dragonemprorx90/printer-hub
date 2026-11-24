@@ -51,6 +51,7 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - Home Assistant: MQTT with auto-discovery, a camera still and a status page from the home bridge.
 - Time left learns from your printer: it allows for how its real prints compare with the slicer, in the Overview, queue, files and slice editor.
 - Find models on every site at once, "while you were away" on opening the app, alert history, and when each rule last ran.
+- Rate prints, printer groups, pre-print checks (nozzle size, temperatures for the material, TPU and the CFS), saved quotes, and a `--check` for the home bridge.
 
 **From anywhere: free and end-to-end encrypted**
 - A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.
