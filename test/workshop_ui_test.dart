@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:printer_hub/main.dart';
 import 'package:printer_hub/moonraker.dart';
 import 'package:printer_hub/printer_page.dart';
+import 'package:printer_hub/settings_page.dart';
 import 'package:printer_hub/settings.dart';
 import 'package:printer_hub/workshop_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -103,5 +104,27 @@ void main() {
     await t.pumpWidget(const SizedBox());
     dropClient(p);
     await t.pump(const Duration(minutes: 2));
+  });
+
+  // Settings lays out, and "Find a setting" scrolls to the section.
+  testWidgets('Settings renders and finds a setting', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    await settings.load();
+    t.view.physicalSize = const Size(390 * 3, 844 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(MaterialApp(home: SettingsPage(printers: const [], onImport: (_) {})));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull, reason: 'page');
+    await t.tap(find.byTooltip('Find a setting'));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull, reason: 'sheet');
+    await t.pumpAndSettle();
+    await t.enterText(find.byType(TextField).last, 'currency');
+    await t.pumpAndSettle();
+    await t.tap(find.text('Currency'));
+    await t.pumpAndSettle();
+    expect(find.text('COST ESTIMATE'), findsOneWidget);
+    expect(t.takeException(), isNull);
   });
 }

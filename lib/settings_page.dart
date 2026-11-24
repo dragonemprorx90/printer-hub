@@ -308,9 +308,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 Row(children: [
-                  const Text('Open printers on'),
-                  const Spacer(),
-                  DropdownButton<String>(
+                  const Expanded(child: Text('Open printers on')),
+                  Flexible(
+                    child: DropdownButton<String>(
+                    isExpanded: true,
                     value: settings.text('openTab', 'last'),
                     underline: const SizedBox(),
                     items: const [
@@ -325,7 +326,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       settings.setText('openTab', v ?? 'last');
                       _refresh();
                     },
-                  ),
+                  )),
                 ]),
                 Row(children: [
                   const Text('Text size'),
@@ -439,8 +440,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     label: const Text('Send a test notification'),
                   ),
                 ),
-                Row(children: [
-                  const Expanded(child: Text('Quiet hours (failures still come)')),
+                Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  const Text('Quiet hours (failures still come)'),
                   for (final k in const ['quietFrom', 'quietTo'])
                     TextButton(
                       onPressed: () async {
