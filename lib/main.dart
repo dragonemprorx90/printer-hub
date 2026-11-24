@@ -919,6 +919,29 @@ class _PrinterCard extends StatelessWidget {
                   run(context, client.resume);
                 },
               ),
+            if (s.online && (s.state == 'complete' || s.state == 'cancelled') && (s.filename ?? '').isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.replay_rounded),
+                title: Text('Print ${s.filename!.split('/').last} again'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  if (await confirm(context, 'Print it again?', message: 'Make sure the plate is clear first.', action: 'Print') &&
+                      context.mounted &&
+                      await preflight(context) &&
+                      context.mounted) {
+                    run(context, () => client.startPrint(s.filename!), done: 'Print started');
+                  }
+                },
+              ),
+            if (s.online && s.state != 'printing' && s.state != 'paused' && (s.hotendTarget > 0 || s.bedTarget > 0))
+              ListTile(
+                leading: const Icon(Icons.ac_unit_rounded),
+                title: const Text('Heaters off'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  run(context, () => client.gcode('TURN_OFF_HEATERS'), done: 'Heaters off');
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.handyman_outlined),
               title: const Text('Workshop'),
