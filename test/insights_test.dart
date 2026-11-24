@@ -198,6 +198,13 @@ void main() {
     expect(fits([10, 10, 300], [270, 270, 270]), isFalse);
   });
 
+  test('week totals', () {
+    // Nov 1 2026 is a Sunday; the week of Mon Nov 2 holds days 2..5.
+    final w = weekTotals(jobs, now: DateTime(2026, 11, 5));
+    expect(w.$1, 5);
+    expect(weekTotals(jobs, offset: 1, now: DateTime(2026, 11, 5)).$1, 1);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

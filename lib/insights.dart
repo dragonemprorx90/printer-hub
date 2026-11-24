@@ -94,6 +94,15 @@ List<(String, int)> mostPrinted(Iterable<PrintJob> jobs, {int top = 10}) {
   );
 }
 
+/// (prints, hours) for the week [offset] weeks back (weeks start on Monday).
+(int, double) weekTotals(Iterable<PrintJob> jobs, {int offset = 0, DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final monday = DateTime(n.year, n.month, n.day - (n.weekday - 1) - 7 * offset);
+  final end = monday.add(const Duration(days: 7));
+  final mine = [for (final j in jobs) if (!j.start.isBefore(monday) && j.start.isBefore(end)) j];
+  return (mine.length, mine.fold(0.0, (a, j) => a + j.duration) / 3600);
+}
+
 /// Filament cost per material at one price per kg, most first.
 List<(String, double)> costByMaterial(Iterable<PrintJob> jobs, double Function(String? material) pricePerKg) {
   final m = <String, double>{};

@@ -155,7 +155,11 @@ class _WorkshopPageState extends State<WorkshopPage> {
           final (n0, h0, kg0) = monthTotals(jobs, offset: 1);
           String d(num a, num b, String unit, [int dp = 0]) =>
               '${a.toStringAsFixed(dp)}$unit${b == 0 ? '' : ' (${a >= b ? '+' : ''}${(a - b).toStringAsFixed(dp)} vs last month)'}';
+          final (wn, wh) = weekTotals(jobs);
+          final (wn0, wh0) = weekTotals(jobs, offset: 1);
           return Column(children: [
+            _row('Prints this week', '$wn${wn0 == 0 ? '' : ' (${wn >= wn0 ? '+' : ''}${wn - wn0} vs last week)'}'),
+            _row('Hours this week', '${wh.toStringAsFixed(0)} h${wh0 == 0 ? '' : ' (last week ${wh0.toStringAsFixed(0)} h)'}'),
             _row('Prints', d(n, n0, '')),
             _row('Print hours', d(h, h0, ' h')),
             _row('Filament', d(kg, kg0, ' kg', 2)),
