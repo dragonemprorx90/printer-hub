@@ -199,6 +199,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
     }
     onOpenFromNotification = (key) => _handleLaunch(key);
     _whileAway();
+    if (settings.flag('clearOnOpen', false)) clearAlerts();
     const MethodChannel('printerhub/statusbar').setMethodCallHandler((call) async {
       if (call.method == 'openPrinter') await _handleLaunch('${call.arguments}');
     });

@@ -64,6 +64,11 @@ void _publishMenu() {
   }
 }
 
+/// Clears the app's delivered alerts (Settings: "Clear alerts when I open the app").
+Future<void> clearAlerts() async {
+  if (_ready) await _plugin.cancelAll();
+}
+
 /// Set by the printer list: opens a printer from a tapped notification.
 void Function(String printerKey)? onOpenFromNotification;
 
