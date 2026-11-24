@@ -72,7 +72,11 @@ class _WallPageState extends State<WallPage> {
       for (final p in widget.printers)
         if ((!_busyOnly || const {'printing', 'paused', 'error'}.contains(clientFor(p).status.state)) &&
             // "Hide offline printers" on the printer list applies here too.
-            (!settings.flag('hideOffline', false) || clientFor(p).status.online))
+            (!settings.flag('hideOffline', false) || clientFor(p).status.online) &&
+            // The group picked on the printer list, if any.
+            (settings.text('listGroup').isEmpty ||
+                !widget.printers.any((x) => settings.text('group.${x.key}') == settings.text('listGroup')) ||
+                settings.text('group.${p.key}') == settings.text('listGroup')))
           p,
     ];
     if (_sorted) {
