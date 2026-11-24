@@ -1253,16 +1253,17 @@ class _RulesPanelState extends State<RulesPanel> {
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               PopupMenuButton<String>(
                 tooltip: 'More',
-                onSelected: (v) => _more(v, rules),
+                onSelected: (v) => v == 'templates' ? _templates() : v == 'snooze' ? _snooze() : _more(v, rules),
                 itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'templates', child: Text('Ready-made rules…')),
+                  const PopupMenuItem(value: 'snooze', child: Text('Snooze alerts…')),
+                  const PopupMenuDivider(),
                   if (rules.isNotEmpty) const PopupMenuItem(value: 'off', child: Text('Turn every rule off (holiday)')),
                   if (rules.any((r) => r['off'] == true)) const PopupMenuItem(value: 'on', child: Text('Turn every rule on')),
                   if (rules.isNotEmpty) const PopupMenuItem(value: 'copy', child: Text('Copy rules as text')),
                   const PopupMenuItem(value: 'paste', child: Text('Paste rules…')),
                 ],
               ),
-              IconButton(tooltip: 'Snooze alerts', icon: const Icon(Icons.notifications_paused_outlined), onPressed: _snooze),
-              IconButton(tooltip: 'Ready-made rules', icon: const Icon(Icons.auto_awesome_outlined), onPressed: _templates),
               IconButton(tooltip: 'Add rule', icon: const Icon(Icons.add_rounded), onPressed: _add),
             ]),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

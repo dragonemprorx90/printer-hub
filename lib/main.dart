@@ -529,17 +529,22 @@ class _PrinterListPageState extends State<PrinterListPage> {
     });
   }
 
+  void _openFleet() => Navigator.push(context, MaterialPageRoute(builder: (_) => FleetPage(printers: _printers)));
+  void _openWall() => Navigator.push(context, MaterialPageRoute(builder: (_) => WallPage(printers: _printers)));
+
   Widget _listScaffold(bool split) {
+    // A phone (or the narrow list beside a printer) keeps three icons; the rest go in ⋯.
+    final narrow = split || MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 76,
-        title: const Text('Printer Hub',
-            style: T.hero),
+        toolbarHeight: 64,
+        title: const Text('Printer Hub', style: T.hero),
         actions: [
-          IconButton(
-              tooltip: 'Find printers on this network',
-              icon: const Icon(Icons.radar_rounded),
-              onPressed: _scan),
+          if (!narrow)
+            IconButton(
+                tooltip: 'Find printers on this network',
+                icon: const Icon(Icons.radar_rounded),
+                onPressed: _scan),
           if (_printers.isNotEmpty)
             StreamBuilder<void>(
               stream: _fleet,
@@ -565,25 +570,27 @@ class _PrinterListPageState extends State<PrinterListPage> {
                 );
               },
             ),
-          if (_printers.length > 1)
+          if (_printers.length > 1 && !narrow)
             IconButton(
               tooltip: 'All printers: stats',
               icon: const Icon(Icons.insights_rounded),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FleetPage(printers: _printers))),
+              onPressed: _openFleet,
             ),
-          if (_printers.isNotEmpty)
+          if (_printers.isNotEmpty && !narrow)
             IconButton(
               tooltip: 'Wall view',
               icon: const Icon(Icons.grid_view_rounded),
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => WallPage(printers: _printers))),
+              onPressed: _openWall,
             ),
-          if (_printers.length > 1)
+          if (_printers.length > 1 || narrow)
             PopupMenuButton<String>(
-              tooltip: 'All printers',
+              tooltip: 'More',
               icon: const Icon(Icons.more_horiz_rounded),
               onSelected: (v) async {
                 final cs = [for (final p in _printers) clientFor(p)];
+                if (v == 'scan') return _scan();
+                if (v == 'fleet') return _openFleet();
+                if (v == 'wall') return _openWall();
                 if (v == 'find') return _findFile();
                 if (v == 'lights') {
                   await run(context, () async {
@@ -606,10 +613,18 @@ class _PrinterListPageState extends State<PrinterListPage> {
                   }, done: 'Paused');
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'find', child: Text('Find a file on any printer…')),
-                PopupMenuItem(value: 'lights', child: Text('Turn every light off')),
-                PopupMenuItem(value: 'pause', child: Text('Pause every print…')),
+              itemBuilder: (_) => [
+                if (narrow) ...[
+                  const PopupMenuItem(value: 'scan', child: Text('Find printers on this network')),
+                  if (_printers.length > 1) const PopupMenuItem(value: 'fleet', child: Text('All printers: stats')),
+                  if (_printers.isNotEmpty) const PopupMenuItem(value: 'wall', child: Text('Wall view')),
+                  if (_printers.length > 1) const PopupMenuDivider(),
+                ],
+                if (_printers.length > 1) ...const [
+                  PopupMenuItem(value: 'find', child: Text('Find a file on any printer…')),
+                  PopupMenuItem(value: 'lights', child: Text('Turn every light off')),
+                  PopupMenuItem(value: 'pause', child: Text('Pause every print…')),
+                ],
               ],
             ),
           IconButton(
@@ -702,16 +717,20 @@ class _PrinterListPageState extends State<PrinterListPage> {
                                   if (next != null)
                                     'next done ${fmtTime(DateTime.now().add(Duration(seconds: next.$2.round())))} (${next.$1})',
                                 ].where((x) => x.isNotEmpty).join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: T.small.copyWith(color: C.muted)),
                           ),
                           IconButton(
+                            visualDensity: VisualDensity.compact,
                             tooltip: problemsFirst ? 'Sorted: problems first' : 'Your order',
-                            icon: Icon(Icons.sort_rounded, size: 20, color: problemsFirst ? C.accent : null),
+                            icon: Icon(Icons.sort_rounded, size: 18, color: problemsFirst ? C.accent : C.muted),
                             onPressed: () => setState(() => settings.setFlag('listSort', !problemsFirst)),
                           ),
                           IconButton(
+                            visualDensity: VisualDensity.compact,
                             tooltip: hideOff ? 'Show offline printers' : 'Hide offline printers',
-                            icon: Icon(hideOff ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+                            icon: Icon(hideOff ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18, color: C.muted),
                             onPressed: () => setState(() => settings.setFlag('hideOffline', !hideOff)),
                           ),
                         ]),
@@ -747,14 +766,14 @@ class _PrinterListPageState extends State<PrinterListPage> {
                               ),
                               if (shown.length > 1)
                                 Positioned(
-                                  left: 2,
+                                  left: 0,
                                   top: 0,
                                   bottom: 12,
                                   child: ReorderableDragStartListener(
                                     index: i,
                                     child: Tooltip(
                                       message: 'Drag to reorder',
-                                      child: Icon(Icons.drag_indicator_rounded, size: 18, color: C.muted.withValues(alpha: 0.6)),
+                                      child: Icon(Icons.drag_indicator_rounded, size: 14, color: C.muted.withValues(alpha: 0.6)),
                                     ),
                                   ),
                                 ),
@@ -862,24 +881,24 @@ class _PrinterCard extends StatelessWidget {
               '${active ? ', ${(s.progress * 100).round()} percent${eta == null ? '' : ', ${fmtDuration(eta)} left'}' : ''}',
           hint: 'Opens the printer. Long-press for quick actions.',
           child: Tile(
-          radius: 20,
+          radius: R.xl,
           onTap: onOpen,
           onLongPress: () => _quick(context, client, s),
           child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(children: [
+            padding: const EdgeInsets.all(16),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (active)
                 ProgressRing(
                   value: s.progress,
-                  size: 64,
-                  stroke: 6,
+                  size: 56,
+                  stroke: 5,
                   color: s.state == 'paused' ? C.warn : null,
                   center: s.filename == null
                       ? null
                       : ClipOval(
                           child: SizedBox(
-                            width: 44,
-                            height: 44,
+                            width: 38,
+                            height: 38,
                             child: FutureBuilder<Uint8List?>(
                               future: Thumbs.of(client, s.filename!),
                               builder: (_, t) => t.data == null
@@ -887,7 +906,7 @@ class _PrinterCard extends StatelessWidget {
                                       child: Text(
                                           '${(s.progress * 100).toStringAsFixed(0)}%',
                                           style: const TextStyle(
-                                              fontSize: 13, fontWeight: FontWeight.w800)))
+                                              fontSize: 13, fontWeight: FontWeight.w700)))
                                   : Image.memory(t.data!, fit: BoxFit.cover),
                             ),
                           ),
@@ -896,48 +915,56 @@ class _PrinterCard extends StatelessWidget {
               else
                 StatefulBuilder(builder: (context, set) {
                   final tint = Color(settings.printerColor(printer.key) ?? C.accent.toARGB32());
-                  return Tooltip(
+                  return Opacity(
+                    opacity: s.online ? 1 : 0.6,
+                    child: Tooltip(
                     message: 'Printer colour',
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(R.xl),
+                      borderRadius: BorderRadius.circular(R.lg),
                       onTap: () async {
                         final c = await pickPrinterColor(context);
                         if (c != null) set(() => settings.setPrinterColor(printer.key, c));
                       },
                       child: Container(
-                        width: 64,
-                        height: 64,
+                        width: 56,
+                        height: 56,
                         decoration: BoxDecoration(
                           color: tint.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(R.xl),
+                          borderRadius: BorderRadius.circular(R.lg),
                         ),
-                        child: Icon(Icons.print_rounded, color: tint, size: 30),
+                        child: Icon(Icons.print_rounded, color: tint, size: 26),
                       ),
                     ),
-                  );
+                  ));
                 }),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                child: Opacity(
+                  opacity: s.online ? 1 : 0.6,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(printer.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.title),
+                  const SizedBox(height: 4),
                   Row(children: [
+                    StatusPill(state: s.state, online: s.online, dense: true),
                     Expanded(
-                      child: Text(printer.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: T.title),
+                      child: Text(
+                        active
+                            ? ' · ${(s.progress * 100).toStringAsFixed(0)}%'
+                                '${s.currentLayer != null && (s.totalLayers ?? 0) > 0 ? ' · layer ${s.currentLayer}/${s.totalLayers}' : ''}'
+                            : ' · ${printer.host}:${printer.port}'
+                                '${settings.text('group.${printer.key}').isEmpty ? '' : ' · ${settings.text('group.${printer.key}')}'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.small.copyWith(color: C.muted),
+                      ),
                     ),
-                    StatusPill(state: s.state, online: s.online),
                   ]),
-                  const SizedBox(height: 2),
-                  Text(
-                    active
-                        ? '${(s.progress * 100).toStringAsFixed(0)}%'
-                            '${s.currentLayer != null && (s.totalLayers ?? 0) > 0 ? ' · layer ${s.currentLayer}/${s.totalLayers}' : ''}'
-                            ' · ${s.filename ?? ''}'
-                        : '${printer.host}:${printer.port}'
-                            '${settings.text('group.${printer.key}').isEmpty ? '' : ' · ${settings.text('group.${printer.key}')}'}',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: C.muted, fontSize: 13),
-                  ),
+                  if (active && s.filename != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(s.filename!.split('/').last,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: T.small.copyWith(color: C.muted)),
+                    ),
                   if (s.state == 'paused' && (s.message ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -950,22 +977,23 @@ class _PrinterCard extends StatelessWidget {
                     ),
                   if (s.online && !settings.flag('compactCards', false)) ...[
                     const SizedBox(height: 10),
-                    Wrap(spacing: 16, runSpacing: 6, children: [
-                      _mini(Icons.local_fire_department_rounded, C.hot, s.hotend,
-                          s.hotendTarget),
-                      _mini(Icons.grid_view_rounded, C.bed, s.bed, s.bedTarget),
-                      if (s.hasChamber)
-                        _mini(Icons.thermostat_rounded, C.chamber, s.chamber,
-                            s.chamberTarget),
+                    Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Expanded(
+                        child: Wrap(spacing: 14, runSpacing: 6, children: [
+                          _mini(Icons.local_fire_department_rounded, C.hot, s.hotend,
+                              s.hotendTarget),
+                          _mini(Icons.grid_view_rounded, C.bed, s.bed, s.bedTarget),
+                          if (s.hasChamber)
+                            _mini(Icons.thermostat_rounded, C.chamber, s.chamber,
+                                s.chamberTarget),
+                        ]),
+                      ),
                       if (active && eta != null)
-                        Text(
-                          'done ${fmtTime(DateTime.now().add(Duration(seconds: eta.round())))}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                        ),
+                        Text('done ${fmtTime(DateTime.now().add(Duration(seconds: eta.round())))}', style: T.value),
                     ]),
                   ],
                 ]),
-              ),
+              )),
               PopupMenuButton<String>(
                 icon: Icon(Icons.more_vert_rounded, color: C.muted),
                 onSelected: (v) async {

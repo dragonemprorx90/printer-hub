@@ -556,16 +556,6 @@ class _FilesTabState extends State<FilesTab> {
             if (_favOnly) _ensureAll();
           },
         ),
-        IconButton(
-          tooltip: _recentOnly ? 'Showing files printed in the last 30 days' : 'Printed in the last 30 days',
-          isSelected: _recentOnly,
-          icon: const Icon(Icons.history_rounded),
-          selectedIcon: Icon(Icons.history_rounded, color: C.accent),
-          onPressed: () {
-            setState(() => _recentOnly = !_recentOnly);
-            if (_recentOnly) _ensureAll();
-          },
-        ),
         PopupMenuButton<_Sort>(
           tooltip: 'Sort',
           icon: const Icon(Icons.sort_rounded),
@@ -580,29 +570,37 @@ class _FilesTabState extends State<FilesTab> {
             PopupMenuItem(value: _Sort.popular, child: Text('Printed most')),
           ],
         ),
-        IconButton(
-            tooltip: settings.flag('filesGrid', false) ? 'Show as a list' : 'Show as a grid',
-            icon: Icon(settings.flag('filesGrid', false) ? Icons.view_list_rounded : Icons.grid_view_rounded),
-            onPressed: () => setState(() => settings.setFlag('filesGrid', !settings.flag('filesGrid', false)))),
-        IconButton(
-            tooltip: 'Tags',
-            icon: const Icon(Icons.sell_outlined),
-            onPressed: _tagList),
-        IconButton(
-            tooltip: 'Tidy up',
-            icon: const Icon(Icons.cleaning_services_outlined),
-            onPressed: _tidy),
-        IconButton(
-            tooltip: 'New folder',
-            icon: const Icon(Icons.create_new_folder_outlined),
-            onPressed: _newFolder),
-        IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              _all = null;
-              _load();
-            }),
+        PopupMenuButton<String>(
+          tooltip: 'More',
+          icon: Icon(Icons.more_vert_rounded, color: _recentOnly ? C.accent : null),
+          onSelected: (v) {
+            switch (v) {
+              case 'grid':
+                setState(() => settings.setFlag('filesGrid', !settings.flag('filesGrid', false)));
+              case 'refresh':
+                _all = null;
+                _load();
+              case 'recent':
+                setState(() => _recentOnly = !_recentOnly);
+                if (_recentOnly) _ensureAll();
+              case 'tags':
+                _tagList();
+              case 'tidy':
+                _tidy();
+              case 'folder':
+                _newFolder();
+            }
+          },
+          itemBuilder: (_) => [
+            CheckedPopupMenuItem(value: 'recent', checked: _recentOnly, child: const Text('Printed in the last 30 days')),
+            PopupMenuItem(value: 'grid', child: Text(settings.flag('filesGrid', false) ? 'Show as a list' : 'Show as a grid')),
+            const PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+            const PopupMenuDivider(),
+            const PopupMenuItem(value: 'tags', child: Text('Tags')),
+            const PopupMenuItem(value: 'tidy', child: Text('Tidy up')),
+            const PopupMenuItem(value: 'folder', child: Text('New folder')),
+          ],
+        ),
       ]),
     );
 
@@ -895,6 +893,9 @@ class _FilesTabState extends State<FilesTab> {
         FloatingActionButton.small(
           heroTag: 'findModels',
           tooltip: 'Find models online',
+          backgroundColor: C.surfaceHi,
+          foregroundColor: C.text,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md), side: BorderSide(color: C.border)),
           onPressed: _findModels,
           child: const Icon(Icons.travel_explore_rounded),
         ),

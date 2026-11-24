@@ -4,6 +4,8 @@ Status: accepted (EGM review resolved 2026-11-09) · Applies to: the Flutter app
 
 ## Goal
 
+**2026-11-24 remake ("bench instrument", direction by Fable 5.2):** flat and calm. No shadows anywhere (depth is bg → surface → surfaceHi plus a 1px border), nothing heavier than weight 700, pills mean status and rounded rectangles mean actions. Tokens below are updated. Also: `StatusPill(dense: true)` for inline status, `StatGrid` for fixed-column stats, buttons 44 tall with `R.md` corners, flat FABs, nav bar on `bg` with muted unselected items, and `StateView.error` strips `Exception:`-style prefixes. On a phone the home toolbar keeps the bell, ⋯ and Settings; the rest is in ⋯.
+
 Every screen should look like it belongs to the same app, and the Orca panel should look like a compact version of it. This spec changes look and layout only. It changes no behaviour, data or `/hub/*` API, and adds no new buttons or actions.
 
 `lib/ui.dart` already holds the base layer:
@@ -38,11 +40,11 @@ Page edges use 16. Panels and list rows sit 12 apart (8 in dense lists such as H
 | Token | Value | Used for |
 |---|---|---|
 | `R.sm` | 8 | chips, thumbnails, colour swatches, small marks |
-| `R.md` | 12 | inputs, hints, inner tiles, images inside a panel |
-| `R.lg` | 16 | list tiles (`Tile`), console box, camera frame |
-| `R.xl` | 20 | `Panel`, gauge tiles, printer cards |
+| `R.md` | 10 | inputs, hints, inner tiles, images inside a panel |
+| `R.lg` | 14 | list tiles (`Tile`), console box, camera frame |
+| `R.xl` | 16 | `Panel`, gauge tiles, printer cards |
 
-Dialogs keep 24, set once in `buildTheme`. Pills use 99 (fully round). Chart legend marks may use 3.
+Dialogs use 20, set once in `buildTheme`. Pills use 99 (fully round). Chart legend marks may use 3.
 
 How today's radii map to tokens:
 - 6 → 8;
@@ -59,12 +61,12 @@ Colour is added at the call site, e.g. `T.label.copyWith(color: C.muted)`, becau
 | Token | Size / weight | Used for |
 |---|---|---|
 | `T.caption` | 11 / 400 | helper lines, chart axes, slot labels |
-| `T.label` | 12 / 700 | muted labels, pill text, panel titles (uppercase, letter-spacing 1.1) |
+| `T.label` | 11 / 700, +0.8 | muted labels, panel titles (uppercase) |
 | `T.small` | 13 / 400 | hints, secondary text, empty/error messages |
-| `T.value` | 16 / 700 | stat values |
-| `T.title` | 18 / 800 | card and sheet titles |
-| `T.heading` | 20 / 800 | page headings |
-| `T.hero` | 26 / 800 | the welcome title, big numbers |
+| `T.value` | 15 / 600 | stat values |
+| `T.title` | 17 / 700, −0.2 | card, sheet and app bar titles |
+| `T.heading` | 20 / 700, −0.3 | page headings |
+| `T.hero` | 28 / 700, −0.6 | the home title, big numbers |
 
 Body text keeps the Material default (14). The review suggested merging `T.title` into `T.heading`. Six screens use 18 for card titles, and 20 crowds them, so `T.title` stays. Folds: 10 → 11, 17 → 18, 22 → 20. Nothing smaller than 11. Gauge and progress-ring numbers keep their size-relative font sizes.
 

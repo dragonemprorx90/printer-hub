@@ -249,11 +249,16 @@ class PrinterCamera extends StatefulWidget {
   final MoonrakerClient client;
   final String? cameraUrl;
   final BoxFit fit;
+
+  /// Set: with no camera at all, show a slim row instead of a black 16:9 box,
+  /// and report it here (so the page can hide the video overlay).
+  final ValueNotifier<bool>? missing;
   const PrinterCamera({
     super.key,
     required this.client,
     this.cameraUrl,
     this.fit = BoxFit.cover,
+    this.missing,
   });
 
   @override
@@ -312,7 +317,9 @@ class PrinterCameraState extends State<PrinterCamera> with WidgetsBindingObserve
   double get fps => _frameTimes.length < 2 ? 0 : (_frameTimes.length - 1) * 1000 / (_frameTimes.last - _frameTimes.first);
 
   void _set(_Mode m) {
-    if (mounted) setState(() => _mode = m);
+    if (!mounted) return;
+    setState(() => _mode = m);
+    widget.missing?.value = m == _Mode.none;
   }
 
   Future<void> _start() async {
@@ -520,6 +527,28 @@ class PrinterCameraState extends State<PrinterCamera> with WidgetsBindingObserve
 
   @override
   Widget build(BuildContext context) {
+    if (_mode == _Mode.none && widget.missing != null) {
+      return Container(
+        height: 72,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: C.surface,
+          borderRadius: BorderRadius.circular(R.lg),
+          border: Border.all(color: C.border),
+        ),
+        child: Row(children: [
+          Icon(Icons.videocam_off_rounded, color: C.muted, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('No camera', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text('Set a camera URL in the printer settings',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.muted)),
+            ]),
+          ),
+        ]),
+      );
+    }
     final child = switch (_mode) {
       _Mode.probing => const Center(child: CircularProgressIndicator()),
       _Mode.mjpeg =>

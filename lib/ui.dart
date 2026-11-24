@@ -18,20 +18,20 @@ class Palette {
   });
 
   static const dark = Palette(
-    bg: Color(0xFF0B0E13),
-    surface: Color(0xFF141922),
-    surfaceHi: Color(0xFF1C2330),
-    border: Color(0xFF252D3A),
-    text: Color(0xFFE9EDF3),
-    muted: Color(0xFF8B95A7),
+    bg: Color(0xFF0B0D11),
+    surface: Color(0xFF13161C),
+    surfaceHi: Color(0xFF1C2129),
+    border: Color(0xFF272D38),
+    text: Color(0xFFECEFF4),
+    muted: Color(0xFF8F98A8),
   );
   static const light = Palette(
-    bg: Color(0xFFF2F4F8),
+    bg: Color(0xFFF3F4F7),
     surface: Color(0xFFFFFFFF),
-    surfaceHi: Color(0xFFEAEEF4),
-    border: Color(0xFFDCE1E9),
-    text: Color(0xFF111722),
-    muted: Color(0xFF5D677A),
+    surfaceHi: Color(0xFFECEEF2),
+    border: Color(0xFFDDE1E8),
+    text: Color(0xFF12161D),
+    muted: Color(0xFF5A6373),
   );
 }
 
@@ -108,21 +108,24 @@ class C {
 
 /// Corner radii. See docs/designs/ui-style.md.
 class R {
-  static const sm = 8.0, md = 12.0, lg = 16.0, xl = 20.0;
+  static const sm = 8.0, md = 10.0, lg = 14.0, xl = 16.0;
 }
 
 /// Type scale (no colour: add it with `copyWith`, C changes at runtime).
 /// Body text is the Material default (14). See docs/designs/ui-style.md.
 class T {
   static const caption = TextStyle(fontSize: 11);
-  static const label = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+  static const label = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8);
   static const small = TextStyle(fontSize: 13);
   static const value = TextStyle(
-      fontSize: 16, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]);
-  static const title = TextStyle(fontSize: 18, fontWeight: FontWeight.w800);
-  static const heading = TextStyle(fontSize: 20, fontWeight: FontWeight.w800);
+      fontSize: 15, fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()]);
+  static const title = TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.2);
+  static const heading = TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3);
   static const hero = TextStyle(
-      fontSize: 26, fontWeight: FontWeight.w800, fontFeatures: [FontFeature.tabularFigures()]);
+      fontSize: 28,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.6,
+      fontFeatures: [FontFeature.tabularFigures()]);
 }
 
 /// Motion. See docs/designs/ui-style.md. Everything is skipped when the OS
@@ -226,6 +229,10 @@ ThemeData buildTheme(Palette p, Color accent) {
     colorScheme: scheme,
     scaffoldBackgroundColor: p.bg,
   );
+  // Theme-level text styles replace (not merge with) the platform font, so
+  // start each from the theme's own style.
+  final tt = base.textTheme;
+  TextStyle f(TextStyle s) => tt.bodyMedium!.merge(s);
   return base.copyWith(
     appBarTheme: AppBarTheme(
       backgroundColor: p.bg,
@@ -234,16 +241,29 @@ ThemeData buildTheme(Palette p, Color accent) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
+      titleSpacing: 16,
+      titleTextStyle: f(T.title.copyWith(color: p.text)),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: p.surface,
+      backgroundColor: p.bg,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: accent.withValues(alpha: 0.18),
-      height: 68,
+      indicatorColor: accent.withValues(alpha: 0.16),
+      indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md)),
+      height: 64,
+      labelTextStyle: WidgetStateProperty.resolveWith((s) => f(TextStyle(
+          fontSize: 11, fontWeight: FontWeight.w600, color: s.contains(WidgetState.selected) ? p.text : p.muted))),
+      iconTheme: WidgetStateProperty.resolveWith(
+          (s) => IconThemeData(color: s.contains(WidgetState.selected) ? p.text : p.muted)),
     ),
     navigationRailTheme: NavigationRailThemeData(
-      backgroundColor: p.surface,
-      indicatorColor: accent.withValues(alpha: 0.18),
+      backgroundColor: p.bg,
+      minWidth: 76,
+      indicatorColor: accent.withValues(alpha: 0.16),
+      indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md)),
+      selectedIconTheme: IconThemeData(color: p.text),
+      unselectedIconTheme: IconThemeData(color: p.muted),
+      selectedLabelTextStyle: f(TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.text)),
+      unselectedLabelTextStyle: f(TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.muted)),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -252,18 +272,48 @@ ThemeData buildTheme(Palette p, Color accent) {
         borderRadius: BorderRadius.circular(R.md),
         borderSide: BorderSide.none,
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(R.md),
+        borderSide: BorderSide(color: primary, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    ),
+    filledButtonTheme: FilledButtonThemeData(style: _button(f)),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+        style: _button(f).copyWith(side: WidgetStatePropertyAll(BorderSide(color: p.border)))),
+    textButtonTheme: TextButtonThemeData(style: _button(f)),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      elevation: 0,
+      focusElevation: 0,
+      hoverElevation: 0,
+      highlightElevation: 0,
+      backgroundColor: primary,
+      foregroundColor: scheme.onPrimary,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.lg)),
+    ),
+    cardTheme: const CardThemeData(elevation: 0),
+    tabBarTheme: TabBarThemeData(
+      tabAlignment: TabAlignment.start,
+      dividerColor: p.border,
+      labelStyle: f(const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      unselectedLabelStyle: f(const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: p.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20), side: BorderSide(color: p.border)),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: p.surface,
       surfaceTintColor: Colors.transparent,
       showDragHandle: true,
     ),
-    popupMenuTheme: PopupMenuThemeData(color: p.surface),
+    popupMenuTheme: PopupMenuThemeData(
+      color: p.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(R.md), side: BorderSide(color: p.border)),
+    ),
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
       TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
@@ -279,23 +329,37 @@ ThemeData buildTheme(Palette p, Color accent) {
     ),
     chipTheme: ChipThemeData(
       backgroundColor: p.surfaceHi,
+      selectedColor: accent.withValues(alpha: 0.16),
+      labelStyle: f(TextStyle(color: p.text)),
       side: BorderSide(color: p.border),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.sm)),
     ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.sm))),
+        side: WidgetStatePropertyAll(BorderSide(color: p.border)),
+        backgroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? accent.withValues(alpha: 0.16) : null),
+        foregroundColor: WidgetStatePropertyAll(p.text),
+      ),
+    ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? Colors.white : null),
+          (s) => s.contains(WidgetState.selected) ? Colors.white : p.muted),
       trackColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? accent : null),
+          (s) => s.contains(WidgetState.selected) ? accent : p.surfaceHi),
+      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
     ),
   );
 }
 
-List<BoxShadow>? get _softShadow => C.dark
-    ? null
-    : const [
-        BoxShadow(color: Color(0x0F000000), blurRadius: 14, offset: Offset(0, 4)),
-      ];
+/// Buttons: [R.md] corners, 44 tall at least, 14/600 labels.
+ButtonStyle _button(TextStyle Function(TextStyle) f) => ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md))),
+      textStyle: WidgetStatePropertyAll(f(const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+    );
 
 /// The rounded card every section sits in.
 class Panel extends StatelessWidget {
@@ -321,7 +385,6 @@ class Panel extends StatelessWidget {
         color: C.surface,
         borderRadius: BorderRadius.circular(R.xl),
         border: Border.all(color: C.border),
-        boxShadow: _softShadow,
       ),
       padding: padding,
       // Transparent Material so list rows and buttons inside show their ink.
@@ -332,21 +395,27 @@ class Panel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (title != null) ...[
-            Row(children: [
-              if (icon != null) ...[
-                Icon(icon, size: 18, color: C.muted),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Text(
-                  title!.toUpperCase(),
-                  overflow: TextOverflow.ellipsis,
-                  style: T.label.copyWith(color: C.muted, letterSpacing: 1.1),
+            SizedBox(
+              height: 32,
+              child: Row(children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16, color: C.muted),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    title!.toUpperCase(),
+                    overflow: TextOverflow.ellipsis,
+                    style: T.label.copyWith(color: C.muted),
+                  ),
                 ),
-              ),
-              const Spacer(),
-              ?trailing,
-            ]),
+                if (trailing != null)
+                  Theme(
+                    data: Theme.of(context).copyWith(visualDensity: VisualDensity.compact),
+                    child: trailing!,
+                  ),
+              ]),
+            ),
             const SizedBox(height: 12),
           ],
           child,
@@ -381,17 +450,14 @@ class _TileState extends State<Tile> {
         child: AnimatedContainer(
           duration: M.base,
           curve: M.curve,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.radius),
-            boxShadow: _softShadow,
-          ),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(widget.radius)),
           child: Material(
-            color: C.surface,
+            color: widget.selected ? Color.alphaBlend(C.accent.withValues(alpha: 0.06), C.surface) : C.surface,
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(widget.radius),
               side: BorderSide(
-                  color: widget.selected ? C.accent : C.border, width: widget.selected ? 2 : 1),
+                  color: widget.selected ? C.accent : C.border, width: widget.selected ? 1.5 : 1),
             ),
             child: InkWell(
               onTap: widget.onTap,
@@ -435,7 +501,7 @@ class TempGauge extends StatelessWidget {
       excludeSemantics: onTap == null,
       button: onTap != null,
       child: Tile(
-      radius: R.xl,
+      radius: R.lg,
       onTap: onTap,
       onLongPress: onLongPress,
       child: Padding(
@@ -463,14 +529,14 @@ class TempGauge extends StatelessWidget {
                       Text(
                         Units.deg(t),
                         style: TextStyle(
-                            fontSize: d > 90 ? 26 : 20,
-                            fontWeight: FontWeight.w800,
+                            fontSize: d > 90 ? 24 : 20,
+                            fontWeight: FontWeight.w700,
                             fontFeatures: const [FontFeature.tabularFigures()]),
                       ),
                       Text(
                         heating ? '→ ${Units.deg(target)}' : 'off',
                         style: TextStyle(
-                            fontSize: 12, color: heating ? color : C.muted),
+                            fontSize: 11, color: heating ? color : C.muted),
                       ),
                     ]),
                   ),
@@ -484,7 +550,7 @@ class TempGauge extends StatelessWidget {
               Flexible(
                 child: Text(label,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                    style: T.label.copyWith(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0, color: C.muted)),
               ),
             ]),
           ]);
@@ -507,7 +573,7 @@ class _ArcPainter extends CustomPainter {
     final r = (Offset.zero & size).deflate(7);
     final p = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
+      ..strokeWidth = 6
       ..strokeCap = StrokeCap.round
       ..color = track;
     canvas.drawArc(r, _start, _sweep, false, p);
@@ -543,8 +609,8 @@ class ProgressRing extends StatelessWidget {
   const ProgressRing({
     super.key,
     required this.value,
-    this.size = 112,
-    this.stroke = 10,
+    this.size = 96,
+    this.stroke = 8,
     this.color,
     this.center,
   });
@@ -571,8 +637,8 @@ class ProgressRing extends StatelessWidget {
               child: center ??
                   Text('${(v * 100).toStringAsFixed(0)}%',
                       style: TextStyle(
-                          fontSize: size / 4.3,
-                          fontWeight: FontWeight.w800,
+                          fontSize: size / 4,
+                          fontWeight: FontWeight.w700,
                           fontFeatures: const [FontFeature.tabularFigures()])),
             ),
           ]),
@@ -595,7 +661,10 @@ class ProgressRing extends StatelessWidget {
 class StatusPill extends StatelessWidget {
   final String state;
   final bool online;
-  const StatusPill({super.key, required this.state, required this.online});
+
+  /// Dot and coloured label only, for use inside a line of text.
+  final bool dense;
+  const StatusPill({super.key, required this.state, required this.online, this.dense = false});
 
   @override
   Widget build(BuildContext context) {
@@ -607,29 +676,22 @@ class StatusPill extends StatelessWidget {
       child: AnimatedContainer(
       duration: M.base,
       curve: M.curve,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: dense ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: dense ? null : color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         _Breathe(
           on: live,
           child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: live
-                  ? [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 6)]
-                  : null,
-            ),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
         ),
         const SizedBox(width: 6),
-        Text(label, style: T.label.copyWith(color: color)),
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
       ]),
     ));
   }
@@ -691,12 +753,31 @@ class StatTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: TextStyle(color: C.muted, fontSize: 12)),
+            Text(label, style: T.caption.copyWith(color: C.muted)),
             const SizedBox(height: 2),
-            Text(value, style: T.value),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, maxLines: 1, style: T.value),
+            ),
           ],
         ),
       );
+}
+
+/// Stats in fixed columns (so values line up), 12 apart.
+class StatGrid extends StatelessWidget {
+  final int columns;
+  final List<Widget> children;
+  const StatGrid({super.key, this.columns = 3, required this.children});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+        final w = (box.maxWidth - 12 * (columns - 1)) / columns;
+        return Wrap(spacing: 12, runSpacing: 12, children: [
+          for (final c in children) SizedBox(width: w, child: c),
+        ]);
+      });
 }
 
 /// Amber info strip for "you can't do this right now" hints.
@@ -745,8 +826,9 @@ class StateView extends StatelessWidget {
 
   const StateView.empty(this.icon, this.text, {super.key, this.action}) : error = false;
 
-  StateView.error(this.text, {super.key, VoidCallback? onRetry})
-      : icon = Icons.error_outline_rounded,
+  StateView.error(String message, {super.key, VoidCallback? onRetry})
+      : text = cleanError(message),
+        icon = Icons.error_outline_rounded,
         error = true,
         action = onRetry == null
             ? null
@@ -757,7 +839,7 @@ class StateView extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 40, color: error ? C.ink(C.danger) : C.muted),
+            Icon(icon, size: error ? 32 : 40, color: error ? C.ink(C.danger) : C.muted),
             const SizedBox(height: 12),
             Text(text,
                 textAlign: TextAlign.center,
@@ -769,6 +851,10 @@ class StateView extends StatelessWidget {
         ),
       );
 }
+
+/// "Exception: x" and "ParallelWaitError(2 errors): x" read as just "x".
+String cleanError(String m) =>
+    m.replaceFirst(RegExp(r'^(\w*Exception: |\w+Error\(.*?\): )'), '');
 
 String fmtDuration(num? secs) {
   if (secs == null || secs <= 0) return '—';

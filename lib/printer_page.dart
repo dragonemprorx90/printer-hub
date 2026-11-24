@@ -93,22 +93,22 @@ class _PrinterPageState extends State<PrinterPage> {
                 Row(children: [
                   // The colour you gave this printer, so you know which one you're on.
                   Container(
-                    width: 10,
-                    height: 10,
+                    width: 4,
+                    height: 18,
                     margin: const EdgeInsets.only(right: 8),
                     decoration: BoxDecoration(
-                        shape: BoxShape.circle, color: Color(settings.printerColor(widget.printer.key) ?? C.accent.toARGB32())),
+                        borderRadius: BorderRadius.circular(2),
+                        color: Color(settings.printerColor(widget.printer.key) ?? C.accent.toARGB32())),
                   ),
                   Flexible(
-                    child: Text(widget.printer.name,
-                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    child: Text(widget.printer.name, overflow: TextOverflow.ellipsis, style: T.title),
                   ),
                 ]),
                 Text(
                     busy
                         ? '${(st.progress * 100).round()}%${st.eta == null ? '' : ' · done ${fmtTime(DateTime.now().add(Duration(seconds: st.eta!.round())))}'}'
                         : widget.printer.host,
-                    style: TextStyle(fontSize: 12, color: C.muted)),
+                    style: T.caption.copyWith(color: C.muted, fontWeight: FontWeight.w400)),
               ]);
             },
           ),
@@ -281,7 +281,14 @@ class OverviewTab extends StatefulWidget {
 
 class _OverviewTabState extends State<OverviewTab> {
   final _cam = GlobalKey<PrinterCameraState>();
+  final _camMissing = ValueNotifier(false);
   MoonrakerClient get c => widget.client;
+
+  @override
+  void dispose() {
+    _camMissing.dispose();
+    super.dispose();
+  }
 
   Future<void> _fullscreen() async {
     // At home both views share one WebRTC session (RtcCamera), so the
@@ -343,10 +350,12 @@ class _OverviewTabState extends State<OverviewTab> {
     final camera = Stack(children: [
       GestureDetector(
         onDoubleTap: _fullscreen, // double-tap the picture for fullscreen
-        child: PrinterCamera(key: _cam, client: c, cameraUrl: widget.printer.cameraUrl),
+        child: PrinterCamera(key: _cam, client: c, cameraUrl: widget.printer.cameraUrl, missing: _camMissing),
       ),
       Positioned.fill(
-        child: StreamBuilder<PrinterStatus>(
+        child: ValueListenableBuilder(
+          valueListenable: _camMissing,
+          builder: (context, missing, _) => missing ? const SizedBox.shrink() : StreamBuilder<PrinterStatus>(
           stream: c.stream,
           initialData: c.status,
           builder: (context, snap) => _CameraOverlay(
@@ -355,6 +364,7 @@ class _OverviewTabState extends State<OverviewTab> {
             onSnapshot: _snapshot,
             onLight: (on) => run(context, () => c.setLed(on)),
             onAdjust: () => _cam.currentState?.adjust(context),
+          ),
           ),
         ),
       ),
@@ -440,8 +450,6 @@ class _CameraOverlay extends StatelessWidget {
     final active = s.state == 'printing' || s.state == 'paused';
     final eta = s.eta;
     return Stack(children: [
-      Positioned(
-          top: 10, left: 10, child: StatusPill(state: s.state, online: s.online)),
       Positioned(
         top: 6,
         right: 6,
@@ -646,21 +654,27 @@ class _JobPanel extends StatelessWidget {
           : null,
       child: Column(children: [
         banner,
-        Row(children: [
-          ProgressRing(
+        LayoutBuilder(builder: (context, box) {
+          final wide = box.maxWidth >= 520;
+          final ring = ProgressRing(
             value: s.progress,
+            size: wide ? 112 : 80,
+            stroke: wide ? 8 : 7,
             color: s.state == 'paused' ? C.warn : null,
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(s.filename!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 14),
-              Wrap(spacing: 24, runSpacing: 12, children: [
+          );
+          final head = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Let long names wrap at _ - . rather than mid-word.
+            Text(s.filename!.replaceAllMapped(RegExp(r'[_.\-]'), (m) => '${m[0]}\u200B'),
+                maxLines: 2, overflow: TextOverflow.ellipsis, style: T.title.copyWith(fontSize: 16)),
+            if (active && eta != null) ...[
+              const SizedBox(height: 4),
+              Text('${fmtDuration(eta)} left · done ${fmtTime(DateTime.now().add(Duration(seconds: eta.round())))}',
+                  style: T.small.copyWith(color: C.muted)),
+            ],
+          ]);
+          final rest = <Widget>[
+              const SizedBox(height: 16),
+              StatGrid(columns: wide ? 4 : 3, children: [
                 StatTile(label: 'Elapsed', value: fmtDuration(s.printDuration)),
                 if (active)
                   StatTile(
@@ -755,9 +769,18 @@ class _JobPanel extends StatelessWidget {
                   ),
                 ]),
               ],
-            ]),
-          ),
-        ]),
+          ];
+          return wide
+              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  ring,
+                  const SizedBox(width: 20),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [head, ...rest])),
+                ])
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [ring, const SizedBox(width: 16), Expanded(child: head)]),
+                  ...rest,
+                ]);
+        }),
         if (active && s.failureWatch != null) _FailureWatch(watch: s.failureWatch!, client: client),
         _QueueHint(client: client, printing: active),
         // Just finished: rate it here (also in History).
