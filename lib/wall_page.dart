@@ -234,6 +234,11 @@ class _WallTile extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                 ]),
+                if (settings.text('pinNote.${printer.key}') case final pin when pin.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('📌 $pin', maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.ink(C.warn))),
+                  ),
                 if (active) ...[
                   const SizedBox(height: 4),
                   Align(
