@@ -1119,6 +1119,33 @@ class _RulesPanelState extends State<RulesPanel> {
         ),
       );
 
+  Future<void> _more(String v, List<Map<String, dynamic>> rules) async {
+    final c = widget.client;
+    switch (v) {
+      case 'off' || 'on':
+        await run(context, () => c.setRules([for (final r in rules) {...r, 'off': v == 'off'}]),
+            done: v == 'off' ? 'Every rule is off' : 'Every rule is on');
+      case 'copy':
+        Clipboard.setData(ClipboardData(text: jsonEncode(rules)));
+        return toast(context, 'Rules copied. Paste them into another printer or a note.');
+      case 'paste':
+        final t = await askText(context, 'Paste rules', hint: 'The text from "Copy rules as text"', action: 'Add');
+        if (t == null || t.trim().isEmpty || !mounted) return;
+        try {
+          final added = [for (final r in jsonDecode(t) as List) Map<String, dynamic>.from(r as Map)];
+          if (added.any((r) => r['on'] is! String || r['do'] is! String)) throw const FormatException();
+          await run(context, () => c.setRules([...rules, ...added]), done: 'Added ${added.length} rules');
+        } on FormatException {
+          if (mounted) toast(context, 'That isn\'t a list of Printer Hub rules', error: true);
+          return;
+        } on TypeError {
+          if (mounted) toast(context, 'That isn\'t a list of Printer Hub rules', error: true);
+          return;
+        }
+    }
+    if (mounted) setState(() => _rules = c.rules());
+  }
+
   Future<void> _snooze() async {
     final pick = await showModalBottomSheet<String>(
       context: context,
@@ -1197,6 +1224,16 @@ class _RulesPanelState extends State<RulesPanel> {
             title: 'Rules',
             icon: Icons.rule_rounded,
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                onSelected: (v) => _more(v, rules),
+                itemBuilder: (_) => [
+                  if (rules.isNotEmpty) const PopupMenuItem(value: 'off', child: Text('Turn every rule off (holiday)')),
+                  if (rules.any((r) => r['off'] == true)) const PopupMenuItem(value: 'on', child: Text('Turn every rule on')),
+                  if (rules.isNotEmpty) const PopupMenuItem(value: 'copy', child: Text('Copy rules as text')),
+                  const PopupMenuItem(value: 'paste', child: Text('Paste rules…')),
+                ],
+              ),
               IconButton(tooltip: 'Snooze alerts', icon: const Icon(Icons.notifications_paused_outlined), onPressed: _snooze),
               IconButton(tooltip: 'Ready-made rules', icon: const Icon(Icons.auto_awesome_outlined), onPressed: _templates),
               IconButton(tooltip: 'Add rule', icon: const Icon(Icons.add_rounded), onPressed: _add),
