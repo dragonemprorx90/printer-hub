@@ -1060,7 +1060,10 @@ class _FleetPageState extends State<FleetPage> {
                           for (final (i, j) in jobs.take(10).indexed)
                             Builder(builder: (_) {
                               final st = clientFor(p).status;
-                              final times = queueFinishTimes([for (final x in jobs.take(10)) _est['${p.key}|${x.filename}']],
+                              final times = queueFinishTimes([
+                                for (final x in jobs.take(10))
+                                  if (_est['${p.key}|${x.filename}'] case final e?) e * st.etaFactor else null,
+                              ],
                                   from: DateTime.now(), currentLeft: st.state == 'printing' ? (st.eta ?? 0) : 0);
                               final known = _est['${p.key}|${j.filename}'] != null;
                               return Text('  ${j.filename.split('/').last}${known ? ' · done ${fmtTime(times[i])}' : ''}',
