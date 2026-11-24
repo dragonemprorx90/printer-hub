@@ -365,6 +365,7 @@ class Alerts {
                   'Tags': tags.join(','),
                   'Priority': '$priority',
                   'Click': openLink(_title),
+                  'Actions': 'view, Open in Printer Hub, ${openLink(_title)}',
                 },
                 body: jpeg)
             .timeout(const Duration(seconds: 30));
@@ -386,6 +387,9 @@ class Alerts {
                 'priority': priority,
                 // Tapping the alert opens this printer in Printer Hub.
                 'click': openLink(_title),
+                'actions': [
+                  {'action': 'view', 'label': 'Open in Printer Hub', 'url': openLink(_title)},
+                ],
               }))
           .timeout(const Duration(seconds: 15));
       if (r.statusCode >= 300) log('Alert not delivered (HTTP ${r.statusCode})');

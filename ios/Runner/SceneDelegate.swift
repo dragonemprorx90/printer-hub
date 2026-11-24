@@ -82,6 +82,9 @@ class SceneDelegate: FlutterSceneDelegate {
               icon: UIApplicationShortcutIcon(systemImageName: "square.grid.2x2"))
           ]
         result(nil)
+      case "setNext":
+        UserDefaults.standard.set(call.arguments as? String ?? "", forKey: "printerhub.next")
+        result(nil)
       case "setStatus":
         // Read by the Shortcuts actions (PrinterIntents.swift).
         UserDefaults.standard.set(call.arguments as? String ?? "", forKey: "printerhub.status")
@@ -111,6 +114,18 @@ struct PrinterStatusIntent: AppIntent {
 }
 
 @available(iOS 16.0, *)
+struct TimeLeftIntent: AppIntent {
+  static var title: LocalizedStringResource = "Time left"
+  static var description = IntentDescription("When the next print finishes.")
+
+  func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
+    let s = UserDefaults.standard.string(forKey: "printerhub.next") ?? ""
+    let text = s.isEmpty ? "Nothing is printing." : s
+    return .result(value: text, dialog: IntentDialog(stringLiteral: text))
+  }
+}
+
+@available(iOS 16.0, *)
 struct OpenWallIntent: AppIntent {
   static var title: LocalizedStringResource = "Open camera wall"
   static var openAppWhenRun = true
@@ -127,6 +142,9 @@ struct PrinterHubShortcuts: AppShortcutsProvider {
       intent: PrinterStatusIntent(),
       phrases: ["Printer status in \(.applicationName)", "How are my prints in \(.applicationName)"],
       shortTitle: "Printer status", systemImageName: "printer.fill")
+    AppShortcut(
+      intent: TimeLeftIntent(), phrases: ["Time left in \(.applicationName)", "When is my print done in \(.applicationName)"],
+      shortTitle: "Time left", systemImageName: "clock")
     AppShortcut(
       intent: OpenWallIntent(), phrases: ["Open the camera wall in \(.applicationName)"],
       shortTitle: "Camera wall", systemImageName: "square.grid.2x2")

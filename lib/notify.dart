@@ -35,8 +35,16 @@ String statusLine(PrinterStatus s) {
       '${eta == null ? '' : ' · ${_short(eta)} left'}';
 }
 
+/// "K2 Plus finishes at 18:40 (1h 12m)", for Siri's Time left.
+String nextLine = '';
+final _next = <String, (String, double)>{};
+
 void _publishMenu() {
-  final json = _menu.entries.map((e) => '${e.key}|${e.value.name}|${e.value.line}|${e.value.attention}').join(';');
+  final best = _next.values.fold<(String, double)?>(null, (a, b) => a == null || b.$2 < a.$2 ? b : a);
+  nextLine = best == null
+      ? ''
+      : '${best.$1} finishes at ${fmtHm(DateTime.now().add(Duration(seconds: best.$2.round())), twelve: settings.flag('twelveHour', false))} (${_short(best.$2)})';
+  final json = '${_menu.entries.map((e) => '${e.key}|${e.value.name}|${e.value.line}|${e.value.attention}').join(';')}|$nextLine';
   if (json == _lastMenu) return;
   _lastMenu = json;
   final attention = _menu.values.where((m) => m.attention).length;
@@ -47,6 +55,7 @@ void _publishMenu() {
     }).catchError((_) => null);
   }
   if (Platform.isIOS) {
+    _launch.invokeMethod('setNext', nextLine).catchError((_) => null);
     _launch.invokeMethod('setShortcuts', [for (final m in _menu.values) m.name]).catchError((_) => null);
     _launch
         .invokeMethod('setStatus', [for (final m in _menu.values) '${m.name}: ${m.line}'].join('. '))
@@ -128,6 +137,11 @@ void watchPrinter(Printer p, MoonrakerClient c) {
     if (s.online && !remindersChecked) {
       remindersChecked = true;
       _dailyReminders(p, c);
+    }
+    if (s.online && s.state == 'printing' && s.eta != null) {
+      _next[p.key] = (p.name, s.eta!);
+    } else {
+      _next.remove(p.key);
     }
     _menu[p.key] = (
       name: p.name,

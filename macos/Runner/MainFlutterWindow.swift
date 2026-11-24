@@ -8,12 +8,27 @@ class MainFlutterWindow: NSWindow {
   private var channel: FlutterMethodChannel?
   /// (key, name, line) per printer, from Dart's setMenu.
   private var printers: [(String, String, String)] = []
+  /// The window, for the Dock menu (AppDelegate).
+  static weak var main: MainFlutterWindow?
+
+  /// Right-click the Dock icon: every printer, click to open it.
+  func dockMenu() -> NSMenu {
+    let menu = NSMenu()
+    for p in printers {
+      let item = NSMenuItem(title: p.2.isEmpty ? p.1 : "\(p.1) — \(p.2)", action: #selector(openPrinter(_:)), keyEquivalent: "")
+      item.target = self
+      item.representedObject = p.0
+      menu.addItem(item)
+    }
+    return menu
+  }
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    MainFlutterWindow.main = self
     // Remember the window's size and place between launches.
     self.setFrameAutosaveName("PrinterHubMain")
 

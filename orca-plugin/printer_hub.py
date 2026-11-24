@@ -5,7 +5,7 @@
 # name = "Printer Hub"
 # description = "Your printers beside the 3D view: camera, progress, temperatures, controls, filaments and spools, history with pictures, rules and print alerts. Uses the Printer Hub Mac app."
 # author = "Printer Hub"
-# version = "3.4.0"
+# version = "3.5.0"
 # type = "script"
 # ///
 """Printer Hub for OrcaSlicer 2.5+.
@@ -440,6 +440,7 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
     panel = None
     started = False      # opened once at Orca start; after that only when asked
     seen = None          # slug -> (state, chamber reached), for alerts
+    milestones = {}      # slug -> (file, set of "first"/"almost") already announced
 
     def get_name(self):
         return "Printer Hub"
@@ -498,6 +499,23 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
                     self._notify("%s: paused · %s" % (name, p.get("message") or "check the printer"), warn=True)
             if reached and not was_reached:
                 self._notify("%s: chamber at %d°C" % (name, target))
+            if now == "printing":
+                f = p.get("file") or ""
+                done_file, done = self.milestones.get(p["slug"], (None, set()))
+                if done_file != f:
+                    done = set()
+                    if done_file is None:  # joined mid-print: don't announce what already passed
+                        if (p.get("layer") or 0) >= 2:
+                            done.add("first")
+                        if p.get("eta") and p["eta"] <= 600:
+                            done.add("almost")
+                if (p.get("layer") or 0) >= 2 and "first" not in done:
+                    done.add("first")
+                    self._notify("%s: first layer done, have a look" % name)
+                if p.get("eta") and p["eta"] <= 600 and "almost" not in done:
+                    done.add("almost")
+                    self._notify("%s: about %d min left" % (name, max(1, round(p["eta"] / 60))))
+                self.milestones[p["slug"]] = (f, done)
 
     def _refresh(self):
         try:

@@ -10,4 +10,8 @@ class AppDelegate: FlutterAppDelegate {
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
   }
+
+  override func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+    return MainFlutterWindow.main?.dockMenu()
+  }
 }
