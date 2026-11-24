@@ -889,7 +889,13 @@ extension on Alerts {
       final est = (jsonDecode(r.body)['result']?['estimated_time'] as num?)?.toDouble();
       _estimate = est;
       if (est == null || est <= 0) return file;
-      final at = DateTime.now().add(Duration(seconds: est.round()));
+      // Scale by how this printer's recent prints compared with their estimates.
+      var factor = 1.0;
+      try {
+        final h = await _client.get(Uri.parse('http://$host:$port/server/history/list?limit=30&order=desc'));
+        factor = historyFactor((jsonDecode(h.body)['result']?['jobs'] as List?) ?? const []);
+      } catch (_) {}
+      final at = DateTime.now().add(Duration(seconds: (est * factor).round()));
       return '$file, done about ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return file;
@@ -1389,6 +1395,21 @@ bool weeklyDue(String spec, DateTime now) {
   if (m == null) return false;
   const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   return days.indexOf(m[1]!.toLowerCase()) + 1 == now.weekday && int.parse(m[2]!) == now.hour && int.parse(m[3]!) == now.minute;
+}
+
+/// Real time ÷ slicer estimate over recent finished prints (1 with fewer
+/// than three), clamped to 0.7–1.5.
+double historyFactor(List jobs) {
+  var real = 0.0, est = 0.0, n = 0;
+  for (final j in jobs) {
+    final e = ((j['metadata'] as Map?)?['estimated_time'] as num?)?.toDouble() ?? 0;
+    final d = (j['print_duration'] as num?)?.toDouble() ?? 0;
+    if (j['status'] != 'completed' || e <= 300 || d <= 0) continue;
+    real += d;
+    est += e;
+    n++;
+  }
+  return n < 3 ? 1 : (real / est).clamp(0.7, 1.5).toDouble();
 }
 
 /// The print has run [pct]% longer than the slicer's estimate.

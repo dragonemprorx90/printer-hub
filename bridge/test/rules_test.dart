@@ -99,6 +99,13 @@ void main() {
     expect(finishedText('a.gcode', {}), 'a.gcode');
   });
 
+  test('history factor', () {
+    Map j(double d, double e) => {'status': 'completed', 'print_duration': d, 'metadata': {'estimated_time': e}};
+    expect(historyFactor([j(900, 1000), j(1800, 2000), j(2700, 3000)]), closeTo(0.9, 1e-9));
+    expect(historyFactor([j(900, 1000)]), 1);
+    expect(historyFactor([j(100, 1000), j(100, 1000), j(100, 1000)]), 0.7);
+  });
+
   test('overrun', () {
     expect(overran(4000, 3000, 30), isTrue);
     expect(overran(3500, 3000, 30), isFalse);
