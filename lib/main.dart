@@ -947,7 +947,7 @@ class _PrinterCard extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 4),
                       child: Text('📌 $pin', maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.ink(C.warn))),
                     ),
-                  if (s.online) ...[
+                  if (s.online && !settings.flag('compactCards', false)) ...[
                     const SizedBox(height: 10),
                     Wrap(spacing: 16, runSpacing: 6, children: [
                       _mini(Icons.local_fire_department_rounded, C.hot, s.hotend,
