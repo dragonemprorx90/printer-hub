@@ -226,7 +226,9 @@ class _WorkshopPageState extends State<WorkshopPage> {
         title: 'Success by material',
         icon: Icons.category_outlined,
         child: Column(children: [
-          for (final (m, rate, n) in rateBy(jobs, (j) => j.material).take(8)) _row('$m · $n prints', pct(rate)),
+          for (final (m, rate, n) in rateBy(jobs, (j) => j.material).take(8))
+            _row('$m · $n prints · avg ${fmtDuration([for (final j in jobs) if ((j.material ?? 'Unknown') == m) j.duration].fold(0.0, (a, b) => a + b) / n)}',
+                pct(rate)),
         ]),
       ),
       Panel(
