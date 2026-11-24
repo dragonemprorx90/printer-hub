@@ -37,6 +37,9 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - Maintenance log, ready-made task lists, nozzle wear, spare parts and daily reminders.
 - Filament inventory (with or without Spoolman), shopping list, colour names, price per gram, drying guide and log, material notes.
 - A pre-print checklist, notes on prints, and History search and filters.
+- **Needs you**: one list of what's paused, failed, offline, damp, due or running low (also in the Orca panel).
+- **Quote** what to charge for a print, and **Calculators** for rotation distance, flow, pressure advance and temperature towers, shrinkage, max speed, spool weight, will-it-fit and more.
+- Compare first layers (or finished prints) side by side, a bed screw helper from the mesh, and stats across all your printers.
 
 **Everyday extras**
 - Queue: reorder, finish time per job, "bed is clear, start next". Files: tags, tidy up (space, copies, old files), finish-at scheduling, times printed before.

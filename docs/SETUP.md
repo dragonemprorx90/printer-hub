@@ -157,12 +157,15 @@ Press **Print** or **Send**. Printer Hub uploads the file (at home or through th
 
 **Printer panel** (Orca 2.5+). Download `printer_hub.py` from the release, or save it from Settings → Orca Slicer. Install it from Orca's **Plugins** dialog. A panel opens beside the 3D view with every printer: camera, progress, temperatures, controls, filaments, spools, history and rules.
 
-**What's in the panel** (plugin 3.4): Queue (with finish times), Stats (prints, hours, success by material, maintenance due), spool inventory with a shopping list, Snooze 1 h, and Save picture under the camera.
+**What's in the panel** (plugin 3.5): a Needs-you list, Queue (with finish times), Stats (prints, hours, success by material, maintenance due), spool inventory with a shopping list, the printing file's thumbnail, grams so far, live speed and pace against Orca's estimate, Copy status, Snooze 1 h, Save picture, a busy-only filter, and first-layer / 10-minutes-left notifications.
 
 ### iPhone and Mac extras
 
-- **iPhone**: long-press the app icon for your printers and the camera wall. Links like `printerhub://printer/K2` or `printerhub://wall` open them. In the Files app, share a `.gcode` or `.3mf` to Printer Hub to upload it. In Shortcuts, add **Printer status** (Siri reads what each printer is doing) or **Open camera wall**.
-- **Mac**: the menu-bar icon lists every printer with its state (⌘1–9 open one), has **Open at login**, and the Dock badge counts printers that need you (paused, failed, offline). In the window, ⌘1–9 open a printer, ⌘L the camera wall, ⌘, Settings. The window remembers its size and place.
+- **iPhone**: long-press the app icon for your printers and the camera wall. Links like `printerhub://printer/K2` or `printerhub://wall` open them (tapping a home-bridge alert does this too). In the Files app, share a `.gcode` or `.3mf` to Printer Hub to upload it. In Shortcuts, add **Printer status**, **Time left** or **Open camera wall**.
+- **Mac**: the menu-bar icon and the Dock menu list every printer with its state (⌘1–9 open one), the menu has **Open at login**, and the Dock badge counts printers that need you (paused, failed, offline). Pin the camera wall or a fullscreen camera on top of other apps. In the window, ⌘1–9 open a printer, ⌘L the camera wall, ⌘, Settings. The window remembers its size and place.
+- **Needs you** (the bell on the printer list): everything paused, failed, offline, possibly failing, damp, due or running low, across all printers. **All printers** (the chart icon): combined stats and every queue.
+- **Workshop → Quote** works out a price from a file (filament, power, machine wear, your time, markup). **Workshop → Calculators** has rotation distance, flow, pressure-advance and temperature towers, shrinkage, max speed, spool weight, layers and line width, will-it-fit, inches and price per gram. None of them talk to the printer.
+- **Without Spoolman**: add spools in Workshop → Filament, long-press one and choose *In use on this printer*; each print's filament comes off it.
 - **Tools → Workshop**: odometer, records and streaks, a calendar of print days, success by material and month, cost per month, why prints failed, maintenance log, ready-made task lists, nozzle wear, spare parts, filament inventory (also without Spoolman), shopping list, drying guide and log, material notes, a pre-print checklist and print notes. Copy history as JSON or a stats summary.
 - **Settings → Appearance**: text size, high contrast, °F, 12-hour time, side-by-side on wide screens, which tab printers open on, and Reset to defaults. **Settings → Notifications**: quiet hours (failures still come), maintenance reminders and the nozzle-temperature alert. Mute one printer from the bell on its screen.
 
