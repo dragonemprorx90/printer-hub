@@ -381,9 +381,6 @@ class _JobTile extends StatelessWidget {
         ? <Spool>[]
         : (await client.spools().catchError((_) => <Spool>[])).where((s) => job.spoolIds.contains(s.id)).toList();
     if (!context.mounted) return;
-    if (files.isEmpty && spools.isEmpty && !jobFailed(job) && job.status != 'cancelled') {
-      return toast(context, 'No pictures for this print (the home bridge takes them when it has a camera)');
-    }
     final price = spoolPrice(spools);
     final grams = filamentGrams(job.filament,
         diameter: settings.number('filamentDiameter', 1.75),
@@ -396,6 +393,22 @@ class _JobTile extends StatelessWidget {
           width: 520,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              StatefulBuilder(builder: (ctx, set) {
+                final k = 'jobNote.${client.host}:${client.port}.${jobKey(job)}';
+                final note = settings.text(k);
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.edit_note_rounded),
+                  title: Text(note.isEmpty ? 'Add a note' : note),
+                  onTap: () async {
+                    final t = await askText(ctx, 'Note', initial: note, action: 'Save');
+                    if (t != null) set(() => settings.setText(k, t));
+                  },
+                );
+              }),
+              if (files.isEmpty && spools.isEmpty)
+                Text('No pictures for this print (the home bridge takes them when it has a camera).',
+                    style: TextStyle(color: C.muted)),
               if (jobFailed(job) || job.status == 'cancelled')
                 StatefulBuilder(builder: (ctx, set) {
                   final k = 'failReasons.${client.host}:${client.port}';
