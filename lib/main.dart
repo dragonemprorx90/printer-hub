@@ -206,14 +206,48 @@ class _PrinterListPageState extends State<PrinterListPage> {
       orcaLink = OrcaLink(onUpload: _fromOrca, printers: () => _printers);
       orcaLink!.start().catchError((Object e) => debugPrint('Orca link: $e'));
     }
+    // Mac: G-code saved into a watched folder goes to a printer (asks before printing).
+    if (Platform.isMacOS) _watch = Timer.periodic(const Duration(seconds: 10), (_) => _checkWatched());
     // Models the phone sent to this Mac's OrcaSlicer wait in each printer's inbox.
     if (Platform.isMacOS && orcaApp() != null) {
       _inbox = Timer.periodic(const Duration(seconds: 20), (_) => _checkInbox());
     }
   }
 
-  Timer? _inbox;
-  bool _inboxBusy = false;
+  Timer? _inbox, _watch;
+  bool _inboxBusy = false, _watchBusy = false;
+
+  Future<void> _checkWatched() async {
+    final dir = settings.text('watch.dir');
+    if (dir.isEmpty || _watchBusy || !mounted) return;
+    final target = _printers.where((p) => p.key == settings.text('watch.printer')).firstOrNull;
+    if (target == null) return;
+    _watchBusy = true;
+    try {
+      final since = settings.number('watch.since', DateTime.now().millisecondsSinceEpoch.toDouble());
+      final d = Directory(dir);
+      if (!d.existsSync()) return;
+      final fresh = [
+        for (final f in d.listSync().whereType<File>())
+          if (f.path.toLowerCase().endsWith('.gcode') && f.lastModifiedSync().millisecondsSinceEpoch > since) f,
+      ];
+      if (fresh.isEmpty) {
+        if (settings.number('watch.since', -1) < 0) settings.setNumber('watch.since', since);
+        return;
+      }
+      settings.setNumber('watch.since', DateTime.now().millisecondsSinceEpoch.toDouble());
+      // Give a slicer a moment to finish writing.
+      await Future.delayed(const Duration(seconds: 2));
+      for (final f in fresh) {
+        if (!mounted) return;
+        await _fromOrca((name: f.uri.pathSegments.last, bytes: await f.readAsBytes(), print: true, printer: printerSlug(target.name)));
+      }
+    } catch (e) {
+      debugPrint('Watch folder: $e');
+    } finally {
+      _watchBusy = false;
+    }
+  }
 
   Future<void> _checkInbox() async {
     if (_inboxBusy) return;
@@ -234,6 +268,7 @@ class _PrinterListPageState extends State<PrinterListPage> {
   @override
   void dispose() {
     _inbox?.cancel();
+    _watch?.cancel();
     super.dispose();
   }
 

@@ -544,6 +544,44 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: 'Orca Slicer',
                 icon: Icons.layers_rounded,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.folder_special_outlined),
+                    title: const Text('Watch a folder'),
+                    subtitle: Text(
+                        settings.text('watch.dir').isEmpty
+                            ? 'G-code saved into a folder goes to a printer (it asks before printing)'
+                            : '${settings.text('watch.dir')} → ${widget.printers.where((p) => p.key == settings.text('watch.printer')).firstOrNull?.name ?? '?'}',
+                        style: T.caption.copyWith(color: C.muted)),
+                    trailing: settings.text('watch.dir').isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Stop watching',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              settings.setText('watch.dir', '');
+                              _refresh();
+                            },
+                          ),
+                    onTap: () async {
+                      final dir = await FilePicker.getDirectoryPath(dialogTitle: 'Folder to watch');
+                      if (dir == null || !context.mounted || widget.printers.isEmpty) return;
+                      final p = widget.printers.length == 1
+                          ? widget.printers.first
+                          : await showDialog<Printer>(
+                              context: context,
+                              builder: (ctx) => SimpleDialog(title: const Text('Send to which printer?'), children: [
+                                for (final p in widget.printers)
+                                  SimpleDialogOption(onPressed: () => Navigator.pop(ctx, p), child: Text(p.name)),
+                              ]),
+                            );
+                      if (p == null) return;
+                      settings.setText('watch.dir', dir);
+                      settings.setText('watch.printer', p.key);
+                      settings.setNumber('watch.since', DateTime.now().millisecondsSinceEpoch.toDouble());
+                      _refresh();
+                    },
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Receive prints from Orca Slicer'),

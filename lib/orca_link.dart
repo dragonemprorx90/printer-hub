@@ -485,6 +485,7 @@ class OrcaLink {
               'port': p.port,
               ...orcaModel(clientFor(p)),
               if (_pinNote(p) case final pin? when pin.isNotEmpty) 'note': pin,
+              if (_due(p) case final n when n > 0) 'maintenanceDue': n,
               ..._status(clientFor(p)),
             },
         ]);
@@ -495,6 +496,16 @@ class OrcaLink {
       json(500, {'error': '$e'});
     } finally {
       await res.close();
+    }
+  }
+
+  /// How many maintenance reminders are due (0 when unknown).
+  static int _due(Printer p) {
+    try {
+      final h = clientFor(p).lastHistory?.$2.printTime;
+      return h == null ? 0 : dueTasks(settings.jsonList('maint.${p.key}'), h / 3600).length;
+    } catch (_) {
+      return 0;
     }
   }
 

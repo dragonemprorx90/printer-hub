@@ -289,7 +289,8 @@ PAGE = r"""
         if (f && f.material && m && f.material.toUpperCase() !== m.toUpperCase()) mismatch.push("Orca slot " + (i + 1) + " is " + m + ", " + f.label + " has " + f.material);
       });
     var h = '<div class="p' + look + '"><div class="row"><span class="name">' + esc(p.name) +
-      (inOrca ? ' <span class="badge">in Orca</span>' : '') + '</span><span>' +
+      (inOrca ? ' <span class="badge">in Orca</span>' : '') +
+      (p.maintenanceDue ? ' <span class="badge" title="Maintenance due (Workshop in the app)">🔧 ' + p.maintenanceDue + '</span>' : '') + '</span><span>' +
       (p.away ? '<span class="muted">away' + (p.delayMs ? " " + p.delayMs + " ms" : "") + '</span> ' : '') +
       '<span class="pill">' + (p.online ? esc(p.state) : "offline") + '</span></span></div>';
     if (p.note) h += '<div class="warn detail">📌 ' + esc(p.note) + '</div>';
