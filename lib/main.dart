@@ -162,10 +162,19 @@ class _PrinterListPageState extends State<PrinterListPage> {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => WallPage(printers: _printers)));
       } else if (u.host == 'printer' && u.pathSegments.isNotEmpty) {
         final name = u.pathSegments.first.toLowerCase();
+        // printerhub://printer/NAME/files (or overview, control, tools, history, workshop)
+        final sub = u.pathSegments.length > 1 ? u.pathSegments[1].toLowerCase() : '';
+        const tabs = ['overview', 'control', 'files', 'tools', 'history'];
         final p = _printers
             .where((p) => p.name.toLowerCase() == name || printerSlug(p.name) == name || p.host == name)
             .firstOrNull;
-        if (p != null) _open(p);
+        if (p != null) {
+          if (sub == 'workshop') {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => WorkshopPage(client: clientFor(p), printer: p)));
+          } else {
+            _open(p, tab: tabs.contains(sub) ? tabs.indexOf(sub) : null);
+          }
+        }
       }
       return;
     }
@@ -173,9 +182,9 @@ class _PrinterListPageState extends State<PrinterListPage> {
     if (p != null) _open(p);
   }
 
-  void _open(Printer p) {
+  void _open(Printer p, {int? tab}) {
     Navigator.of(context).popUntil((r) => r.isFirst);
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PrinterPage(printer: p)));
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PrinterPage(printer: p, tab: tab)));
   }
 
   @override

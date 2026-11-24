@@ -24,16 +24,18 @@ import 'insights.dart';
 /// One printer: five tabs, bottom bar on phones, side rail on wide screens.
 class PrinterPage extends StatefulWidget {
   final Printer printer;
-  const PrinterPage({super.key, required this.printer});
+  final int? tab; // open on this tab (0 Overview … 4 History), e.g. from a link
+  const PrinterPage({super.key, required this.printer, this.tab});
   @override
   State<PrinterPage> createState() => _PrinterPageState();
 }
 
 class _PrinterPageState extends State<PrinterPage> {
   // Opens on the tab you last used for this printer (Settings → "Open printers on").
-  late int _tab = settings.text('openTab', 'last') == 'last'
+  late int _tab = widget.tab ??
+      (settings.text('openTab', 'last') == 'last'
       ? settings.number('lastTab.${widget.printer.key}', 0).round().clamp(0, 4)
-      : (int.tryParse(settings.text('openTab')) ?? 0).clamp(0, 4);
+      : (int.tryParse(settings.text('openTab')) ?? 0).clamp(0, 4));
   late final MoonrakerClient _client = clientFor(widget.printer);
 
   static const _dest = [
