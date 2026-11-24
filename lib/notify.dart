@@ -187,6 +187,8 @@ void watchPrinter(Printer p, MoonrakerClient c) {
       if (state == 'printing' && last != 'paused' && settings.flag('notifyStart', false)) {
         _say(p.key, '${p.name}: print started', file);
       }
+      // No Spoolman: take this print's filament off the on-device spool in use.
+      if (state == 'complete' || state == 'cancelled' || state == 'error') _useLocalSpool(p.key, s.filamentUsed);
       if (state == 'complete' && settings.flag('notifyDone')) {
         _say(p.key, '${p.name}: print finished', '$file · ${_short(s.printDuration)}');
       } else if (state == 'error' && settings.flag('notifyError')) {
@@ -259,6 +261,15 @@ void _say(String key, String title, String body, {bool urgent = false}) {
 /// Muted with "Mute alerts" on the printer page, until a time.
 bool alertsMuted(String key) =>
     settings.flag('muteAlways.$key', false) || snoozed(settings.number('mute.$key', 0).toInt());
+
+void _useLocalSpool(String key, double mm) {
+  final i = settings.number('localSpool.$key', -1).round();
+  final l = settings.jsonList('localSpools');
+  if (i < 0 || i >= l.length || mm <= 0) return;
+  final left = ((l[i]['grams'] as num).toDouble() - gramsFromMm(mm)).clamp(0, 1e9);
+  l[i] = {...l[i], 'grams': left.round()};
+  settings.setJsonList('localSpools', l);
+}
 
 /// Once a day per printer: maintenance that's due and spare parts running low.
 Future<void> _dailyReminders(Printer p, MoonrakerClient c) async {

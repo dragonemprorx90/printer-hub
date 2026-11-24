@@ -559,6 +559,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
               title: Text('${s.material} ${s.name}'.trim()),
               subtitle: Text(
                 [
+                  if (s.id < 0 && settings.number('localSpool.$_k', -1).round() == -1 - s.id) 'in use',
                   if (s.color != null) colorName(s.color!),
                   if (pricePerGram(s) != null) '$cur${pricePerGram(s)!.toStringAsFixed(3)}/g',
                 ].join(' · '),
@@ -580,7 +581,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
                     },
                   ),
               ]),
-              onLongPress: () => _logDrying(s),
+              onLongPress: () => _spoolMenu(s),
             ),
         ]),
       ),
@@ -597,7 +598,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           for (final (m, t, h) in dryPresets) _row(m, '$t°C · $h h'),
           const SizedBox(height: 8),
-          Hint('Long-press a spool above to log that you dried it.'),
+          Hint('Long-press a spool above to log that you dried it (or, without Spoolman, to say it\'s in use).'),
         ]),
       ),
       Panel(
@@ -664,6 +665,39 @@ class _WorkshopPageState extends State<WorkshopPage> {
     final g = await askNumber(context, 'Grams on the spool', presets: const [250, 500, 1000], unit: ' g');
     if (g == null) return;
     settings.setJsonList('localSpools', [..._localSpools, {'material': m.trim().toUpperCase(), 'name': name.trim(), 'grams': g}]);
+    setState(() {});
+  }
+
+  Future<void> _spoolMenu(Spool s) async {
+    final local = s.id < 0;
+    final inUse = local && settings.number('localSpool.$_k', -1).round() == -1 - s.id;
+    final pick = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(title: Text('${s.material} ${s.name}'.trim())),
+          ListTile(leading: const Icon(Icons.water_drop_outlined), title: const Text('Log that I dried it'), onTap: () => Navigator.pop(ctx, 'dry')),
+          if (local)
+            ListTile(
+              leading: Icon(inUse ? Icons.radio_button_checked : Icons.radio_button_off),
+              title: Text(inUse ? 'Stop using it on ${widget.printer.name}' : 'In use on ${widget.printer.name}'),
+              subtitle: const Text('Each print\'s filament comes off it'),
+              onTap: () => Navigator.pop(ctx, 'use'),
+            ),
+          if (local)
+            ListTile(leading: const Icon(Icons.delete_outline_rounded), title: const Text('Remove'), onTap: () => Navigator.pop(ctx, 'remove')),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    if (pick == 'dry') return _logDrying(s);
+    if (pick == 'use') {
+      settings.setNumber('localSpool.$_k', inUse ? -1 : (-1 - s.id).toDouble());
+    } else if (pick == 'remove') {
+      if (!await confirm(context, 'Remove this spool?', action: 'Remove', danger: true) || !mounted) return;
+      settings.setJsonList('localSpools', _localSpools..removeAt(-1 - s.id));
+      settings.setNumber('localSpool.$_k', -1);
+    }
     setState(() {});
   }
 
