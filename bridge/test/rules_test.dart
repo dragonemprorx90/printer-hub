@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:test/test.dart';
 
 import '../bin/bridge.dart';
@@ -36,6 +40,26 @@ void main() {
     final c = mqttConnect('id', user: 'u', password: 'p');
     expect(c.first, 0x10);
     expect(c[2 + 7], 0xC2); // user + password + clean session
+  });
+
+  test('MQTT status reaches a broker with Home Assistant discovery', () async {
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final got = <int>[];
+    final done = Completer<void>();
+    server.listen((c) => c.listen((b) {
+          got.addAll(b);
+          if (latin1.decode(got, allowInvalid: true).contains('printerhub/k2_plus/state')) {
+            if (!done.isCompleted) done.complete();
+          }
+        }));
+    final m = MqttStatus(Uri.parse('mqtt://u:p@127.0.0.1:${server.port}'), 'K2 Plus');
+    await m.publish({'state': 'printing', 'progress': 42});
+    await done.future.timeout(const Duration(seconds: 5));
+    final text = latin1.decode(got, allowInvalid: true);
+    expect(got.first, 0x10); // CONNECT first
+    expect(text, contains('homeassistant/sensor/printerhub_k2_plus_progress/config'));
+    expect(text, contains('"progress":42'));
+    await server.close();
   });
 
   test('alert text and links', () {
