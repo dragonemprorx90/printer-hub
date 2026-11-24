@@ -116,6 +116,11 @@ PAGE = r"""
       send({ command: "action", printer: slug, action: action, params: params || {} });
     },
     val: function (id) { var e = document.getElementById(id); return e ? e.value : ""; },
+    all: function (what) {
+      var ps = last.printers.filter(function (p) { return p.online && (what === "light" ? p.light : p.state === "printing"); });
+      if (what === "pause" && !confirm("Pause " + ps.length + " print(s)?")) return;
+      ps.forEach(function (p) { send({ command: "action", printer: p.slug, action: what, params: {} }); });
+    },
     fold: function (slug) { store("ph.fold." + slug, store("ph.fold." + slug) === "1" ? "0" : "1"); render(true); },
     // The layer printing at a height (same maths as the app's Pause at height).
     layerAt: function (mm, layer, first) { mm = parseFloat(mm); return mm <= first ? 1 : Math.ceil((mm - first) / layer) + 1; },
@@ -360,7 +365,12 @@ PAGE = r"""
       ps.sort(function (x, y) { function r(p) { return !p.online || p.state === "error" || p.state === "paused" ? 0 : p.state === "printing" ? 1 : 2; } return r(x) - r(y); });
     list.className = document.getElementById("compact").checked ? "compact" : "";
     var att = last.attention || [];
-    list.innerHTML = (att.length ? '<div class="p is-paused"><div class="name">Needs you (' + att.length + ')</div>' +
+    var printing = last.printers.filter(function (p) { return p.online && p.state === "printing"; });
+    var lit = last.printers.filter(function (p) { return p.online && p.light; });
+    var all = (printing.length || lit.length) && last.printers.length > 1 ? '<div class="actions">' +
+      (lit.length ? '<button onclick="ph.all(\'light\')">Lights off (' + lit.length + ')</button>' : '') +
+      (printing.length ? '<button onclick="ph.all(\'pause\')">Pause all (' + printing.length + ')</button>' : '') + '</div>' : '';
+    list.innerHTML = all + (att.length ? '<div class="p is-paused"><div class="name">Needs you (' + att.length + ')</div>' +
       att.map(function (a) { return '<div class="warn detail">' + esc(a) + '</div>'; }).join("") + '</div>' : '') +
       ps.map(card).join("");
   }
