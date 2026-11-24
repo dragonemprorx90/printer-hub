@@ -520,6 +520,11 @@ class _ToolsTabState extends State<ToolsTab> {
                                   }
                                   items[i] = {...m, 'since': hours};
                                   settings.setJsonList(_maintKey, items);
+                                  // Also in Workshop → Maintenance log.
+                                  settings.setJsonList('maintLog.${widget.printer.key}', [
+                                    ...settings.jsonList('maintLog.${widget.printer.key}'),
+                                    {'text': '${m['name']} (at ${hours.round()} print hours)', 'at': DateTime.now().millisecondsSinceEpoch},
+                                  ]);
                                   setState(() {});
                                 },
                               ),

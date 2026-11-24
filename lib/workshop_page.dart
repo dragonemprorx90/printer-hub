@@ -572,6 +572,14 @@ class _WorkshopPageState extends State<WorkshopPage> {
                     dense: true,
                     title: Text('${n['m']}', style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text('${n['t']}'),
+                    onTap: () async {
+                      final t = await askText(context, 'Note for ${n['m']}', initial: '${n['t']}', action: 'Save');
+                      if (t == null) return;
+                      final l = settings.jsonList('materialNotes');
+                      l[i] = {...l[i], 't': t};
+                      settings.setJsonList('materialNotes', l);
+                      setState(() {});
+                    },
                     trailing: IconButton(
                       tooltip: 'Remove',
                       icon: const Icon(Icons.close_rounded, size: 18),

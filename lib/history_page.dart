@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'charts.dart';
 import 'insights.dart';
@@ -122,8 +123,10 @@ class _HistoryTabState extends State<HistoryTab> {
     }
   }
 
+  List<PrintJob>? _shown;
+
   Future<void> _export() async {
-    final jobs = _jobs;
+    final jobs = _shown ?? _jobs;
     if (jobs == null) return;
     try {
       final saved = await FilePicker.saveFile(
@@ -153,6 +156,7 @@ class _HistoryTabState extends State<HistoryTab> {
           j,
     ], text: _query, material: _material, from: _days == 0 ? null : DateTime.now().subtract(Duration(days: _days)));
     final materials = {for (final j in jobs) ?j.material}.toList()..sort();
+    _shown = shown; // Export CSV saves what the filters show
     return RefreshIndicator(
       onRefresh: _load,
       child: Center(
@@ -447,6 +451,12 @@ class _JobTile extends StatelessWidget {
     return Tile(
       child: ListTile(
         onTap: () => _pictures(context),
+        onLongPress: () {
+          Clipboard.setData(ClipboardData(
+              text: '$name · ${job.status} · ${fmtDate(job.start)} · ${fmtDuration(job.duration)} · '
+                  '${fmtFilament(job.filament)} · ${money(jobCost(job))}'));
+          toast(context, 'Copied');
+        },
         leading: Icon(icon, color: color, size: 28),
         title: Text(name,
             overflow: TextOverflow.ellipsis,

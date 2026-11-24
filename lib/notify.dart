@@ -151,7 +151,7 @@ void watchPrinter(Printer p, MoonrakerClient c) {
         SystemSound.play(SystemSoundType.alert);
       }
       if (state == 'complete' && settings.flag('notifyDone')) {
-        _say(p.key, '${p.name}: print finished', file);
+        _say(p.key, '${p.name}: print finished', '$file · ${_short(s.printDuration)}');
       } else if (state == 'error' && settings.flag('notifyError')) {
         _say(p.key, urgent: true, '${p.name}: print failed', s.message ?? file);
       } else if (state == 'cancelled' && settings.flag('notifyError')) {
@@ -160,7 +160,8 @@ void watchPrinter(Printer p, MoonrakerClient c) {
           last == 'printing' &&
           settings.flag('notifyPause')) {
         _say(p.key, '${p.name}: print paused',
-            s.message ?? 'Check the printer (filament run-out?)');
+            '${s.message ?? 'Check the printer (filament run-out?)'}'
+            '${s.currentLayer == null ? '' : ' · layer ${s.currentLayer}'}');
       }
     }
     last = state;
