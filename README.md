@@ -47,7 +47,8 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - Overview: pause at a height, print again, pace against the slicer, copy status, keep screen on, heaters off.
 - Alerts: quiet hours, mute a printer, nozzle temperature drift. Bridge: run-out, chamber ready, offline, still paused, bed cooled, daily summary, snooze, webhooks, rule days and hours, a status page with Prometheus metrics, and its log in the app.
 - iPhone: quick actions, `printerhub://` links, open G-code from Files, Siri Shortcuts. Mac: a menu-bar menu of printers, Dock badge, open at login, keyboard shortcuts.
-- Text size, high contrast, °F, 12-hour time, side-by-side on wide screens, VoiceOver labels.
+- Text size, high contrast, bold text, larger buttons, °F, 12-hour time, grams, side-by-side on wide screens, VoiceOver labels, and a search for any setting.
+- Home Assistant: MQTT with auto-discovery, a camera still and a status page from the home bridge.
 
 **From anywhere: free and end-to-end encrypted**
 - A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.

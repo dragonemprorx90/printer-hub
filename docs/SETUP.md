@@ -140,6 +140,10 @@ The bridge also alerts on filament run-out (Klipper filament sensors) and when a
 
 **Rules** (Tools → Rules) can now also start on *print starts*, *filament runs out*, *chamber reaches its temperature*, *bed has cooled* and *CFS humidity over the limit*. They can run only on some days or hours, send you an alert with your own text, or call a **webhook** (for example Home Assistant: `http://homeassistant.local:8123/api/webhook/<id>`, which gets the printer, event, state, file and progress as JSON). The flask button tests a rule without sending anything, and the sparkle button adds ready-made rules.
 
+More rule triggers: *print reaches layer N*, *printer has been idle for N minutes* (for example: idle 60 min → all heaters off, or → a smart plug off with **Power device on or off**). More actions: light on, pause the print, part fan off, run a macro. The ⋯ menu turns every rule off for a holiday (and back on), and copies rules as text to paste on another printer. Long-press a rule to change its days or hours; ▶ runs its G-code once now.
+
+**Home Assistant**: with `MQTT_URL` set, the printer shows up as a device with state, progress, time left, layer, temperatures, filament used and a Printing sensor. With `STATUS_PORT` set, add `http://<nas>:<port>/snapshot.jpg` as a generic camera.
+
 **Bridge log**: Tools → Away from home → Bridge log shows its last 200 lines; Check bridge version tells you when it's older than the app.
 
 ### Updating the bridge
@@ -170,6 +174,8 @@ Press **Print** or **Send**. Printer Hub uploads the file (at home or through th
 - **Workshop → Quote** works out a price from a file (filament, power, machine wear, your time, markup). **Workshop → Calculators** has rotation distance, flow, pressure-advance and temperature towers, shrinkage, max speed, spool weight, layers and line width, will-it-fit, inches and price per gram. None of them talk to the printer.
 - **Without Spoolman**: add spools in Workshop → Filament, long-press one and choose *In use on this printer*; each print's filament comes off it.
 - **Tools → Workshop**: odometer, records and streaks, a calendar of print days, success by material and month, cost per month, why prints failed, maintenance log, ready-made task lists, nozzle wear, spare parts, filament inventory (also without Spoolman), shopping list, drying guide and log, material notes, a pre-print checklist and print notes. Copy history as JSON or a stats summary.
+- **Mac watch folder**: Settings → Orca Slicer → Watch a folder. G-code saved into it goes to the printer you pick, and the app asks before printing.
+- **Settings**: the search button finds any setting. Appearance also has larger buttons, bold text, filament in grams and keep-the-screen-on during prints.
 - **Settings → Appearance**: text size, high contrast, °F, 12-hour time, side-by-side on wide screens, which tab printers open on, and Reset to defaults. **Settings → Notifications**: quiet hours (failures still come), maintenance reminders and the nozzle-temperature alert. Mute one printer from the bell on its screen.
 
 ## 5. Slicing from the app
