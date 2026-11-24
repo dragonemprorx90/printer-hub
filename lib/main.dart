@@ -889,12 +889,17 @@ class _PrinterCard extends StatelessWidget {
                       await launchUrl(Uri.parse('http://${printer.host}'), mode: LaunchMode.externalApplication);
                     case 'duplicate':
                       onDuplicate();
+                    case 'link':
+                      // For Shortcuts, Home Assistant or a note: opens this printer in the app.
+                      Clipboard.setData(ClipboardData(text: 'printerhub://printer/${Uri.encodeComponent(printer.name)}'));
+                      toast(context, 'App link copied');
                   }
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'edit', child: Text('Edit')),
                   PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
                   PopupMenuItem(value: 'copy', child: Text('Copy address')),
+                  PopupMenuItem(value: 'link', child: Text('Copy app link')),
                   PopupMenuItem(value: 'web', child: Text('Open its web page')),
                   PopupMenuItem(value: 'delete', child: Text('Remove')),
                 ],
