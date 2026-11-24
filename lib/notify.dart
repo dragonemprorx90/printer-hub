@@ -92,10 +92,11 @@ Future<void> initNotifications() async {
   _setBar('');
 }
 
-Future<void> notify(String title, String body, {String? printerKey}) async {
+Future<void> notify(String title, String body, {String? printerKey, int? replace}) async {
   if (!_ready) return;
   await _plugin.show(
-    id: _nextId++,
+    // [replace]: the same id updates one alert instead of stacking (progress).
+    id: replace ?? _nextId++,
     title: title,
     body: body,
     payload: printerKey,
@@ -173,7 +174,10 @@ void watchPrinter(Printer p, MoonrakerClient c) {
           // VoiceOver users hear it while the app is open, even without the alert.
           // ignore: deprecated_member_use
           if (voiceOver) SemanticsService.announce('${p.name}: $q percent done', TextDirection.ltr);
-          if (settings.flag('notifyQuarters', false)) _say(p.key, '${p.name}: $q% done', file);
+          // One progress alert per printer that updates, not three stacked ones.
+          if (settings.flag('notifyQuarters', false)) {
+            _say(p.key, '${p.name}: $q% done', file, replace: 100000 + p.key.hashCode.abs() % 100000);
+          }
         }
       }
     }
@@ -282,11 +286,11 @@ void watchPrinter(Printer p, MoonrakerClient c) {
 
 /// Local alerts, unless this printer is muted or it's quiet hours
 /// (Settings → Notifications). [urgent] ones still come in quiet hours.
-void _say(String key, String title, String body, {bool urgent = false}) {
+void _say(String key, String title, String body, {bool urgent = false, int? replace}) {
   if (alertsMuted(key)) return;
   final from = settings.text('quietFrom'), to = settings.text('quietTo');
   if (!urgent && from.isNotEmpty && to.isNotEmpty && inWindow(DateTime.now(), from: from, to: to)) return;
-  notify(title, body, printerKey: key);
+  notify(title, body, printerKey: key, replace: replace);
 }
 
 /// Muted with "Mute alerts" on the printer page, until a time.
