@@ -94,7 +94,7 @@ PAGE = r"""
     </select>
   </span>
 </div>
-<div id="list"></div>
+<div id="list" aria-label="Printers"></div>
 <p id="status">Connecting to the Printer Hub app…</p>
 <script>
 (function () {
