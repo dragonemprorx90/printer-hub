@@ -173,7 +173,14 @@ class _ToolsTabState extends State<ToolsTab> {
         !mounted) {
       return;
     }
+    settings.setNumber('calib.${widget.printer.key}.$title', DateTime.now().millisecondsSinceEpoch.toDouble());
     run(context, () => c.gcode(command), done: '$title finished');
+  }
+
+  /// "Last run 12 days ago" for a calibration, from this device.
+  String? _lastRun(String title) {
+    final ms = settings.number('calib.${widget.printer.key}.$title', 0);
+    return ms == 0 ? null : 'Last run ${fmtAgo(DateTime.fromMillisecondsSinceEpoch(ms.toInt()))}';
   }
 
   @override
@@ -346,7 +353,7 @@ class _ToolsTabState extends State<ToolsTab> {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      why,
+                      [why, ?_lastRun(title)].join('\n'),
                       style: TextStyle(color: C.muted, fontSize: 12),
                     ),
                     trailing: FilledButton.tonal(

@@ -268,6 +268,8 @@ class _StatsPanel extends StatelessWidget {
         StatTile(label: 'Print time', value: fmtDuration(totals?.printTime ?? hours)),
         StatTile(label: 'Filament', value: '${fmtFilament(filament)} · ${(grams / 1000).toStringAsFixed(2)} kg'),
         StatTile(label: 'Est. cost', value: money(cost)),
+        if (jobs.isNotEmpty) StatTile(label: 'Per print', value: money(cost / jobs.length)),
+        if (hours > 0) StatTile(label: 'Per print hour', value: money(cost / (hours / 3600))),
         StatTile(label: 'Longest', value: fmtDuration(totals?.longest)),
        ]),
        const SizedBox(height: 18),

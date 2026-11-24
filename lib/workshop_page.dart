@@ -322,14 +322,24 @@ class _WorkshopPageState extends State<WorkshopPage> {
       Panel(
         title: 'Maintenance log',
         icon: Icons.history_edu_rounded,
-        trailing: IconButton(
-          tooltip: 'Log maintenance',
-          icon: const Icon(Icons.add_rounded),
-          onPressed: () async {
-            final t = await askText(context, 'What did you do?', hint: 'e.g. Lubricated Z rods', action: 'Log');
-            if (t != null && t.trim().isNotEmpty) _addLog(t.trim());
-          },
-        ),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (_log.isNotEmpty)
+            IconButton(
+              tooltip: 'Copy the log',
+              icon: const Icon(Icons.copy_rounded),
+              onPressed: () => _copy(
+                  [for (final e in _log) '${fmtDate(DateTime.fromMillisecondsSinceEpoch(e['at'] as int))}  ${e['text']}'].join('\n'),
+                  'Maintenance log'),
+            ),
+          IconButton(
+            tooltip: 'Log maintenance',
+            icon: const Icon(Icons.add_rounded),
+            onPressed: () async {
+              final t = await askText(context, 'What did you do?', hint: 'e.g. Lubricated Z rods', action: 'Log');
+              if (t != null && t.trim().isNotEmpty) _addLog(t.trim());
+            },
+          ),
+        ]),
         child: _log.isEmpty
             ? Hint('Log what you fix or clean, with the date.')
             : Column(children: [
@@ -372,7 +382,19 @@ class _WorkshopPageState extends State<WorkshopPage> {
             : Column(children: [
                 for (final (i, p) in _parts.indexed)
                   Row(children: [
-                    Expanded(child: Text('${p['name']}')),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final n = await askNumber(context, 'Warn when ${p['name']} is down to', presets: const [0, 1, 2, 5], unit: '');
+                          if (n == null) return;
+                          final l = _parts;
+                          l[i] = {...l[i], 'low': n};
+                          settings.setJsonList('parts.$_k', l);
+                          setState(() {});
+                        },
+                        child: Text('${p['name']}  ·  warn at ${p['low'] ?? 1}', style: T.small),
+                      ),
+                    ),
                     if ((p['n'] as int) <= (p['low'] as int? ?? 1))
                       Padding(
                         padding: const EdgeInsets.only(right: 8),

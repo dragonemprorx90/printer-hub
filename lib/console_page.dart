@@ -55,7 +55,17 @@ class ConsoleTab extends StatefulWidget {
 class _ConsoleTabState extends State<ConsoleTab> {
   final _ctl = TextEditingController();
   final _focus = FocusNode();
-  static const _quick = ['M114', 'M105', 'G28', 'QUERY_ENDSTOPS', 'M84'];
+  static const _defaultQuick = ['M114', 'M105', 'G28', 'QUERY_ENDSTOPS', 'M84'];
+  List<String> get _quick => settings.strings('console.quick').isEmpty ? _defaultQuick : settings.strings('console.quick');
+
+  Future<void> _editQuick() async {
+    final t = await askText(context, 'Quick commands', initial: _quick.join(', '),
+        hint: 'Comma-separated, e.g. M114, QUERY_ENDSTOPS', action: 'Save');
+    if (t == null) return;
+    final list = [for (final x in t.split(',')) if (x.trim().isNotEmpty) x.trim()];
+    settings.setStrings('console.quick', list);
+    setState(() {});
+  }
   late final _history = CommandHistory(settings.strings('console.history'));
   String _find = '';
   bool _errorsOnly = false, _hideTemps = true;
@@ -200,6 +210,11 @@ class _ConsoleTabState extends State<ConsoleTab> {
                       onPressed: () => _send(q),
                     ),
                   ),
+                ActionChip(
+                  avatar: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit'),
+                  onPressed: _editQuick,
+                ),
               ],
             ),
           ),
