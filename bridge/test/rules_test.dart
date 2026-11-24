@@ -32,6 +32,13 @@ void main() {
     expect(finishedText('a.gcode', {}), 'a.gcode');
   });
 
+  test('still heating', () {
+    expect(stillHeating(150, 220), isTrue);
+    expect(stillHeating(218, 220), isFalse);
+    expect(stillHeating(20, 0), isFalse);
+    expect(stillHeating(null, 60), isFalse);
+  });
+
   test('weekly summary time', () {
     expect(weeklyDue('Sun 20:00', DateTime(2026, 11, 29, 20, 0)), isTrue);
     expect(weeklyDue('sun 20:00', DateTime(2026, 11, 29, 20, 1)), isFalse);

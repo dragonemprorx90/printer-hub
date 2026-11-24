@@ -138,7 +138,8 @@ Future<void> main(List<String> argv) async {
           summaryAt: env['DAILY_SUMMARY'] ?? '',
           bedCool: double.tryParse(env['BED_COOL_C'] ?? '') ?? 35,
           progressAlerts: [for (final v in (env['PROGRESS_ALERTS'] ?? '').split(',')) ?int.tryParse(v.trim())],
-          weeklyAt: env['WEEKLY_SUMMARY'] ?? '');
+          weeklyAt: env['WEEKLY_SUMMARY'] ?? '',
+          heatTimeout: int.tryParse(env['HEAT_TIMEOUT_MIN'] ?? '') ?? 15);
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -291,7 +292,12 @@ class Alerts {
   int _snoozeUntil = 0; // ms; the app sets printer_hub/snooze
   final _sensors = <String, bool>{}; // filament sensor -> filament detected
   final _chamber = <String, dynamic>{};
-  double? _bedTemp;
+  double? _bedTemp, _bedTarget, _nozzle, _nozzleTarget;
+  DateTime? _heatingSince; // nozzle set but not near its target yet
+  final int heatTimeout; // minutes before "still heating" alerts, 0 = off
+  double? get nozzle => _nozzle;
+  double? get bedTemp => _bedTemp;
+  double? get chamber => (_chamber['temperature'] as num?)?.toDouble();
   bool _waitBedCool = false; // after a finished print, until the bed is cool
   final double bedCool; // °C; "take the print off" below this, 0 = off
   final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
@@ -314,7 +320,8 @@ class Alerts {
       this.summaryAt = '',
       this.bedCool = 35,
       this.progressAlerts = const [],
-      this.weeklyAt = ''})
+      this.weeklyAt = '',
+      this.heatTimeout = 15})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -433,7 +440,8 @@ class Alerts {
               for (final l in lanes) l: ['map', 'load', 'color', 'material', 'spool_id', 'filament_name'],
               for (final f in sensors) f: ['filament_detected', 'enabled'],
               for (final c in chambers) c: ['temperature', 'target'],
-              'heater_bed': ['temperature'],
+              'heater_bed': ['temperature', 'target'],
+              'extruder': ['temperature', 'target'],
             },
           },
         }));
@@ -501,6 +509,24 @@ class Alerts {
     }
     final bt = (status['heater_bed'] as Map?)?['temperature'];
     if (bt is num) _bedTemp = bt.toDouble();
+    final bg = (status['heater_bed'] as Map?)?['target'];
+    if (bg is num) _bedTarget = bg.toDouble();
+    final ex = status['extruder'];
+    if (ex is Map) {
+      if (ex['temperature'] is num) _nozzle = (ex['temperature'] as num).toDouble();
+      if (ex['target'] is num) _nozzleTarget = (ex['target'] as num).toDouble();
+    }
+    // A heater that never gets there: a loose thermistor, a bad heater, a draught.
+    final heating = stillHeating(_nozzle, _nozzleTarget) || stillHeating(_bedTemp, _bedTarget, margin: 3);
+    if (!heating) {
+      _heatingSince = null;
+      _sent.remove('heat_timeout');
+    } else if (heatTimeout > 0 &&
+        DateTime.now().difference(_heatingSince ??= DateTime.now()).inMinutes >= heatTimeout &&
+        _sent.add('heat_timeout')) {
+      await send('$_title: still heating', 'Nozzle ${_nozzle?.round()}°C of ${_nozzleTarget?.round()}°C, bed ${_bedTemp?.round()}°C of ${_bedTarget?.round()}°C after $heatTimeout minutes. Check the heaters.',
+          tags: ['thermometer'], priority: 4);
+    }
     if (_waitBedCool && bedCool > 0 && _bedTemp != null && _bedTemp! < bedCool) {
       _waitBedCool = false;
       await send('$_title: bed has cooled', 'Down to ${_bedTemp!.round()}°C. Prints usually come off easily now.',
@@ -1051,6 +1077,10 @@ bool weeklyDue(String spec, DateTime now) {
   return days.indexOf(m[1]!.toLowerCase()) + 1 == now.weekday && int.parse(m[2]!) == now.hour && int.parse(m[3]!) == now.minute;
 }
 
+/// A heater with a target that is still more than [margin] below it.
+bool stillHeating(double? temp, double? target, {double margin = 5}) =>
+    temp != null && target != null && target > 0 && temp < target - margin;
+
 /// The chamber is within 1°C of a set target.
 bool chamberReady(double? temp, double? target) =>
     temp != null && target != null && target > 0 && temp >= target - 1;
@@ -1089,6 +1119,9 @@ Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts
       'state': a?.state,
       'file': a?.file,
       'progress': a == null ? null : (a.progress * 100).round(),
+      'nozzle': a?.nozzle,
+      'bed': a?.bedTemp,
+      'chamber': a?.chamber,
       'counters': a?.counters,
     };
     if (req.method != 'GET') {
@@ -1106,6 +1139,9 @@ Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts
         'printer_online': a?.online == true ? 1 : 0,
         'printing': a?.state == 'printing' ? 1 : 0,
         'progress_ratio': a?.progress ?? 0,
+        if (a?.nozzle != null) 'nozzle_celsius': a!.nozzle!,
+        if (a?.bedTemp != null) 'bed_celsius': a!.bedTemp!,
+        if (a?.chamber != null) 'chamber_celsius': a!.chamber!,
         for (final e in (a?.counters ?? const <String, int>{}).entries) '${e.key}_total': e.value,
       }));
     } else if (req.uri.path == '/') {

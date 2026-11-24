@@ -1138,6 +1138,10 @@ class _FileSheetState extends State<_FileSheet> {
               final m = snap.data!;
               return Wrap(spacing: 28, runSpacing: 12, children: [
                 StatTile(label: 'Est. time', value: fmtDuration(m['estimated_time'] as num?)),
+                if ((m['estimated_time'] as num? ?? 0) > 0)
+                  StatTile(
+                      label: 'Done if started now',
+                      value: fmtTime(DateTime.now().add(Duration(seconds: (m['estimated_time'] as num).round())))),
                 StatTile(label: 'Filament', value: fmtFilament((m['filament_total'] as num?) ?? 0)),
                 StatTile(
                     label: 'Weight',

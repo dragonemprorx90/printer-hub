@@ -127,6 +127,7 @@ More options for `.env` (all optional):
 | `DAILY_SUMMARY` | off | A time like `21:00`: sends today's prints, hours and failures |
 | `PROGRESS_ALERTS` | off | Percents like `25,50,75`: an alert as the print passes each |
 | `WEEKLY_SUMMARY` | off | A day and time like `Sun 20:00`: the week's prints, hours and failures |
+| `HEAT_TIMEOUT_MIN` | `15` | Alerts when the nozzle or bed still hasn't reached its target after this long (`0` = off) |
 | `BED_COOL_C` | `35` | After a print, "bed has cooled" once the bed drops below this (`0` = off) |
 | `STATUS_PORT` | off | A port like `7127`: a read-only status page on your home network at `http://<nas>:7127/`, plus `/status.json`, `/metrics` (Prometheus) and `/log` |
 

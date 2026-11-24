@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'main.dart' show orcaLink;
 import 'models_page.dart' show CrealitySource;
@@ -563,11 +564,28 @@ class _SettingsPageState extends State<SettingsPage> {
             Panel(
               title: 'About',
               icon: Icons.info_outline_rounded,
-              child: Text(
-                'Printer Hub $kAppVersion talks to your printers directly over your '
-                'local network using Moonraker. Nothing is sent to any cloud.',
-                style: TextStyle(color: C.muted),
-              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  'Printer Hub $kAppVersion talks to your printers directly over your '
+                  'local network using Moonraker. Nothing is sent to any cloud.',
+                  style: TextStyle(color: C.muted),
+                ),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final (label, icon, url) in [
+                    ('Setup guide', Icons.menu_book_outlined, 'https://github.com/$kUpdateRepo/blob/main/docs/SETUP.md'),
+                    ('Changelog', Icons.history_rounded, 'https://github.com/$kUpdateRepo/blob/main/CHANGELOG.md'),
+                    // Only the app version goes in the link; describe the problem yourself.
+                    ('Report a problem', Icons.bug_report_outlined,
+                        'https://github.com/$kUpdateRepo/issues/new?title=${Uri.encodeQueryComponent('Printer Hub $kAppVersion: ')}'),
+                  ])
+                    ActionChip(
+                      avatar: Icon(icon, size: 16),
+                      label: Text(label),
+                      onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+                    ),
+                ]),
+              ]),
             ),
           ]),
         ),
