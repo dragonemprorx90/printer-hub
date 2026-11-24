@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 
 import '../bin/bridge.dart';
@@ -60,6 +61,22 @@ void main() {
     expect(text, contains('homeassistant/sensor/printerhub_k2_plus_progress/config'));
     expect(text, contains('"progress":42'));
     await server.close();
+  });
+
+  test('status page answers on the home network', () async {
+    final free = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = free.port;
+    await free.close();
+    unawaited(serveStatus(port, '127.0.0.1', 1, null));
+    await Future.delayed(const Duration(milliseconds: 200));
+    final page = await http.get(Uri.parse('http://127.0.0.1:$port/'));
+    expect(page.body, contains('Printer Hub bridge'));
+    final metrics = await http.get(Uri.parse('http://127.0.0.1:$port/metrics'));
+    expect(metrics.body, contains('printer_hub_up 1'));
+    final snap = await http.get(Uri.parse('http://127.0.0.1:$port/snapshot.jpg'));
+    expect(snap.statusCode, 404); // no camera set
+    final post = await http.post(Uri.parse('http://127.0.0.1:$port/'));
+    expect(post.statusCode, 405); // read-only
   });
 
   test('history CSV', () {
