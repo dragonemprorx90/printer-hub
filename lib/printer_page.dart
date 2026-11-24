@@ -80,12 +80,35 @@ class _PrinterPageState extends State<PrinterPage> {
       final wide = c.maxWidth >= 1000;
       return Scaffold(
         appBar: AppBar(
-          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.printer.name,
-                style: const TextStyle(fontWeight: FontWeight.w800)),
-            Text(widget.printer.host,
-                style: TextStyle(fontSize: 12, color: C.muted)),
-          ]),
+          title: StreamBuilder<PrinterStatus>(
+            stream: _client.stream,
+            initialData: _client.status,
+            builder: (_, snap) {
+              final st = snap.data!;
+              final busy = st.online && (st.state == 'printing' || st.state == 'paused');
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  // The colour you gave this printer, so you know which one you're on.
+                  Container(
+                    width: 10,
+                    height: 10,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle, color: Color(settings.printerColor(widget.printer.key) ?? C.accent.toARGB32())),
+                  ),
+                  Flexible(
+                    child: Text(widget.printer.name,
+                        overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  ),
+                ]),
+                Text(
+                    busy
+                        ? '${(st.progress * 100).round()}%${st.eta == null ? '' : ' · done ${fmtTime(DateTime.now().add(Duration(seconds: st.eta!.round())))}'}'
+                        : widget.printer.host,
+                    style: TextStyle(fontSize: 12, color: C.muted)),
+              ]);
+            },
+          ),
           actions: [
             IconButton(
               tooltip: alertsMuted(widget.printer.key) ? 'Alerts muted (tap to unmute)' : 'Mute this printer\'s alerts',
