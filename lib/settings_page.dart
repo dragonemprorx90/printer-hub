@@ -43,6 +43,71 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   void _refresh() => setState(() {});
 
+  final _scroll = ScrollController();
+  final _keys = <String, GlobalKey>{};
+  GlobalKey _sectionKey(String title) => _keys.putIfAbsent(title, GlobalKey.new);
+
+  /// (what you'd look for, the section it's in)
+  static const _index = [
+    ('Dark or light theme', 'Appearance'), ('Accent colour', 'Appearance'), ('Text size', 'Appearance'),
+    ('High contrast', 'Appearance'), ('°F / Fahrenheit', 'Appearance'), ('12-hour time', 'Appearance'),
+    ('Reduce motion', 'Appearance'), ('Larger buttons', 'Appearance'), ('Bold text', 'Appearance'),
+    ('Side by side on wide screens', 'Appearance'), ('Which tab printers open on', 'Appearance'), ('Reset look', 'Appearance'),
+    ('Temperature presets', 'Temperature presets'),
+    ('Alerts / notifications', 'Notifications'), ('Quiet hours', 'Notifications'), ('Humidity limit', 'Notifications'),
+    ('Maintenance reminders', 'Notifications'), ('Test notification', 'Notifications'),
+    ('Creality Cloud / Thingiverse sign-in', 'Model sites'),
+    ('Currency', 'Cost estimate'), ('Filament price', 'Cost estimate'), ('Price per material', 'Cost estimate'),
+    ('Electricity price / printer power', 'Cost estimate'), ('Filament density / diameter', 'Cost estimate'),
+    ('Check for updates', 'Updates'), ('Back up / restore settings', 'Printers'), ('Share / import printers', 'Printers'),
+    ('Orca Slicer plugin', 'Orca Slicer'), ('Watch a folder', 'Orca Slicer'),
+    ('Setup guide / changelog / report a problem', 'About'), ("What's new", 'About'),
+  ];
+
+  Future<void> _find() async {
+    final section = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        var q = '';
+        return StatefulBuilder(
+          builder: (ctx, set) => Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(ctx).bottom),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                autofocus: true,
+                decoration: const InputDecoration(hintText: 'Find a setting', prefixIcon: Icon(Icons.search_rounded)),
+                onChanged: (v) => set(() => q = v.toLowerCase()),
+              ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 360),
+                child: ListView(shrinkWrap: true, children: [
+                  for (final (label, sec) in _index)
+                    if (q.isEmpty || label.toLowerCase().contains(q) || sec.toLowerCase().contains(q))
+                      ListTile(title: Text(label), subtitle: Text(sec), onTap: () => Navigator.pop(ctx, sec)),
+                ]),
+              ),
+            ]),
+          ),
+        );
+      },
+    );
+    if (section == null || !mounted) return;
+    // Sections out of view aren't built: start at the top and scroll down
+    // until it exists, then bring it into view.
+    if (_sectionKey(section).currentContext == null && _scroll.hasClients) {
+      _scroll.jumpTo(0);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    for (var i = 0; i < 30 && _sectionKey(section).currentContext == null && _scroll.hasClients; i++) {
+      _scroll.jumpTo((_scroll.offset + 500).clamp(0, _scroll.position.maxScrollExtent));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    final c = _sectionKey(section).currentContext;
+    if (c != null && c.mounted) await Scrollable.ensureVisible(c, duration: M.base, curve: M.curve);
+  }
+
   Widget _numberField(String key, String label, double fallback, {String? suffix}) =>
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -182,12 +247,15 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     const gap = SizedBox(height: 16);
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text('Settings'), actions: [
+        IconButton(tooltip: 'Find a setting', icon: const Icon(Icons.search_rounded), onPressed: _find),
+      ]),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(padding: const EdgeInsets.all(16), children: [
+          child: ListView(controller: _scroll, padding: const EdgeInsets.all(16), children: [
             Panel(
+              key: _sectionKey('Appearance'),
               title: 'Appearance',
               icon: Icons.palette_outlined,
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -310,6 +378,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             gap,
             Panel(
+              key: _sectionKey('Temperature presets'),
               title: 'Temperature presets',
               icon: Icons.thermostat_rounded,
               child: Column(children: [
@@ -320,6 +389,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             gap,
             Panel(
+              key: _sectionKey('Notifications'),
               title: 'Notifications',
               icon: Icons.notifications_outlined,
               child: Column(children: [
@@ -404,6 +474,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             gap,
             Panel(
+              key: _sectionKey('Model sites'),
               title: 'Model sites',
               icon: Icons.travel_explore_rounded,
               child: Column(children: [
@@ -439,6 +510,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             gap,
             Panel(
+              key: _sectionKey('Cost estimate'),
               title: 'Cost estimate',
               icon: Icons.payments_outlined,
               child: Column(children: [
@@ -468,6 +540,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             gap,
             Panel(
+              key: _sectionKey('Updates'),
               title: 'Updates',
               icon: Icons.system_update_rounded,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -504,6 +577,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             gap,
             Panel(
+              key: _sectionKey('Printers'),
               title: 'Printers',
               icon: Icons.print_rounded,
               child: Wrap(spacing: 10, runSpacing: 10, children: [
@@ -541,6 +615,7 @@ class _SettingsPageState extends State<SettingsPage> {
             gap,
             if (Platform.isMacOS) ...[
               Panel(
+                key: _sectionKey('Orca Slicer'),
                 title: 'Orca Slicer',
                 icon: Icons.layers_rounded,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -618,6 +693,7 @@ class _SettingsPageState extends State<SettingsPage> {
               gap,
             ],
             Panel(
+              key: _sectionKey('About'),
               title: 'About',
               icon: Icons.info_outline_rounded,
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
