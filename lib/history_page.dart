@@ -555,6 +555,8 @@ class _JobTile extends StatelessWidget {
             fmtFilament(job.filament),
             ?job.material,
             money(jobCost(job)),
+            if (jobOk(job) && (job.estimate ?? 0) > 300 && paceText(job.duration - job.estimate!) != 'on time')
+              '${paceText(job.duration - job.estimate!)} than the slicer said',
             if (_reason(job) case final r?) '⚑ $r',
             if (settings.text('jobNote.${client.host}:${client.port}.${jobKey(job)}') case final n when n.isNotEmpty) '✎ $n',
           ].join(' · '),

@@ -214,6 +214,14 @@ List<(String, int)> reasonBreakdown(Map<String, String> tags) {
   return (mine.length, ok.length, ok.isEmpty ? null : ok.fold(0.0, (a, j) => a + j.duration) / ok.length);
 }
 
+/// How the slicer's estimates compare with real print time, over finished
+/// prints that had one: real ÷ estimate (1.1 = prints take 10% longer).
+double? estimateRatio(Iterable<PrintJob> jobs) {
+  final ok = [for (final j in jobs) if (jobOk(j) && (j.estimate ?? 0) > 300 && j.duration > 0) j];
+  if (ok.isEmpty) return null;
+  return ok.fold(0.0, (a, j) => a + j.duration) / ok.fold(0.0, (a, j) => a + j.estimate!);
+}
+
 /// History key for a job, for notes and tags kept on the device.
 String jobKey(PrintJob j) => '${j.filename}@${j.start.millisecondsSinceEpoch ~/ 1000}';
 

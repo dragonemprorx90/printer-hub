@@ -551,9 +551,10 @@ class PrintJob {
   final String? material;
   final List<int> spoolIds; // recorded by Moonraker's Spoolman integration
   final String? id; // Moonraker's job id, for removing it from history
+  final double? estimate; // the slicer's estimate (s), from the file's metadata
   PrintJob(this.filename, this.status, this.start, this.duration, this.filament,
       this.exists,
-      {this.material, this.spoolIds = const [], this.id});
+      {this.material, this.spoolIds = const [], this.id, this.estimate});
 }
 
 class HistoryTotals {
@@ -1638,6 +1639,7 @@ class MoonrakerClient {
           material: jobMaterial(j as Map),
           spoolIds: jobSpoolIds(j),
           id: j['job_id'] == null ? null : '${j['job_id']}',
+          estimate: ((j['metadata'] as Map?)?['estimated_time'] as num?)?.toDouble(),
         ),
     ];
   }

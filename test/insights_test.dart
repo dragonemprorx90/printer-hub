@@ -205,6 +205,12 @@ void main() {
     expect(weekTotals(jobs, offset: 1, now: DateTime(2026, 11, 5)).$1, 1);
   });
 
+  test('slicer estimate accuracy', () {
+    PrintJob e(double real, double est) => PrintJob('x', 'completed', DateTime(2026), real, 1, true, estimate: est);
+    expect(estimateRatio([e(1100, 1000), e(2200, 2000)]), closeTo(1.1, 1e-9));
+    expect(estimateRatio([e(100, 100)]), isNull); // too short to count
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

@@ -176,6 +176,8 @@ class _WorkshopPageState extends State<WorkshopPage> {
           _row('Best run of good prints', '${r.bestStreak}'),
           if (bestDay(jobs) case (final d, final n)) _row('Busiest day: ${fmtDate(d)}', '$n prints'),
           _row('Success of the last 10', pct(recentSuccess(jobs))),
+          if (estimateRatio(jobs) case final r?)
+            _row('Slicer estimates', r >= 1 ? '${((r - 1) * 100).round()}% short of real time' : '${((1 - r) * 100).round()}% longer than real time'),
           _row('Current run', '${r.currentStreak}', color: r.currentStreak > 0 ? C.ink(C.accent) : null),
         ]),
       ),
