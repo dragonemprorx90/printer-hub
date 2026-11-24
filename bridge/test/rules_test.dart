@@ -18,6 +18,11 @@ void main() {
     expect(ruleAllowed({'from': 'bad', 'to': '18:00'}, mon2330), isTrue);
   });
 
+  test('rule signature', () {
+    expect(ruleSig({'on': 'progress', 'at': '50', 'do': '@picture'}), 'progress|50|@picture');
+    expect(ruleSig({'on': 'complete', 'do': 'M84'}), 'complete||M84');
+  });
+
   test('webhooks only go to http(s) URLs', () {
     expect(webhookUri('@webhook https://ha.local/api/webhook/x')?.host, 'ha.local');
     expect(webhookUri('@webhook file:///etc/passwd'), isNull);

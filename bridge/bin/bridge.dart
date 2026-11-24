@@ -322,6 +322,8 @@ class Alerts {
   bool _fromQueue = false; // the current print was taken from the queue
   DateTime? _idleSince; // when the printer last stopped printing
   final _idleRan = <String>{}; // idle rules already run in this idle stretch
+  final _lastRan = <String, int>{}; // rule signature -> when it last ran (s), shown in the app
+  bool _lastRanDirty = false;
   final double bedCool; // °C; "take the print off" below this, 0 = off
   final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
   String? get state => _state;
@@ -838,6 +840,14 @@ extension on Alerts {
         await _runRules((r) => r['on'] == 'interval' && (int.tryParse('${r['at']}') ?? 0) > 0 &&
             mins % int.parse('${r['at']}') == 0);
       }
+      if (_lastRanDirty) {
+        _lastRanDirty = false;
+        try {
+          await _client.post(Uri.parse('http://$host:$port/server/database/item'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'namespace': 'printer_hub', 'key': 'rules_ran', 'value': _lastRan}));
+        } catch (_) {}
+      }
       await Future.delayed(Duration(seconds: 60 - DateTime.now().second));
     }
   }
@@ -938,6 +948,8 @@ extension on Alerts {
   Future<void> _runRules(bool Function(Map) match) async {
     for (final r in _rules.where((r) => r['off'] != true).where((r) => ruleAllowed(r, DateTime.now())).where(match)) {
       counters['rules'] = counters['rules']! + 1;
+      _lastRan[ruleSig(r)] = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      _lastRanDirty = true;
       final g = '${r['do'] ?? ''}'.trim();
       if (g.isEmpty) continue;
       if (g == '@keep') {
@@ -1197,6 +1209,9 @@ bool ruleAllowed(Map r, DateTime now) {
   final t = now.hour * 60 + now.minute;
   return a <= b ? t >= a && t < b : t >= a || t < b;
 }
+
+/// Identifies a rule across edits of other rules (when + what).
+String ruleSig(Map r) => '${r['on']}|${r['at'] ?? ''}|${r['do']}';
 
 /// "@webhook https://…" -> its URL; only http(s).
 Uri? webhookUri(String action) {

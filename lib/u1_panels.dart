@@ -936,6 +936,8 @@ class RulesPanel extends StatefulWidget {
 
 class _RulesPanelState extends State<RulesPanel> {
   late Future<List<Map<String, dynamic>>> _rules = widget.client.rules();
+  // When each rule last ran, written by the home bridge.
+  late final Future<Map> _ran = widget.client.dbGet('rules_ran').then((v) => v is Map ? v : const {}).catchError((_) => const {});
 
   List<(String, String)> _actions(PrinterStatus s) => [
         ('Send me a picture', '@picture'),
@@ -1260,7 +1262,18 @@ class _RulesPanelState extends State<RulesPanel> {
                   contentPadding: EdgeInsets.zero,
                   leading: Switch(value: r['off'] != true, onChanged: (on) => _toggle(rules, i, on)),
                   title: Text(ruleText(r, _triggers)),
-                  subtitle: Text('Long-press to change when it may run', style: T.caption.copyWith(color: C.muted)),
+                  subtitle: FutureBuilder<Map>(
+                    future: _ran,
+                    builder: (_, ran) {
+                      final at = ran.data?['${r['on']}|${r['at'] ?? ''}|${r['do']}'];
+                      return Text(
+                          [
+                            if (at is num) 'Last ran ${fmtAgo(DateTime.fromMillisecondsSinceEpoch(at.toInt() * 1000))}',
+                            'long-press to change when it may run',
+                          ].join(' · '),
+                          style: T.caption.copyWith(color: C.muted));
+                    },
+                  ),
                   onLongPress: () => _window(rules, i),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                     IconButton(
