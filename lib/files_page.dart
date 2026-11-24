@@ -867,7 +867,12 @@ class _FileSheetState extends State<_FileSheet> {
       if (await snapmakerPrintSetup(context, c, f.path, meta)) nav.pop();
       return;
     }
-    if (!await confirm(context, 'Print ${f.name}?', action: 'Print') || !mounted) {
+    final meta = await _meta.catchError((_) => <String, dynamic>{});
+    if (!mounted) return;
+    final st = c.status;
+    final warn = materialWarning('${meta['filament_type'] ?? ''}'.split(';').first,
+        hasChamber: st.chamberHeatable, chamberTemp: st.hasChamber ? st.chamber : null);
+    if (!await confirm(context, 'Print ${f.name}?', message: warn, action: 'Print') || !mounted) {
       return;
     }
     if (!await preflight(context) || !mounted) return;

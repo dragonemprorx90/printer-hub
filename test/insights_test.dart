@@ -57,6 +57,12 @@ void main() {
     expect(startForFinish(DateTime(2026, 1, 1, 10), 7200, now: DateTime(2026, 1, 1, 9)), isNull);
   });
 
+  test('layer for height', () {
+    expect(layerForHeight(10, layer: 0.2, first: 0.2), 50);
+    expect(layerForHeight(0.1, layer: 0.2), 1);
+    expect(layerForHeight(1.0, layer: 0.2, first: 0.3), 5);
+  });
+
   test('maintenance', () {
     expect(wearFactor('PA-CF'), 3);
     expect(nozzleHours(jobs, DateTime(2026, 11, 5)), 9);

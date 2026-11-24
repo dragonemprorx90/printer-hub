@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -265,12 +266,31 @@ class PrinterCameraState extends State<PrinterCamera> {
   Timer? _watchdog;
   http.Client? _mjpegClient;
   Uint8List? _frame;
+  final _frameTimes = <int>[]; // ms of recent frames, for the frame-rate readout
+  bool _litByUs = false;
 
   @override
   void initState() {
     super.initState();
     _start();
+    // "Light on while watching": switch it on if it's off, and back off when
+    // the view closes (only if we were the ones who turned it on).
+    final led = widget.client.status.led;
+    if (settings.flag(_lightKey, false) && led == false) {
+      _litByUs = true;
+      widget.client.setLed(true).catchError((_) {});
+    }
   }
+
+  void _tick() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _frameTimes
+      ..add(now)
+      ..removeWhere((t) => now - t > 3000);
+  }
+
+  /// Frames per second over the last 3 s (MJPEG / relay only).
+  double get fps => _frameTimes.length < 2 ? 0 : (_frameTimes.length - 1) * 1000 / (_frameTimes.last - _frameTimes.first);
 
   void _set(_Mode m) {
     if (mounted) setState(() => _mode = m);
@@ -315,6 +335,7 @@ class PrinterCameraState extends State<PrinterCamera> {
       }
       if (!mounted || gen != _gen) return;
       _frame = f;
+      _tick();
       _set(_Mode.mjpeg);
       await Future.delayed(const Duration(milliseconds: 300));
     }
@@ -332,7 +353,10 @@ class PrinterCameraState extends State<PrinterCamera> {
     res.stream.listen(
       (chunk) {
         final frames = splitter.add(chunk);
-        if (frames.isNotEmpty && mounted) setState(() => _frame = frames.last);
+        if (frames.isNotEmpty && mounted) {
+          _tick();
+          setState(() => _frame = frames.last);
+        }
       },
       onError: (Object e) {
         _error = '$e';
@@ -436,6 +460,7 @@ class PrinterCameraState extends State<PrinterCamera> {
 
   @override
   void dispose() {
+    if (_litByUs) widget.client.setLed(false).catchError((_) {});
     _teardown();
     super.dispose();
   }
@@ -505,16 +530,39 @@ class PrinterCameraState extends State<PrinterCamera> {
       ),
     };
     final turns = settings.number(_turnsKey, 0).toInt(), flip = settings.flag(_flipKey, false);
+    final bright = settings.number(_brightKey, 0), contrast = settings.number(_contrastKey, 1);
+    final guide = settings.text(_guideKey, '');
+    Widget video = Transform.flip(flipX: flip, child: child);
+    if (bright != 0 || contrast != 1) {
+      // Display only: the picture saved or sent in alerts is unchanged.
+      final o = 128 * (1 - contrast) + bright * 255;
+      video = ColorFiltered(
+        colorFilter: ColorFilter.matrix([
+          contrast, 0, 0, 0, o, //
+          0, contrast, 0, 0, o,
+          0, 0, contrast, 0, o,
+          0, 0, 0, 1, 0,
+        ]),
+        child: video,
+      );
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(R.lg),
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: ColoredBox(
           color: Colors.black,
-          child: RotatedBox(
-            quarterTurns: turns,
-            child: Transform.flip(flipX: flip, child: child),
-          ),
+          child: Stack(fit: StackFit.expand, children: [
+            RotatedBox(quarterTurns: turns, child: video),
+            if (guide.isNotEmpty) IgnorePointer(child: CustomPaint(painter: _GuidePainter(guide))),
+            if (settings.flag(_fpsKey, false) && _mode == _Mode.mjpeg)
+              Positioned(
+                left: 8,
+                bottom: 8,
+                child: Text('${fps.toStringAsFixed(1)} fps${widget.client.viaRelay ? ' · via relay' : ''}',
+                    style: T.caption.copyWith(color: Colors.white, shadows: const [Shadow(blurRadius: 3)])),
+              ),
+          ]),
         ),
       ),
     );
@@ -522,6 +570,11 @@ class PrinterCameraState extends State<PrinterCamera> {
 
   String get _turnsKey => 'cam.turns.${widget.client.host}';
   String get _flipKey => 'cam.flip.${widget.client.host}';
+  String get _brightKey => 'cam.bright.${widget.client.host}';
+  String get _contrastKey => 'cam.contrast.${widget.client.host}';
+  String get _guideKey => 'cam.guide.${widget.client.host}';
+  String get _fpsKey => 'cam.fps.${widget.client.host}';
+  String get _lightKey => 'cam.light.${widget.client.host}';
 
   /// Rotate / flip the picture (mounted upside down or mirrored cameras).
   Future<void> adjust(BuildContext context) async {
@@ -532,6 +585,16 @@ class PrinterCameraState extends State<PrinterCamera> {
           for (final (k, icon, label) in [
             ('rotate', Icons.rotate_right_rounded, 'Rotate 90°'),
             ('flip', Icons.flip_rounded, 'Mirror'),
+            ('brighter', Icons.brightness_high_rounded, 'Brighter'),
+            ('darker', Icons.brightness_low_rounded, 'Darker'),
+            ('contrast', Icons.contrast_rounded, 'More contrast'),
+            ('grid', Icons.grid_4x4_rounded, 'Grid: ${settings.text(_guideKey) == 'grid' ? 'on' : 'off'}'),
+            ('cross', Icons.add_rounded, 'Crosshair: ${settings.text(_guideKey) == 'cross' ? 'on' : 'off'}'),
+            ('stamp', Icons.text_fields_rounded,
+                'Stamp snapshots with progress: ${settings.flag('cam.stamp', true) ? 'on' : 'off'}'),
+            ('fps', Icons.speed_rounded, 'Frame rate: ${settings.flag(_fpsKey, false) ? 'shown' : 'hidden'}'),
+            ('light', Icons.lightbulb_outline_rounded,
+                'Light on while watching: ${settings.flag(_lightKey, false) ? 'on' : 'off'}'),
             ('reset', Icons.restart_alt_rounded, 'Reset'),
           ])
             ListTile(leading: Icon(icon), title: Text(label), onTap: () => Navigator.pop(ctx, k)),
@@ -542,16 +605,31 @@ class PrinterCameraState extends State<PrinterCamera> {
     setState(() {
       if (pick == 'rotate') settings.setNumber(_turnsKey, ((settings.number(_turnsKey, 0) + 1) % 4));
       if (pick == 'flip') settings.setFlag(_flipKey, !settings.flag(_flipKey, false));
+      if (pick == 'brighter') settings.setNumber(_brightKey, (settings.number(_brightKey, 0) + 0.1).clamp(-0.5, 0.5));
+      if (pick == 'darker') settings.setNumber(_brightKey, (settings.number(_brightKey, 0) - 0.1).clamp(-0.5, 0.5));
+      if (pick == 'contrast') {
+        final c = settings.number(_contrastKey, 1);
+        settings.setNumber(_contrastKey, c >= 1.6 ? 1 : c + 0.2);
+      }
+      if (pick == 'grid' || pick == 'cross') {
+        settings.setText(_guideKey, settings.text(_guideKey) == pick ? '' : pick);
+      }
+      if (pick == 'stamp') settings.setFlag('cam.stamp', !settings.flag('cam.stamp', true));
+      if (pick == 'fps') settings.setFlag(_fpsKey, !settings.flag(_fpsKey, false));
+      if (pick == 'light') settings.setFlag(_lightKey, !settings.flag(_lightKey, false));
       if (pick == 'reset') {
         settings.setNumber(_turnsKey, 0);
         settings.setFlag(_flipKey, false);
+        settings.setNumber(_brightKey, 0);
+        settings.setNumber(_contrastKey, 1);
+        settings.setText(_guideKey, '');
       }
     });
   }
 }
 
-/// Fullscreen camera with pinch / scroll zoom.
-class CameraFullscreen extends StatelessWidget {
+/// Fullscreen camera with pinch / scroll zoom. The zoom is remembered per camera.
+class CameraFullscreen extends StatefulWidget {
   final MoonrakerClient client;
   final String? cameraUrl;
   final String title;
@@ -563,24 +641,100 @@ class CameraFullscreen extends StatelessWidget {
   });
 
   @override
+  State<CameraFullscreen> createState() => _CameraFullscreenState();
+}
+
+class _CameraFullscreenState extends State<CameraFullscreen> {
+  String get _key => 'cam.zoom.${widget.client.host}';
+  late final _t = TransformationController(Matrix4.fromList([
+    for (final v in settings.strings(_key)) double.tryParse(v) ?? 0,
+  ].length == 16
+      ? [for (final v in settings.strings(_key)) double.parse(v)]
+      : Matrix4.identity().storage.toList()));
+
+  @override
+  void dispose() {
+    settings.setStrings(_key, [for (final v in _t.value.storage) '$v']);
+    _t.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Colors.black,
     appBar: AppBar(
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
-      title: Text(title),
+      title: Text(widget.title),
+      actions: [
+        IconButton(
+          tooltip: 'Reset zoom',
+          icon: const Icon(Icons.zoom_out_map_rounded),
+          onPressed: () => _t.value = Matrix4.identity(),
+        ),
+      ],
     ),
     body: InteractiveViewer(
+      transformationController: _t,
       maxScale: 6,
       child: Center(
         child: PrinterCamera(
-          client: client,
-          cameraUrl: cameraUrl,
+          client: widget.client,
+          cameraUrl: widget.cameraUrl,
           fit: BoxFit.contain,
         ),
       ),
     ),
   );
+}
+
+/// Draws [text] in a dark band along the bottom of a JPEG/PNG and returns a PNG.
+Future<Uint8List> stampImage(Uint8List bytes, String text) async {
+  final codec = await ui.instantiateImageCodec(bytes);
+  final img = (await codec.getNextFrame()).image;
+  final w = img.width.toDouble(), h = img.height.toDouble();
+  final rec = ui.PictureRecorder();
+  final canvas = Canvas(rec);
+  canvas.drawImage(img, Offset.zero, Paint());
+  final band = (h * 0.07).clamp(20, 80).toDouble();
+  canvas.drawRect(Rect.fromLTWH(0, h - band, w, band), Paint()..color = const Color(0xAA000000));
+  final tp = TextPainter(
+    text: TextSpan(text: text, style: TextStyle(color: Colors.white, fontSize: band * 0.5, fontWeight: FontWeight.w600)),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+    ellipsis: '…',
+  )..layout(maxWidth: w - band);
+  tp.paint(canvas, Offset(band / 2, h - band + (band - tp.height) / 2));
+  final out = await rec.endRecording().toImage(img.width, img.height);
+  final data = await out.toByteData(format: ui.ImageByteFormat.png);
+  return data!.buffer.asUint8List();
+}
+
+/// Thirds grid or centre crosshair over the camera, for lining up and
+/// checking a first layer.
+class _GuidePainter extends CustomPainter {
+  final String kind;
+  _GuidePainter(this.kind);
+  @override
+  void paint(Canvas canvas, Size s) {
+    final p = Paint()
+      ..color = Colors.white.withValues(alpha: 0.55)
+      ..strokeWidth = 1;
+    if (kind == 'grid') {
+      for (var i = 1; i < 3; i++) {
+        canvas.drawLine(Offset(s.width * i / 3, 0), Offset(s.width * i / 3, s.height), p);
+        canvas.drawLine(Offset(0, s.height * i / 3), Offset(s.width, s.height * i / 3), p);
+      }
+    } else {
+      final c = s.center(Offset.zero);
+      canvas.drawLine(c - const Offset(24, 0), c + const Offset(24, 0), p);
+      canvas.drawLine(c - const Offset(0, 24), c + const Offset(0, 24), p);
+      canvas.drawCircle(c, 10, p..style = PaintingStyle.stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GuidePainter old) => old.kind != kind;
 }
 
 /// Small round icon button used over video.

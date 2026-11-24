@@ -142,6 +142,14 @@ DateTime? startForFinish(DateTime finish, double seconds, {DateTime? now}) {
   return s.isBefore(now ?? DateTime.now()) ? null : s;
 }
 
+/// The layer that prints at [mm] height (1-based), from the slicer's first
+/// layer and layer heights.
+int layerForHeight(double mm, {required double layer, double? first}) {
+  final f = first ?? layer;
+  if (mm <= f || layer <= 0) return 1;
+  return ((mm - f) / layer).ceil() + 1;
+}
+
 // ---------------------------------------------------------------- maintenance
 
 /// Abrasive filaments wear a brass nozzle faster: they count extra hours.

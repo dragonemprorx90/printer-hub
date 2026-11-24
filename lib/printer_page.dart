@@ -15,6 +15,8 @@ import 'settings.dart';
 import 'tools_page.dart';
 import 'u1_panels.dart';
 import 'ui.dart';
+import 'workshop_page.dart';
+import 'insights.dart';
 
 /// One printer: five tabs, bottom bar on phones, side rail on wide screens.
 class PrinterPage extends StatefulWidget {
@@ -229,10 +231,24 @@ class _OverviewTabState extends State<OverviewTab> {
     final now = DateTime.now();
     final safe = widget.printer.name.replaceAll(RegExp(r'[^\w-]+'), '_');
     final stamp = fmtClock(now).replaceAll(':', '');
+    var out = bytes, ext = cam.snapshotExtension;
+    if (settings.flag('cam.stamp', true)) {
+      final s = c.status;
+      final busy = s.state == 'printing' || s.state == 'paused';
+      try {
+        out = await stampImage(bytes, [
+          widget.printer.name,
+          if (busy) '${(s.progress * 100).round()}%',
+          if (busy && s.eta != null) '${fmtDuration(s.eta)} left',
+          '${fmtDate(now)} ${fmtClock(now)}',
+        ].join('  ·  '));
+        ext = 'png';
+      } catch (_) {} // keep the plain picture
+    }
     try {
       final saved = await FilePicker.saveFile(
-        fileName: '$safe-${fmtDate(now)}-$stamp.${cam.snapshotExtension}',
-        bytes: bytes,
+        fileName: '$safe-${fmtDate(now)}-$stamp.$ext',
+        bytes: out,
       );
       if (saved != null && mounted) toast(context, 'Snapshot saved');
     } catch (e) {
@@ -950,6 +966,34 @@ class _Actions extends StatelessWidget {
               icon: const Icon(Icons.layers_clear_outlined),
               label: const Text('Pause at layer'),
             ),
+          if (busy && client.canPauseAtLayer && (s.jobMeta['layer_height'] as num?) != null)
+            OutlinedButton.icon(
+              onPressed: () async {
+                final mm = await askNumber(context, 'Pause at height', presets: const [5, 10, 20, 50], unit: ' mm');
+                if (mm == null || mm <= 0 || !context.mounted) return;
+                final l = layerForHeight(mm.toDouble(),
+                    layer: (s.jobMeta['layer_height'] as num).toDouble(),
+                    first: (s.jobMeta['first_layer_height'] as num?)?.toDouble());
+                await run(context, () => client.pauseAtLayer(l), done: 'Pauses at $mm mm (layer $l)');
+              },
+              icon: const Icon(Icons.height_rounded),
+              label: const Text('Pause at height'),
+            ),
+          if (!busy && (s.state == 'complete' || s.state == 'cancelled') && (s.filename ?? '').isNotEmpty)
+            FilledButton.tonalIcon(
+              onPressed: () async {
+                final f = s.filename!;
+                if (await confirm(context, 'Print ${f.split('/').last} again?',
+                        message: 'Make sure the plate is clear first.', action: 'Print') &&
+                    context.mounted &&
+                    await preflight(context) &&
+                    context.mounted) {
+                  run(context, () => client.startPrint(f), done: 'Print started');
+                }
+              },
+              icon: const Icon(Icons.replay_rounded),
+              label: const Text('Print again'),
+            ),
           if (printing)
             FilledButton.icon(
               onPressed: () => run(context, client.pause),
@@ -967,7 +1011,8 @@ class _Actions extends StatelessWidget {
               style: OutlinedButton.styleFrom(foregroundColor: C.danger),
               onPressed: () async {
                 if (await confirm(context, 'Cancel this print?',
-                        message: 'This cannot be undone.',
+                        message: 'This cannot be undone. ${fmtDuration(s.printDuration)} of printing and '
+                            '${gramsFromMm(s.filamentUsed).round()} g of filament so far will be lost.',
                         action: 'Cancel print',
                         danger: true) &&
                     context.mounted &&
