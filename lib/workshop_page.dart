@@ -849,6 +849,11 @@ class FleetPage extends StatefulWidget {
 }
 
 class _FleetPageState extends State<FleetPage> {
+  late final Future<List<(Printer, List<QueuedJob>)>> _queues = Future.wait([
+    for (final p in widget.printers)
+      clientFor(p).queue().then<(Printer, List<QueuedJob>)>((q) => (p, q.$1)).catchError((_) => (p, <QueuedJob>[])),
+  ]);
+
   late final Future<List<(Printer, List<PrintJob>?)>> _data = Future.wait([
     for (final p in widget.printers)
       clientFor(p).allHistory().then<(Printer, List<PrintJob>?)>((j) => (p, j)).catchError((_) => (p, null)),
@@ -877,6 +882,28 @@ class _FleetPageState extends State<FleetPage> {
                 ]),
               ),
               const SizedBox(height: 12),
+              FutureBuilder<List<(Printer, List<QueuedJob>)>>(
+                future: _queues,
+                builder: (context, q) {
+                  final qs = [for (final (p, jobs) in q.data ?? const <(Printer, List<QueuedJob>)>[]) if (jobs.isNotEmpty) (p, jobs)];
+                  if (qs.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Panel(
+                      title: 'Queues',
+                      icon: Icons.queue_rounded,
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        for (final (p, jobs) in qs) ...[
+                          Text('${p.name} · ${jobs.length}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          for (final j in jobs.take(5))
+                            Text('  ${j.filename.split('/').last}', style: T.small.copyWith(color: C.muted), overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 8),
+                        ],
+                      ]),
+                    ),
+                  );
+                },
+              ),
               for (final (p, j) in rows) ...[
                 Panel(
                   title: p.name,
