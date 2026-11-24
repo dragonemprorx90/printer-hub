@@ -495,7 +495,7 @@ class Alerts {
               'print_stats': ['state', 'filename', 'message', 'print_duration', 'filament_used', 'info'],
               'virtual_sdcard': ['progress'],
               'box': null,
-              'dragonbreath': ['connected', 'fault', 'fault_reason'],
+              'dragonbreath': ['connected', 'fault', 'fault_reason', 'mode'],
               'output_pin dragonbreath_filter': null,
               for (final l in lanes) l: ['map', 'load', 'color', 'material', 'spool_id', 'filament_name'],
               for (final f in sensors) f: ['filament_detected', 'enabled'],
@@ -603,7 +603,12 @@ class Alerts {
       _sent.removeWhere((x) => x.startsWith('chamber_ready'));
     }
     final db = status['dragonbreath'];
+    final wasDrying = _dragon['mode'] == 'drying';
     if (db is Map) _dragon.addAll(Map<String, dynamic>.from(db));
+    if (wasDrying && db is Map && db.containsKey('mode') && _dragon['mode'] != 'drying' && _dragon['fault'] != true) {
+      await send('$_title: filament is dry', 'The DragonBreath finished drying.', tags: ['sunny'], priority: 3);
+      unawaited(_runRules((r) => r['on'] == 'dry_done'));
+    }
     if (status['output_pin dragonbreath_filter'] != null) _hasFilter = true;
     final p = status['virtual_sdcard']?['progress'];
     if (p is num) _progress = p.toDouble();

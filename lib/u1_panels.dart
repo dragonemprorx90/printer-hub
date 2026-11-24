@@ -895,6 +895,7 @@ const _triggers = {
   'bed_cool': 'Bed has cooled after a print',
   'layer': 'Print reaches layer…',
   'idle': 'Printer has been idle for…',
+  'dry_done': 'Filament drying finishes (DragonBreath)',
   'humidity': 'CFS humidity goes over the limit',
 };
 
