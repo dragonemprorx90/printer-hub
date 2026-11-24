@@ -129,6 +129,7 @@ void watchPrinter(Printer p, MoonrakerClient c) {
   if (!_watched.add(p.key)) return;
   String? last, milestoneFile;
   var failureAlerted = '', driftAlerted = '';
+  String? lastDry; // DragonBreath mode, for "filament is dry"
   DateTime? driftSince;
   var sent = <String>{};
   final humidityAlerted = <String, DateTime>{};
@@ -207,6 +208,12 @@ void watchPrinter(Printer p, MoonrakerClient c) {
       }
     }
     last = state;
+
+    final dry = s.dragon?['mode'] as String?;
+    if (lastDry == 'drying' && dry != null && dry != 'drying' && s.dragon?['fault'] != true) {
+      _say(p.key, '${p.name}: filament is dry', 'The DragonBreath finished drying.');
+    }
+    if (dry != null) lastDry = dry;
 
     // Hotend far from its target for a minute mid-print: a heater, fan or
     // thermistor problem worth a look.
