@@ -172,8 +172,11 @@ class LayerPainter extends CustomPainter {
   final double bedW, bedH;
   final Color color, below, border;
 
+  /// Draw every layer below faded, not just the one under it.
+  final bool stack;
+
   LayerPainter(this.model, this.layer, this.bedW, this.bedH,
-      {required this.color, required this.below, required this.border});
+      {required this.color, required this.below, required this.border, this.stack = false});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -194,7 +197,11 @@ class LayerPainter extends CustomPainter {
     final p = Paint()
       ..strokeCap = StrokeCap.round
       ..strokeWidth = 0.45;
-    if (layer > 0) {
+    if (stack) {
+      for (var i = 0; i < layer; i++) {
+        canvas.drawRawPoints(ui.PointMode.lines, model.layers[i], p..color = below.withValues(alpha: 0.08));
+      }
+    } else if (layer > 0) {
       canvas.drawRawPoints(
           ui.PointMode.lines, model.layers[layer - 1], p..color = below);
     }
@@ -204,7 +211,7 @@ class LayerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(LayerPainter o) =>
-      o.layer != layer || o.model != model || o.color != color;
+      o.layer != layer || o.model != model || o.color != color || o.stack != stack;
 }
 
 /// The bed with one layer drawn, and a slider to step through the layers.
@@ -218,6 +225,34 @@ class LayerView extends StatefulWidget {
 
 class _LayerViewState extends State<LayerView> {
   late int _layer = math.max(0, widget.model.layers.length - 1);
+  bool _stack = false;
+  Timer? _play;
+
+  @override
+  void dispose() {
+    _play?.cancel();
+    super.dispose();
+  }
+
+  /// Steps through the layers from the bottom, about 12 a second.
+  void _togglePlay() {
+    if (_play != null) {
+      _play!.cancel();
+      setState(() => _play = null);
+      return;
+    }
+    if (_layer >= widget.model.layers.length - 1) _layer = 0;
+    _play = Timer.periodic(const Duration(milliseconds: 80), (t) {
+      if (!mounted) return t.cancel();
+      if (_layer >= widget.model.layers.length - 1) {
+        t.cancel();
+        setState(() => _play = null);
+      } else {
+        setState(() => _layer++);
+      }
+    });
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +266,7 @@ class _LayerViewState extends State<LayerView> {
             child: CustomPaint(
               size: Size.infinite,
               painter: LayerPainter(m, _layer, widget.bedW, widget.bedH,
-                  color: C.accent, below: C.muted.withValues(alpha: 0.25), border: C.border),
+                  color: C.accent, below: C.muted.withValues(alpha: 0.25), border: C.border, stack: _stack),
             ),
           ),
         ),
@@ -243,6 +278,18 @@ class _LayerViewState extends State<LayerView> {
           child: Panel(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: Row(children: [
+              IconButton(
+                tooltip: _play == null ? 'Play from the bottom' : 'Stop',
+                onPressed: m.layers.length < 2 ? null : _togglePlay,
+                icon: Icon(_play == null ? Icons.play_arrow_rounded : Icons.stop_rounded),
+              ),
+              IconButton(
+                tooltip: _stack ? 'Show only the layer below' : 'Show all layers below',
+                isSelected: _stack,
+                onPressed: () => setState(() => _stack = !_stack),
+                icon: const Icon(Icons.layers_outlined),
+                selectedIcon: Icon(Icons.layers_rounded, color: C.accent),
+              ),
               IconButton(
                 tooltip: 'Previous layer',
                 onPressed: _layer > 0 ? () => setState(() => _layer--) : null,
