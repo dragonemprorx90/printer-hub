@@ -139,7 +139,9 @@ Future<void> main(List<String> argv) async {
           bedCool: double.tryParse(env['BED_COOL_C'] ?? '') ?? 35,
           progressAlerts: [for (final v in (env['PROGRESS_ALERTS'] ?? '').split(',')) ?int.tryParse(v.trim())],
           weeklyAt: env['WEEKLY_SUMMARY'] ?? '',
-          heatTimeout: int.tryParse(env['HEAT_TIMEOUT_MIN'] ?? '') ?? 15);
+          heatTimeout: int.tryParse(env['HEAT_TIMEOUT_MIN'] ?? '') ?? 15,
+          overrunPct: int.tryParse(env['OVERRUN_PCT'] ?? '') ?? 30,
+          layerStuck: int.tryParse(env['LAYER_STUCK_MIN'] ?? '') ?? 30);
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -295,6 +297,11 @@ class Alerts {
   double? _bedTemp, _bedTarget, _nozzle, _nozzleTarget;
   DateTime? _heatingSince; // nozzle set but not near its target yet
   final int heatTimeout; // minutes before "still heating" alerts, 0 = off
+  final int overrunPct; // alert when a print runs this % over the slicer's estimate, 0 = off
+  final int layerStuck; // minutes on one layer before an alert, 0 = off
+  double? _estimate; // slicer's estimate for the current print
+  int? _layer;
+  DateTime? _layerSince;
   double? get nozzle => _nozzle;
   double? get bedTemp => _bedTemp;
   double? get chamber => (_chamber['temperature'] as num?)?.toDouble();
@@ -321,7 +328,9 @@ class Alerts {
       this.bedCool = 35,
       this.progressAlerts = const [],
       this.weeklyAt = '',
-      this.heatTimeout = 15})
+      this.heatTimeout = 15,
+      this.overrunPct = 30,
+      this.layerStuck = 30})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -570,12 +579,16 @@ class Alerts {
           await send('$_title: print cancelled', file, tags: ['x']);
         case 'paused' when last == 'printing':
           _pausedAt = DateTime.now();
+          _layerSince = null; // a pause isn't a stuck layer
           await send('$_title: print paused',
               note.isEmpty ? 'Check the printer (filament run-out?)' : note,
               tags: ['pause_button'], priority: 4, picture: true);
         case 'printing' when last == 'standby' || last == 'complete' || last == 'cancelled' || last == 'error':
           _sent = {};
           _waitBedCool = false;
+          _estimate = null;
+          _layer = null;
+          _layerSince = null;
           _started = DateTime.now();
           counters['prints_started'] = counters['prints_started']! + 1;
           _failure.reset();
@@ -592,6 +605,25 @@ class Alerts {
     }
 
     if (state == 'printing') {
+      final dur0 = (_stats['print_duration'] as num?)?.toDouble() ?? 0;
+      if (overrunPct > 0 && overran(dur0, _estimate, overrunPct) && _sent.add('overrun')) {
+        await send('$_title: taking longer than planned',
+            'Printing ${(dur0 / 60).round()} min against an estimate of ${(_estimate! / 60).round()} min. Worth a look.',
+            tags: ['hourglass'], priority: 3, picture: true);
+      }
+      final cl = (_stats['info'] as Map?)?['current_layer'];
+      if (cl is num && cl.toInt() != _layer) {
+        _layer = cl.toInt();
+        _layerSince = DateTime.now();
+        _sent.remove('stuck');
+        unawaited(_runRules((r) => r['on'] == 'layer' && int.tryParse('${r['at']}') == _layer));
+      } else if (_layerSince == null) {
+        _layerSince = DateTime.now(); // just resumed: start counting again
+      } else if (layerStuck > 0 &&
+          DateTime.now().difference(_layerSince!).inMinutes >= layerStuck && _sent.add('stuck')) {
+        await send('$_title: stuck on layer $_layer?', 'The same layer for $layerStuck minutes. Check for a clog or a stall.',
+            tags: ['warning'], priority: 4, picture: true);
+      }
       final layer = (_stats['info'] as Map?)?['current_layer'];
       if (layer is num && layer >= 2 && _sent.add('first_layer')) {
         await send('$_title: first layer done', 'Have a look before it carries on.',
@@ -724,6 +756,7 @@ extension on Alerts {
       final r = await _client.get(Uri.parse('http://$host:$port/server/files/metadata?filename='
           '${Uri.encodeQueryComponent('${_stats['filename'] ?? ''}')}'));
       final est = (jsonDecode(r.body)['result']?['estimated_time'] as num?)?.toDouble();
+      _estimate = est;
       if (est == null || est <= 0) return file;
       final at = DateTime.now().add(Duration(seconds: est.round()));
       return '$file, done about ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
@@ -1076,6 +1109,10 @@ bool weeklyDue(String spec, DateTime now) {
   const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   return days.indexOf(m[1]!.toLowerCase()) + 1 == now.weekday && int.parse(m[2]!) == now.hour && int.parse(m[3]!) == now.minute;
 }
+
+/// The print has run [pct]% longer than the slicer's estimate.
+bool overran(double elapsed, double? estimate, int pct) =>
+    estimate != null && estimate > 600 && elapsed > estimate * (1 + pct / 100);
 
 /// A heater with a target that is still more than [margin] below it.
 bool stillHeating(double? temp, double? target, {double margin = 5}) =>

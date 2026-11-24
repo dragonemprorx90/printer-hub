@@ -128,6 +128,8 @@ More options for `.env` (all optional):
 | `PROGRESS_ALERTS` | off | Percents like `25,50,75`: an alert as the print passes each |
 | `WEEKLY_SUMMARY` | off | A day and time like `Sun 20:00`: the week's prints, hours and failures |
 | `HEAT_TIMEOUT_MIN` | `15` | Alerts when the nozzle or bed still hasn't reached its target after this long (`0` = off) |
+| `OVERRUN_PCT` | `30` | Alerts once when a print runs this much longer than the slicer said (`0` = off) |
+| `LAYER_STUCK_MIN` | `30` | Alerts when the same layer has been printing this long (`0` = off) |
 | `BED_COOL_C` | `35` | After a print, "bed has cooled" once the bed drops below this (`0` = off) |
 | `STATUS_PORT` | off | A port like `7127`: a read-only status page on your home network at `http://<nas>:7127/`, plus `/status.json`, `/metrics` (Prometheus) and `/log` |
 

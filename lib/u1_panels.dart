@@ -842,6 +842,7 @@ const _triggers = {
   'runout': 'Filament runs out',
   'chamber_ready': 'Chamber reaches its temperature',
   'bed_cool': 'Bed has cooled after a print',
+  'layer': 'Print reaches layer…',
   'humidity': 'CFS humidity goes over the limit',
 };
 
@@ -918,6 +919,10 @@ class _RulesPanelState extends State<RulesPanel> {
       final m = await askNumber(context, 'Every how many minutes?', presets: const [5, 10, 15, 30], unit: ' min');
       if (m == null || m <= 0 || !mounted) return;
       at = '$m';
+    } else if (on == 'layer') {
+      final l = await askNumber(context, 'At which layer?', presets: const [2, 10, 50, 100], unit: '');
+      if (l == null || l <= 0 || !mounted) return;
+      at = '$l';
     } else if (on == 'progress') {
       final p = await askNumber(context, 'At what progress?', presets: const [25, 50, 75, 90], unit: '%');
       if (p == null || p <= 0 || p > 100 || !mounted) return;

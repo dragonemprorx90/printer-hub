@@ -32,6 +32,13 @@ void main() {
     expect(finishedText('a.gcode', {}), 'a.gcode');
   });
 
+  test('overrun', () {
+    expect(overran(4000, 3000, 30), isTrue);
+    expect(overran(3500, 3000, 30), isFalse);
+    expect(overran(400, 300, 30), isFalse); // short prints don't count
+    expect(overran(9999, null, 30), isFalse);
+  });
+
   test('still heating', () {
     expect(stillHeating(150, 220), isTrue);
     expect(stillHeating(218, 220), isFalse);
