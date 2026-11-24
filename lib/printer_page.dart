@@ -880,6 +880,9 @@ class _Temps extends StatelessWidget {
           color: C.tools[i % C.tools.length],
           onTap: () => _set(context, tools.length == 1 ? 'nozzle' : 'T$i',
               'nozzle', (t) => client.setToolTemp(tools[i], t)),
+          onLongPress: s.toolTarget(tools[i]) > 0 && s.state != 'printing' && s.state != 'paused'
+              ? () => run(context, () => client.setToolTemp(tools[i], 0), done: '${tools.length == 1 ? 'Nozzle' : 'T$i'} off')
+              : null,
         ),
       TempGauge(
         label: 'Bed',
@@ -889,6 +892,9 @@ class _Temps extends StatelessWidget {
         max: 120,
         color: C.bed,
         onTap: () => _set(context, 'bed', 'bed', client.setBed),
+        onLongPress: s.bedTarget > 0 && s.state != 'printing' && s.state != 'paused'
+            ? () => run(context, () => client.setBed(0), done: 'Bed off')
+            : null,
       ),
       if (s.hasChamber)
         TempGauge(

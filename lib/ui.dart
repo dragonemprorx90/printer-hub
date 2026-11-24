@@ -421,7 +421,11 @@ class TempGauge extends StatelessWidget {
     required this.max,
     required this.color,
     this.onTap,
+    this.onLongPress,
   });
+
+  /// Long-press: usually "turn this heater off".
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -433,6 +437,7 @@ class TempGauge extends StatelessWidget {
       child: Tile(
       radius: R.xl,
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 16, 10, 14),
         child: LayoutBuilder(builder: (context, c) {

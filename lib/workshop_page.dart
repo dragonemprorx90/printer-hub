@@ -688,7 +688,14 @@ class _WorkshopPageState extends State<WorkshopPage> {
       Panel(
         title: 'Material notes',
         icon: Icons.sticky_note_2_outlined,
-        trailing: IconButton(
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (settings.jsonList('materialNotes').isNotEmpty)
+            IconButton(
+              tooltip: 'Copy all notes',
+              icon: const Icon(Icons.copy_rounded),
+              onPressed: () => _copy([for (final n in settings.jsonList('materialNotes')) '${n['m']}: ${n['t']}'].join('\n'), 'Notes'),
+            ),
+          IconButton(
           tooltip: 'Add note',
           icon: const Icon(Icons.add_rounded),
           onPressed: () async {
@@ -700,6 +707,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
             setState(() {});
           },
         ),
+        ]),
         child: settings.jsonList('materialNotes').isEmpty
             ? Hint('Keep the temperatures and tips that work for each brand.')
             : Column(children: [
