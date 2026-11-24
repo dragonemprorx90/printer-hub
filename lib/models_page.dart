@@ -483,7 +483,48 @@ class _ModelsPageState extends State<ModelsPage> {
     super.dispose();
   }
 
+  /// "All sites": one search on every site that's ready, results mixed.
+  bool _everywhere = false;
+  final _srcOf = <ModelHit, ModelSource>{};
+
+  Future<void> _searchAll({bool next = false}) async {
+    setState(() {
+      _error = null;
+      if (!next) {
+        _hits.clear();
+        _srcOf.clear();
+        _page = 0;
+        _more = true;
+      }
+      _loading = true;
+    });
+    final q = _query.text.trim();
+    final ready = [for (final src in sources) if (src.blocked == null) src];
+    final results = await Future.wait([
+      for (final src in ready) src.search(q, _page).catchError((_) => <ModelHit>[]),
+    ]);
+    if (!mounted || !_everywhere) return;
+    // Take turns so no site drowns out the others.
+    final mixed = <ModelHit>[];
+    for (var i = 0; results.any((r) => i < r.length); i++) {
+      for (final (k, r) in results.indexed) {
+        if (i < r.length) {
+          mixed.add(r[i]);
+          _srcOf[r[i]] = ready[k];
+        }
+      }
+    }
+    setState(() {
+      _hits.addAll(mixed);
+      _page++;
+      _more = mixed.isNotEmpty;
+      _loading = false;
+      if (mixed.isEmpty && !next) _error = null;
+    });
+  }
+
   Future<void> _search({bool next = false}) async {
+    if (_everywhere) return _searchAll(next: next);
     final src = _src;
     setState(() {
       _error = null;
@@ -604,7 +645,7 @@ class _ModelsPageState extends State<ModelsPage> {
       ]);
 
   Widget _results() {
-    if (_src.blocked == 'token') return _tokenSetup();
+    if (_src.blocked == 'token' && !_everywhere) return _tokenSetup();
     if (_error != null && _hits.isEmpty) return StateView.error(_error!, onRetry: _search);
     if (_hits.isEmpty && _loading) return const Center(child: CircularProgressIndicator());
     if (_hits.isEmpty) return const StateView.empty(Icons.search_off_rounded, 'No models found');
@@ -627,7 +668,11 @@ class _ModelsPageState extends State<ModelsPage> {
           childAspectRatio: 0.78,
         ),
         itemCount: _hits.length,
-        itemBuilder: (_, i) => _HitCard(hit: list[i], saved: saved.contains(list[i].id), onTap: () => _open(list[i])),
+        itemBuilder: (_, i) => _HitCard(
+            hit: list[i],
+            site: _everywhere ? _srcOf[list[i]]?.name : null,
+            saved: saved.contains(list[i].id),
+            onTap: () => _open(list[i], _srcOf[list[i]])),
       ),
       ),
     );
@@ -676,16 +721,27 @@ class _ModelsPageState extends State<ModelsPage> {
           SizedBox(
             height: 40,
             child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16), children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: const Text('All sites'),
+                  selected: _everywhere,
+                  onSelected: (_) {
+                    setState(() => _everywhere = true);
+                    _search();
+                  },
+                ),
+              ),
               ...[
               for (final s in sources)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
                     label: Text(s.name),
-                    selected: s == _src,
+                    selected: s == _src && !_everywhere,
                     onSelected: (_) {
                       settings.setText('models.source', s.name);
-                      setState(() => _src = s);
+                      setState(() => (_src = s, _everywhere = false));
                       _query.text = settings.text('models.query.${s.name}');
                       _search();
                     },
@@ -713,7 +769,8 @@ class _HitCard extends StatelessWidget {
   final ModelHit hit;
   final VoidCallback onTap;
   final bool saved;
-  const _HitCard({required this.hit, required this.onTap, this.saved = false});
+  final String? site; // shown in "All sites"
+  const _HitCard({required this.hit, required this.onTap, this.saved = false, this.site});
   @override
   Widget build(BuildContext context) {
     final placeholder = Icon(Icons.view_in_ar_rounded, color: C.muted);
@@ -738,7 +795,7 @@ class _HitCard extends StatelessWidget {
             Text('${saved ? '★ ' : ''}${hit.title}',
                 maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
-            Text('${hit.author}${hit.likes > 0 ? ' · ♥ ${hit.likes}' : ''}',
+            Text('${site == null ? '' : '$site · '}${hit.author}${hit.likes > 0 ? ' · ♥ ${hit.likes}' : ''}',
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.muted)),
           ]),
         ),
