@@ -977,6 +977,11 @@ class _TempHistoryState extends State<_TempHistory> {
     if (!_loaded || !s.online) return;
     _add('extruder', s.hotend);
     _add('extruder#target', s.hotendTarget);
+    // The other toolheads on multi-tool printers (U1: extruder1..3).
+    for (final t in s.extruders.skip(1)) {
+      _add(t, s.toolTemp(t));
+      _add('$t#target', s.toolTarget(t));
+    }
     _add('heater_bed', s.bed);
     _add('heater_bed#target', s.bedTarget);
     if (s.hasChamber) {
@@ -997,7 +1002,9 @@ class _TempHistoryState extends State<_TempHistory> {
           ? const SizedBox(
               height: 170, child: Center(child: CircularProgressIndicator()))
           : TempChart(series: [
-              series('Nozzle', C.hot, 'extruder'),
+              series(s.extruders.length > 1 ? 'T0' : 'Nozzle', C.hot, 'extruder'),
+              for (final (i, t) in s.extruders.skip(1).indexed)
+                series('T${i + 1}', C.tools[(i + 1) % C.tools.length], t),
               series('Bed', C.bed, 'heater_bed'),
               if (s.hasChamber) series('Chamber', C.chamber, _chamberKey),
             ]),
