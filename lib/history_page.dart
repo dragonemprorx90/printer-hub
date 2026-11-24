@@ -381,7 +381,7 @@ class _JobTile extends StatelessWidget {
         ? <Spool>[]
         : (await client.spools().catchError((_) => <Spool>[])).where((s) => job.spoolIds.contains(s.id)).toList();
     if (!context.mounted) return;
-    if (files.isEmpty && spools.isEmpty) {
+    if (files.isEmpty && spools.isEmpty && !jobFailed(job) && job.status != 'cancelled') {
       return toast(context, 'No pictures for this print (the home bridge takes them when it has a camera)');
     }
     final price = spoolPrice(spools);
@@ -396,6 +396,23 @@ class _JobTile extends StatelessWidget {
           width: 520,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (jobFailed(job) || job.status == 'cancelled')
+                StatefulBuilder(builder: (ctx, set) {
+                  final k = 'failReasons.${client.host}:${client.port}';
+                  final m = Map<String, dynamic>.from(jsonDecode(settings.text(k, '{}')) as Map);
+                  return Row(children: [
+                    const Expanded(child: Text('Why did it stop?')),
+                    DropdownButton<String>(
+                      value: m[jobKey(job)] as String?,
+                      hint: const Text('Pick a reason'),
+                      items: [for (final r in failureReasons) DropdownMenuItem(value: r, child: Text(r))],
+                      onChanged: (v) => set(() {
+                        m[jobKey(job)] = v;
+                        settings.setText(k, jsonEncode(m));
+                      }),
+                    ),
+                  ]);
+                }),
               for (final s in spools)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -416,7 +433,17 @@ class _JobTile extends StatelessWidget {
                     FutureBuilder<Uint8List>(
                       future: client.snapshotBytes(f),
                       builder: (_, s) => s.hasData
-                          ? ClipRRect(borderRadius: BorderRadius.circular(R.md), child: Image.memory(s.data!))
+                          ? GestureDetector(
+                              onTap: () => Navigator.push(
+                                  ctx,
+                                  MaterialPageRoute(
+                                      builder: (_) => Scaffold(
+                                            backgroundColor: Colors.black,
+                                            appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+                                            body: InteractiveViewer(maxScale: 8, child: Center(child: Image.memory(s.data!))),
+                                          ))),
+                              child: ClipRRect(borderRadius: BorderRadius.circular(R.md), child: Image.memory(s.data!)),
+                            )
                           : const SizedBox(height: 160, child: Center(child: CircularProgressIndicator())),
                     ),
                     const SizedBox(height: 4),
