@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:printer_hub/main.dart';
 import 'package:printer_hub/moonraker.dart';
+import 'package:printer_hub/printer_page.dart';
 import 'package:printer_hub/settings.dart';
 import 'package:printer_hub/workshop_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -81,6 +82,26 @@ void main() {
     // Close the page and the client so no reconnect timer is left behind.
     await t.pumpWidget(const SizedBox());
     dropClient(const Printer(name: 'K2 Plus', host: '127.0.0.1', port: 1));
+    await t.pump(const Duration(minutes: 2));
+  });
+
+  // Every tab of a printer that can't be reached lays out without errors.
+  testWidgets('Printer page tabs render offline', (t) async {
+    SharedPreferences.setMockInitialValues({'seenVersion': '99.0.0'});
+    await settings.load();
+    t.view.physicalSize = const Size(390 * 3, 844 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    const p = Printer(name: 'U1', host: '127.0.0.1', port: 2);
+    await t.pumpWidget(const MaterialApp(home: PrinterPage(printer: p)));
+    await t.pump(const Duration(seconds: 1));
+    for (final tab in ['Control', 'Files', 'Tools', 'History', 'Overview']) {
+      await t.tap(find.text(tab).last);
+      await t.pump(const Duration(seconds: 1));
+      expect(t.takeException(), isNull, reason: tab);
+    }
+    await t.pumpWidget(const SizedBox());
+    dropClient(p);
     await t.pump(const Duration(minutes: 2));
   });
 }
