@@ -46,7 +46,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
-        length: 4,
+        length: 5,
         child: Scaffold(
           appBar: AppBar(
             title: Text('Workshop · ${widget.printer.name}'),
@@ -55,6 +55,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
               Tab(text: 'Maintenance'),
               Tab(text: 'Filament'),
               Tab(text: 'Notes'),
+              Tab(text: 'Quote'),
             ]),
           ),
           body: _error != null
@@ -66,6 +67,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
                       _list(_maintenance()),
                       _list(_filament()),
                       _list(_notes()),
+                      _QuoteTab(client: widget.client),
                     ]),
         ),
       );
@@ -867,4 +869,115 @@ class _FleetPageState extends State<FleetPage> {
           },
         ),
       );
+}
+
+/// What to charge for a print: pick a file (or type the grams and hours),
+/// then add machine wear, your time and a markup.
+class _QuoteTab extends StatefulWidget {
+  final MoonrakerClient client;
+  const _QuoteTab({required this.client});
+  @override
+  State<_QuoteTab> createState() => _QuoteTabState();
+}
+
+class _QuoteTabState extends State<_QuoteTab> {
+  double _grams = 50, _hours = 2;
+  String? _file;
+
+  double _n(String k, double d) => settings.number('quote.$k', d);
+
+  Future<void> _pickFile() async {
+    final files = await widget.client.listFiles().catchError((_) => <GcodeFile>[]);
+    if (!mounted || files.isEmpty) return;
+    final f = await showModalBottomSheet<GcodeFile>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: ListView(children: [
+          for (final f in files..sort((a, b) => b.modified.compareTo(a.modified)))
+            ListTile(title: Text(f.name), onTap: () => Navigator.pop(ctx, f)),
+        ]),
+      ),
+    );
+    if (f == null) return;
+    final m = await widget.client.metadata(f.path).catchError((_) => <String, dynamic>{});
+    if (!mounted) return;
+    setState(() {
+      _file = f.name;
+      _hours = ((m['estimated_time'] as num?) ?? _hours * 3600) / 3600;
+      _grams = (m['filament_weight_total'] as num?)?.toDouble() ??
+          (m['filament_total'] is num ? gramsFromMm((m['filament_total'] as num).toDouble()) : _grams);
+    });
+  }
+
+  Widget _field(String label, double value, ValueChanged<double> set, {String suffix = ''}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: TextFormField(
+          key: ValueKey('$label $value'),
+          initialValue: value.toStringAsFixed(value == value.roundToDouble() ? 0 : 2),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(labelText: label, suffixText: suffix, isDense: true),
+          onFieldSubmitted: (v) => setState(() => set(double.tryParse(v.replaceAll(',', '.')) ?? value)),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final cur = settings.text('currency', r'$');
+    final q = quote(
+      grams: _grams,
+      hours: _hours,
+      pricePerKg: settings.number('filamentPrice', 20),
+      watts: settings.number('printerWatts', 350),
+      pricePerKwh: settings.number('kwhPrice', 0.30),
+      wearPerHour: _n('wear', 0.2),
+      labour: _n('labour', 0),
+      markupPct: _n('markup', 30),
+    );
+    String m(double v) => '$cur${v.toStringAsFixed(2)}';
+    final text = '${_file ?? 'Print'}: ${_grams.round()} g, ${fmtDuration(_hours * 3600)}. Price ${m(q.$5)}.';
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      Panel(
+        title: 'The print',
+        icon: Icons.description_outlined,
+        trailing: TextButton(onPressed: _pickFile, child: const Text('From a file')),
+        child: Column(children: [
+          if (_file != null) Align(alignment: Alignment.centerLeft, child: Text(_file!, style: T.small.copyWith(color: C.muted))),
+          _field('Filament', _grams, (v) => _grams = v, suffix: 'g'),
+          _field('Print time', _hours, (v) => _hours = v, suffix: 'h'),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      Panel(
+        title: 'Your rates',
+        icon: Icons.tune_rounded,
+        child: Column(children: [
+          _field('Machine wear per hour', _n('wear', 0.2), (v) => settings.setNumber('quote.wear', v), suffix: cur),
+          _field('Your time (design, post-processing)', _n('labour', 0), (v) => settings.setNumber('quote.labour', v), suffix: cur),
+          _field('Markup', _n('markup', 30), (v) => settings.setNumber('quote.markup', v), suffix: '%'),
+          Hint('Filament price, power and electricity price come from Settings → Cost estimate.'),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      Panel(
+        title: 'Price',
+        icon: Icons.sell_outlined,
+        trailing: TextButton(
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: text));
+            toast(context, 'Quote copied');
+          },
+          child: const Text('Copy'),
+        ),
+        child: Column(children: [
+          for (final (l, v) in [('Filament', q.$1), ('Power', q.$2), ('Machine wear', q.$3), ('Your time', q.$4)])
+            Row(children: [Expanded(child: Text(l)), Text(m(v), style: T.value.copyWith(fontSize: 14))]),
+          const Divider(height: 20),
+          Row(children: [
+            Expanded(child: Text('With ${_n('markup', 30).round()}% markup', style: const TextStyle(fontWeight: FontWeight.w700))),
+            Text(m(q.$5), style: T.hero),
+          ]),
+        ]),
+      ),
+    ]);
+  }
 }

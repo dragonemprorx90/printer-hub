@@ -153,6 +153,14 @@ void main() {
     expect(daysUntil(5, 0), isNull);
   });
 
+  test('quote', () {
+    final q = quote(grams: 100, hours: 2, pricePerKg: 20, watts: 500, pricePerKwh: 0.5, wearPerHour: 0.25, labour: 3, markupPct: 50);
+    expect(q.$1, 2);
+    expect(q.$2, 0.5);
+    expect(q.$3, 0.5);
+    expect(q.$5, 9);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

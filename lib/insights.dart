@@ -208,6 +208,24 @@ List<(String, int)> reasonBreakdown(Map<String, String> tags) {
 /// History key for a job, for notes and tags kept on the device.
 String jobKey(PrintJob j) => '${j.filename}@${j.start.millisecondsSinceEpoch ~/ 1000}';
 
+/// A price for a print: (filament, power, machine wear, labour, total with markup).
+(double, double, double, double, double) quote({
+  required double grams,
+  required double hours,
+  required double pricePerKg,
+  required double watts,
+  required double pricePerKwh,
+  double wearPerHour = 0,
+  double labour = 0,
+  double markupPct = 0,
+}) {
+  final fil = grams / 1000 * pricePerKg;
+  final power = hours * watts / 1000 * pricePerKwh;
+  final wear = hours * wearPerHour;
+  final cost = fil + power + wear + labour;
+  return (fil, power, wear, labour, cost * (1 + markupPct / 100));
+}
+
 // ---------------------------------------------------------------- queue
 
 /// When each queued job will finish, one after another, starting [from]
