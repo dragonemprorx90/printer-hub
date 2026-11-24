@@ -70,7 +70,10 @@ class _WallPageState extends State<WallPage> {
   List<Printer> get _order {
     final list = [
       for (final p in widget.printers)
-        if (!_busyOnly || const {'printing', 'paused', 'error'}.contains(clientFor(p).status.state)) p,
+        if ((!_busyOnly || const {'printing', 'paused', 'error'}.contains(clientFor(p).status.state)) &&
+            // "Hide offline printers" on the printer list applies here too.
+            (!settings.flag('hideOffline', false) || clientFor(p).status.online))
+          p,
     ];
     if (_sorted) {
       // List.sort isn't stable; keep the saved order within a rank.
