@@ -297,7 +297,10 @@ class _OverviewTabState extends State<OverviewTab> {
   Widget build(BuildContext context) {
     // Built outside the status stream so the video never restarts.
     final camera = Stack(children: [
-      PrinterCamera(key: _cam, client: c, cameraUrl: widget.printer.cameraUrl),
+      GestureDetector(
+        onDoubleTap: _fullscreen, // double-tap the picture for fullscreen
+        child: PrinterCamera(key: _cam, client: c, cameraUrl: widget.printer.cameraUrl),
+      ),
       Positioned.fill(
         child: StreamBuilder<PrinterStatus>(
           stream: c.stream,

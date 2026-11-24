@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'camera.dart';
 import 'moonraker.dart';
+import 'printer_page.dart';
 import 'settings.dart';
 import 'ui.dart';
 
@@ -150,7 +151,9 @@ class _WallTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final client = clientFor(printer);
-    return Panel(
+    return GestureDetector(
+      onDoubleTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterPage(printer: printer))),
+      child: Panel(
       padding: const EdgeInsets.all(8),
       child: Column(children: [
         PrinterCamera(client: client, cameraUrl: printer.cameraUrl),
@@ -203,6 +206,6 @@ class _WallTile extends StatelessWidget {
           },
         ),
       ]),
-    );
+    ));
   }
 }

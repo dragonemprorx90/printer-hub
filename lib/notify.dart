@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -145,6 +146,11 @@ void watchPrinter(Printer p, MoonrakerClient c) {
       }
     }
     if (last != null && state != last) {
+      // VoiceOver / TalkBack users hear state changes while the app is open.
+      if (const {'complete', 'error', 'paused', 'printing', 'cancelled'}.contains(state)) {
+        // ignore: deprecated_member_use
+        SemanticsService.announce('${p.name}: ${state == 'complete' ? 'print finished' : state}', TextDirection.ltr);
+      }
       if ((state == 'complete' || state == 'error' || state == 'paused') &&
           settings.flag('feedback')) {
         HapticFeedback.heavyImpact();
