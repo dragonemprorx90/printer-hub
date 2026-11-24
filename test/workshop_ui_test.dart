@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:convert';
+
+import 'package:printer_hub/main.dart';
 import 'package:printer_hub/moonraker.dart';
 import 'package:printer_hub/settings.dart';
 import 'package:printer_hub/workshop_page.dart';
@@ -54,5 +57,30 @@ void main() {
     }
     // The calculators work out answers from the defaults.
     expect(find.byWidgetPredicate((w) => w is SelectableText && w.data == '7.500'), findsOneWidget);
+  });
+
+  // The printer list with one (unreachable) printer: summary, Needs you, quick sheet.
+  testWidgets('Printer list renders, with Needs you and the quick sheet', (t) async {
+    SharedPreferences.setMockInitialValues({
+      'printers': [jsonEncode(const Printer(name: 'K2 Plus', host: '127.0.0.1', port: 1).toJson())],
+      'seenVersion': '99.0.0',
+      'updateAuto': false,
+    });
+    await settings.load();
+    t.view.physicalSize = const Size(390 * 3, 844 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(const MaterialApp(home: PrinterListPage()));
+    await t.pump(const Duration(seconds: 1));
+    expect(find.text('K2 Plus'), findsWidgets);
+    await t.tap(find.byIcon(Icons.notifications_none_rounded));
+    await t.pump(const Duration(milliseconds: 600));
+    expect(find.text('Needs you'), findsOneWidget);
+    expect(find.textContaining('offline'), findsWidgets);
+    expect(t.takeException(), isNull);
+    // Close the page and the client so no reconnect timer is left behind.
+    await t.pumpWidget(const SizedBox());
+    dropClient(const Printer(name: 'K2 Plus', host: '127.0.0.1', port: 1));
+    await t.pump(const Duration(minutes: 2));
   });
 }
