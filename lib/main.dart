@@ -776,11 +776,18 @@ class _PrinterCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     active
-                        ? '${(s.progress * 100).toStringAsFixed(0)}% · ${s.filename ?? ''}'
+                        ? '${(s.progress * 100).toStringAsFixed(0)}%'
+                            '${s.currentLayer != null && (s.totalLayers ?? 0) > 0 ? ' · layer ${s.currentLayer}/${s.totalLayers}' : ''}'
+                            ' · ${s.filename ?? ''}'
                         : '${printer.host}:${printer.port}',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: C.muted, fontSize: 13),
                   ),
+                  if (s.state == 'paused' && (s.message ?? '').isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(s.message!, maxLines: 2, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.ink(C.warn))),
+                    ),
                   if (settings.text('pinNote.${printer.key}') case final pin when pin.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),

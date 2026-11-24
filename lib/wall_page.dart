@@ -226,6 +226,12 @@ class _WallTile extends StatelessWidget {
                     ),
                 ]),
                 if (active) ...[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text((s.filename ?? '').split('/').last,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.muted)),
+                  ),
                   const SizedBox(height: 6),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(99),
