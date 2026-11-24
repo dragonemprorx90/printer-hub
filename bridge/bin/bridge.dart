@@ -313,6 +313,7 @@ class Alerts {
   double? get bedTemp => _bedTemp;
   double? get chamber => (_chamber['temperature'] as num?)?.toDouble();
   bool _waitBedCool = false; // after a finished print, until the bed is cool
+  int _queued = 0; // jobs in Moonraker's queue at the last print start
   final double bedCool; // °C; "take the print off" below this, 0 = off
   final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
   String? get state => _state;
@@ -608,6 +609,12 @@ class Alerts {
       switch (state) {
         case 'complete':
           _waitBedCool = true;
+          if (_queued > 0) {
+            unawaited(_queueSize().then((n) async {
+              if (n == 0) await send('$_title: queue finished', 'Every job in the queue has printed.', tags: ['tada'], priority: 3);
+              _queued = n;
+            }));
+          }
           await send('$_title: print finished', finishedText(file, _stats),
               tags: ['white_check_mark'], priority: 4, jpeg: await _keep('end'));
           unawaited(_checkSpools());
@@ -632,6 +639,7 @@ class Alerts {
           _layerSince = null;
           _started = DateTime.now();
           counters['prints_started'] = counters['prints_started']! + 1;
+          unawaited(_queueSize().then((n) => _queued = n));
           _failure.reset();
           await send('$_title: print started', await _startedText(file), tags: ['printer'], priority: 2);
           if (autoFilter && _hasFilter) unawaited(_filterFor('${_stats['filename'] ?? ''}'));
@@ -788,6 +796,15 @@ extension on Alerts {
             mins % int.parse('${r['at']}') == 0);
       }
       await Future.delayed(Duration(seconds: 60 - DateTime.now().second));
+    }
+  }
+
+  Future<int> _queueSize() async {
+    try {
+      final r = await _client.get(Uri.parse('http://$host:$port/server/job_queue/status'));
+      return ((jsonDecode(r.body)['result']?['queued_jobs'] as List?) ?? const []).length;
+    } catch (_) {
+      return 0; // no job queue on this printer
     }
   }
 
