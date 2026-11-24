@@ -231,6 +231,15 @@ class _WorkshopPageState extends State<WorkshopPage> {
         ]),
       ),
       Panel(
+        title: 'First layers',
+        icon: Icons.photo_library_outlined,
+        trailing: TextButton(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _FirstLayers(client: widget.client, jobs: jobs))),
+          child: const Text('Compare'),
+        ),
+        child: Hint('Your home bridge saves a picture after the first layer. Compare the last prints side by side.'),
+      ),
+      Panel(
         title: 'Why prints failed',
         icon: Icons.report_outlined,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1193,4 +1202,65 @@ class _CalcTabState extends State<_CalcTab> {
       for (final (i, p) in panels.indexed) ...[if (i > 0) const SizedBox(height: 12), p],
     ]);
   }
+}
+
+/// First-layer pictures of recent prints, side by side.
+class _FirstLayers extends StatefulWidget {
+  final MoonrakerClient client;
+  final List<PrintJob> jobs;
+  const _FirstLayers({required this.client, required this.jobs});
+  @override
+  State<_FirstLayers> createState() => _FirstLayersState();
+}
+
+class _FirstLayersState extends State<_FirstLayers> {
+  late final Future<List<(PrintJob, String)>> _pics = () async {
+    final files = await widget.client.snapshotFiles().catchError((_) => <String>[]);
+    return [
+      for (final j in widget.jobs.take(60))
+        if (snapshotsFor(j, files).where((f) => f.endsWith('__first.jpg')).firstOrNull case final f?) (j, f),
+    ].take(24).toList();
+  }();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('First layers')),
+        body: FutureBuilder<List<(PrintJob, String)>>(
+          future: _pics,
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            if (snap.data!.isEmpty) {
+              return const StateView.empty(Icons.photo_library_outlined,
+                  'No first-layer pictures yet. They come from your home bridge with a camera.');
+            }
+            return GridView.extent(
+              padding: const EdgeInsets.all(16),
+              maxCrossAxisExtent: 320,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 4 / 3.6,
+              children: [
+                for (final (j, f) in snap.data!)
+                  Tile(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Expanded(
+                        child: FutureBuilder<Uint8List>(
+                          future: widget.client.snapshotBytes(f),
+                          builder: (_, s) => s.data == null
+                              ? Container(color: C.surfaceHi)
+                              : InteractiveViewer(child: Image.memory(s.data!, fit: BoxFit.cover)),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text('${jobOk(j) ? '✓' : '✕'} ${j.filename.split('/').last} · ${fmtDate(j.start)}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption),
+                      ),
+                    ]),
+                  ),
+              ],
+            );
+          },
+        ),
+      );
 }
