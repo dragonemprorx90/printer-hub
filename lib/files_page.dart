@@ -637,7 +637,7 @@ class _FilesTabState extends State<FilesTab> {
 
     final st = c.status;
     final busy = st.state == 'printing' || st.state == 'paused';
-    final finish = queueFinishTimes([for (final j in _queue) _est[j.filename]],
+    final finish = queueFinishTimes([for (final j in _queue) _est[j.filename] == null ? null : _est[j.filename]! * st.etaFactor],
         from: DateTime.now(), currentLeft: busy ? (st.eta ?? 0) : 0);
     final total = _queue.fold(0.0, (a, j) => a + (_est[j.filename] ?? 0));
     final queue = _queue.isEmpty
@@ -1301,7 +1301,7 @@ class _FileSheetState extends State<_FileSheet> {
                 if ((m['estimated_time'] as num? ?? 0) > 0)
                   StatTile(
                       label: 'Done if started now',
-                      value: fmtTime(DateTime.now().add(Duration(seconds: (m['estimated_time'] as num).round())))),
+                      value: fmtTime(DateTime.now().add(Duration(seconds: ((m['estimated_time'] as num) * c.status.etaFactor).round())))),
                 StatTile(label: 'Filament', value: fmtFilament((m['filament_total'] as num?) ?? 0)),
                 StatTile(
                     label: 'Weight',
