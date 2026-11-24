@@ -62,6 +62,15 @@ void main() {
     await server.close();
   });
 
+  test('history CSV', () {
+    final csv = historyCsv([
+      {'filename': 'a,b.gcode', 'status': 'completed', 'start_time': 0, 'print_duration': 61.4, 'filament_used': 1000.2},
+    ]);
+    expect(csv.split('\n').first, 'file,status,started,duration_s,filament_mm');
+    expect(csv.split('\n')[1], startsWith('"a,b.gcode",completed,'));
+    expect(csv, endsWith(',61,1000'));
+  });
+
   test('alert text and links', () {
     expect(openLink('K2 Plus'), 'printerhub://printer/K2%20Plus');
     expect(finishedText('a.gcode', {'print_duration': 4320, 'filament_used': 14200}), 'a.gcode · 1h 12m · 14.2 m of filament');

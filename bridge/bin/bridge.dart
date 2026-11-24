@@ -168,7 +168,7 @@ Future<void> main(List<String> argv) async {
   }
 
   final statusPort = int.tryParse(env['STATUS_PORT'] ?? '');
-  if (statusPort != null) unawaited(serveStatus(statusPort, printer, port, alerts));
+  if (statusPort != null) unawaited(serveStatus(statusPort, printer, port, alerts, camera: camera));
 
   log('Printer Hub bridge $kBridgeVersion: printer $printer:$port through ${pair.relay}');
   if (camera != null) log('Camera from away: $cameraUrl');
@@ -1369,7 +1369,26 @@ String metricsText(Map<String, num> values) => [
 /// A small read-only status page on the home network (STATUS_PORT):
 /// `/` (HTML), `/status.json` and `/metrics` (Prometheus). It never
 /// controls the printer.
-Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts) async {
+/// Moonraker history jobs as CSV (newest first).
+String historyCsv(List jobs) {
+  String cell(Object? v) {
+    final s = '${v ?? ''}';
+    return s.contains(RegExp('[",\n]')) ? '"${s.replaceAll('"', '""')}"' : s;
+  }
+  return [
+    'file,status,started,duration_s,filament_mm',
+    for (final j in jobs)
+      [
+        j['filename'],
+        j['status'],
+        DateTime.fromMillisecondsSinceEpoch((((j['start_time'] as num?) ?? 0) * 1000).round()).toIso8601String(),
+        ((j['print_duration'] as num?) ?? 0).round(),
+        ((j['filament_used'] as num?) ?? 0).round(),
+      ].map(cell).join(','),
+  ].join('\n');
+}
+
+Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts, {CameraFeed? camera}) async {
   final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
   log('Status page on port $port (/, /status.json, /metrics)');
   await for (final req in server) {
@@ -1392,6 +1411,35 @@ Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts
     } else if (req.uri.path == '/status.json') {
       res.headers.contentType = ContentType.json;
       res.write(jsonEncode(st));
+    } else if (req.uri.path == '/history.csv') {
+      try {
+        final r = await http.get(Uri.parse('http://$printer:$moonraker/server/history/list?limit=1000&order=desc'));
+        final jobs = (jsonDecode(r.body)['result']?['jobs'] as List?) ?? const [];
+        res.headers
+          ..contentType = ContentType('text', 'csv', charset: 'utf-8')
+          ..set('content-disposition', 'attachment; filename="print-history.csv"');
+        res.write(historyCsv(jobs));
+      } catch (e) {
+        res.statusCode = HttpStatus.badGateway;
+        res.write('Printer not reachable: $e');
+      }
+    } else if (req.uri.path == '/snapshot.jpg') {
+      // A still for Home Assistant's generic camera (or a browser).
+      if (camera == null) {
+        res.statusCode = HttpStatus.notFound;
+        res.write('No CAMERA_URL set');
+      } else {
+        try {
+          final jpeg = await camera.frame(quiet: true);
+          res.headers
+            ..contentType = ContentType('image', 'jpeg')
+            ..set('cache-control', 'no-store');
+          res.add(jpeg);
+        } catch (e) {
+          res.statusCode = HttpStatus.badGateway;
+          res.write('Camera not reachable: $e');
+        }
+      }
     } else if (req.uri.path == '/log') {
       res.headers.contentType = ContentType('text', 'plain', charset: 'utf-8');
       res.write(recentLog.join('\n'));

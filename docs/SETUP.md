@@ -134,7 +134,7 @@ More options for `.env` (all optional):
 | `ALERT_WEBHOOK` | off | A URL that gets every alert as JSON (`printer`, `title`, `message`, `priority`; `content` too, so a Discord webhook shows it) |
 | `MQTT_URL` | off | `mqtt://user:password@homeassistant.local:1883`: state, progress, time left, temperatures and file go to `printerhub/<printer>/state`, and Home Assistant finds them by itself (MQTT discovery) |
 | `BED_COOL_C` | `35` | After a print, "bed has cooled" once the bed drops below this (`0` = off) |
-| `STATUS_PORT` | off | A port like `7127`: a read-only status page on your home network at `http://<nas>:7127/`, plus `/status.json`, `/metrics` (Prometheus) and `/log` |
+| `STATUS_PORT` | off | A port like `7127`: a read-only status page on your home network at `http://<nas>:7127/`, plus `/status.json`, `/metrics` (Prometheus), `/log`, `/history.csv` and `/snapshot.jpg` (a camera still for Home Assistant's generic camera) |
 
 The bridge also alerts on filament run-out (Klipper filament sensors) and when a heated chamber reaches its temperature. **Snooze** a printer's bridge alerts from the app (Tools → Rules → the bell). Failures and faults still come through.
 
