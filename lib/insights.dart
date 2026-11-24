@@ -501,6 +501,13 @@ const preheatPresets = [
   ('TPU', 225, 50, 0),
 ];
 
+/// The CFS can't feed flexible filament: TPU / TPE need the external spool holder.
+String? cfsWarning(String? material, {required bool hasCfs}) {
+  final m = (material ?? '').toUpperCase();
+  if (!hasCfs || !(m.contains('TPU') || m.contains('TPE') || m.contains('FLEX'))) return null;
+  return '$m is too soft for the CFS. Load it from the external spool holder.';
+}
+
 /// Drying presets: (material, °C, hours).
 const dryPresets = [
   ('PLA', 50, 4),

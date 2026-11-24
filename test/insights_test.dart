@@ -234,6 +234,12 @@ void main() {
     expect(fleetSummary([]), '');
   });
 
+  test('CFS and flexible filament', () {
+    expect(cfsWarning('TPU 95A', hasCfs: true), contains('external spool'));
+    expect(cfsWarning('TPU', hasCfs: false), isNull);
+    expect(cfsWarning('PLA', hasCfs: true), isNull);
+  });
+
   test('files', () {
     final f = [
       GcodeFile('a/x.gcode', 10, DateTime(2026, 1, 1)),
