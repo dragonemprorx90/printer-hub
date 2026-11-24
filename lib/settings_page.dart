@@ -134,6 +134,7 @@ class _SettingsPageState extends State<SettingsPage> {
         fileName: 'printer-hub-backup-${fmtDate(DateTime.now())}.json',
         bytes: utf8.encode(const JsonEncoder.withIndent('  ').convert(settings.exportAll())),
       );
+      if (saved != null) settings.setNumber('lastBackup', DateTime.now().millisecondsSinceEpoch.toDouble());
       if (saved != null && mounted) toast(context, 'Backup saved');
     } catch (e) {
       if (mounted) toast(context, 'Could not save: $e', error: true);
@@ -515,6 +516,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: const Icon(Icons.save_alt_rounded),
                   label: const Text('Back up settings'),
                 ),
+                if (settings.number('lastBackup', 0) > 0)
+                  Text('Last backup ${fmtAgo(DateTime.fromMillisecondsSinceEpoch(settings.number('lastBackup', 0).toInt()))}',
+                      style: T.caption.copyWith(color: C.muted)),
                 OutlinedButton.icon(
                   onPressed: _restore,
                   icon: const Icon(Icons.settings_backup_restore_rounded),

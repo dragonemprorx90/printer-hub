@@ -107,6 +107,7 @@ Future<void> autoCheckForUpdate(BuildContext context) async {
   try {
     final u = await checkForUpdate();
     if (u == null || !context.mounted) return;
+    if (settings.text('skipVersion') == u.version) return; // "Skip this version"; Check for updates still shows it
     if (Platform.isMacOS && u.downloadUrl != null) {
       try {
         await installMacUpdate(u.downloadUrl!);
@@ -301,6 +302,12 @@ Future<void> showUpdate(BuildContext context, UpdateInfo u) => showDialog(
           ),
         ),
         actions: [
+          TextButton(
+              onPressed: () {
+                settings.setText('skipVersion', u.version);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Skip this version')),
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Later')),
           FilledButton.icon(
