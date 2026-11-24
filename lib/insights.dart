@@ -54,6 +54,34 @@ Records records(List<PrintJob> jobs) {
   return Records(longest, heaviest, best, run, days);
 }
 
+/// Print hours started on each weekday, Monday first.
+List<double> hoursByWeekday(Iterable<PrintJob> jobs) {
+  final out = List<double>.filled(7, 0);
+  for (final j in jobs) {
+    out[j.start.weekday - 1] += j.duration / 3600;
+  }
+  return out;
+}
+
+/// Prints started in each hour of the day (0–23).
+List<int> startsByHour(Iterable<PrintJob> jobs) {
+  final out = List<int>.filled(24, 0);
+  for (final j in jobs) {
+    out[j.start.hour]++;
+  }
+  return out;
+}
+
+/// Files printed most, (name, times), most first.
+List<(String, int)> mostPrinted(Iterable<PrintJob> jobs, {int top = 10}) {
+  final m = <String, int>{};
+  for (final j in jobs) {
+    final n = j.filename.split('/').last;
+    m[n] = (m[n] ?? 0) + 1;
+  }
+  return ([for (final e in m.entries) (e.key, e.value)]..sort((a, b) => b.$2.compareTo(a.$2))).take(top).toList();
+}
+
 String dayKey(DateTime t) => '${t.year}-${t.month}-${t.day}';
 
 /// Prints per day for the last [days] days, oldest first (calendar heat-map).

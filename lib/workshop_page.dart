@@ -141,6 +141,25 @@ class _WorkshopPageState extends State<WorkshopPage> {
         child: _Heatmap(days),
       ),
       Panel(
+        title: 'When you print',
+        icon: Icons.schedule_rounded,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _Bars(labels: const ['M', 'T', 'W', 'T', 'F', 'S', 'S'], values: hoursByWeekday(jobs), unit: 'h'),
+          const SizedBox(height: 12),
+          Text('Starts by hour of day', style: T.caption.copyWith(color: C.muted)),
+          const SizedBox(height: 4),
+          _Bars(
+              labels: [for (var h = 0; h < 24; h++) h % 6 == 0 ? '$h' : ''],
+              values: [for (final n in startsByHour(jobs)) n.toDouble()],
+              unit: ''),
+        ]),
+      ),
+      Panel(
+        title: 'Printed most',
+        icon: Icons.repeat_rounded,
+        child: Column(children: [for (final (n, c) in mostPrinted(jobs)) _row(n, '$c×')]),
+      ),
+      Panel(
         title: 'Success by material',
         icon: Icons.category_outlined,
         child: Column(children: [
@@ -664,4 +683,97 @@ Future<bool> preflight(BuildContext context) async {
     ),
   );
   return ok == true;
+}
+
+/// Simple labelled bars (no axes), tallest = full height.
+class _Bars extends StatelessWidget {
+  final List<String> labels;
+  final List<double> values;
+  final String unit;
+  const _Bars({required this.labels, required this.values, required this.unit});
+  @override
+  Widget build(BuildContext context) {
+    final most = values.fold(0.0, (a, b) => b > a ? b : a);
+    return Semantics(
+      label: [for (var i = 0; i < values.length; i++) if (labels[i].isNotEmpty) '${labels[i]} ${values[i].round()}$unit'].join(', '),
+      child: SizedBox(
+        height: 72,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          for (var i = 0; i < values.length; i++)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  Container(
+                    height: most == 0 ? 2 : 2 + 52 * values[i] / most,
+                    decoration: BoxDecoration(color: C.accent.withValues(alpha: 0.8), borderRadius: BorderRadius.circular(3)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(labels[i], style: T.caption.copyWith(color: C.muted)),
+                ]),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Every printer's history side by side, and all of them together.
+class FleetPage extends StatefulWidget {
+  final List<Printer> printers;
+  const FleetPage({super.key, required this.printers});
+  @override
+  State<FleetPage> createState() => _FleetPageState();
+}
+
+class _FleetPageState extends State<FleetPage> {
+  late final Future<List<(Printer, List<PrintJob>?)>> _data = Future.wait([
+    for (final p in widget.printers)
+      clientFor(p).allHistory().then<(Printer, List<PrintJob>?)>((j) => (p, j)).catchError((_) => (p, null)),
+  ]);
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('All printers')),
+        body: FutureBuilder<List<(Printer, List<PrintJob>?)>>(
+          future: _data,
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            final rows = snap.data!;
+            final all = [for (final (_, j) in rows) ...?j];
+            String h(List<PrintJob> j) => (j.fold(0.0, (a, x) => a + x.duration) / 3600).toStringAsFixed(0);
+            String kg(List<PrintJob> j) => (j.fold(0.0, (a, x) => a + gramsFromMm(x.filament)) / 1000).toStringAsFixed(2);
+            return ListView(padding: const EdgeInsets.all(16), children: [
+              Panel(
+                title: 'Together',
+                icon: Icons.groups_2_outlined,
+                child: Wrap(spacing: 24, runSpacing: 12, children: [
+                  StatTile(label: 'Prints', value: '${all.length}'),
+                  StatTile(label: 'Print hours', value: h(all)),
+                  StatTile(label: 'Filament', value: '${kg(all)} kg'),
+                  StatTile(label: 'Success', value: '${(successRate(all) * 100).round()}%'),
+                ]),
+              ),
+              const SizedBox(height: 12),
+              for (final (p, j) in rows) ...[
+                Panel(
+                  title: p.name,
+                  icon: Icons.print_rounded,
+                  child: j == null
+                      ? Text('Not reachable right now.', style: TextStyle(color: C.muted))
+                      : Wrap(spacing: 24, runSpacing: 12, children: [
+                          StatTile(label: 'Prints', value: '${j.length}'),
+                          StatTile(label: 'Print hours', value: h(j)),
+                          StatTile(label: 'Filament', value: '${kg(j)} kg'),
+                          StatTile(label: 'Success', value: '${(successRate(j) * 100).round()}%'),
+                          StatTile(label: 'Share of hours', value: all.isEmpty ? '—' : '${(double.parse(h(j)) * 100 / (double.parse(h(all)) == 0 ? 1 : double.parse(h(all)))).round()}%'),
+                        ]),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ]);
+          },
+        ),
+      );
 }

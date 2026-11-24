@@ -100,6 +100,14 @@ void main() {
     expect(statusShare('K2', 'a/b.gcode', 0.42, 3600, now: DateTime(2026, 1, 1, 10)), 'K2: b.gcode is 42% done, done about 11:00.');
   });
 
+  test('weekday, hour and most printed', () {
+    final w = hoursByWeekday(jobs); // Nov 1 2026 is a Sunday
+    expect(w[6], 2);
+    expect(w.reduce((a, b) => a + b), 13);
+    expect(startsByHour(jobs)[10], 6);
+    expect(mostPrinted(jobs).first, ('f4.gcode', 2));
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

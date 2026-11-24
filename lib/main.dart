@@ -381,6 +381,12 @@ class _PrinterListPageState extends State<PrinterListPage> {
               tooltip: 'Find printers on this network',
               icon: const Icon(Icons.radar_rounded),
               onPressed: _scan),
+          if (_printers.length > 1)
+            IconButton(
+              tooltip: 'All printers: stats',
+              icon: const Icon(Icons.insights_rounded),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FleetPage(printers: _printers))),
+            ),
           if (_printers.isNotEmpty)
             IconButton(
               tooltip: 'Wall view',
