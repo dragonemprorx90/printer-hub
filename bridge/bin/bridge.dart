@@ -619,6 +619,9 @@ class Alerts {
         'nozzle': _nozzle?.round(),
         'bed': _bedTemp?.round(),
         'file': file,
+        'layer': (_stats['info'] as Map?)?['current_layer'],
+        'chamber': chamber?.round(),
+        'filament_m': (((_stats['filament_used'] as num?) ?? 0) / 1000).toStringAsFixed(2),
       }));
     }
     final note = '${_stats['message'] ?? ''}'.trim();
@@ -1266,6 +1269,9 @@ class MqttStatus {
       ('nozzle', 'Nozzle', '°C', 'temperature'),
       ('bed', 'Bed', '°C', 'temperature'),
       ('file', 'File', null, null),
+      ('layer', 'Layer', null, null),
+      ('chamber', 'Chamber', '°C', 'temperature'),
+      ('filament_m', 'Filament used', 'm', 'distance'),
     ]) {
       s.add(mqttPublish(
           'homeassistant/sensor/printerhub_${slug}_$key/config',
@@ -1280,6 +1286,18 @@ class MqttStatus {
           }),
           retain: true));
     }
+    // On while a print runs (or is paused), for automations.
+    s.add(mqttPublish(
+        'homeassistant/binary_sensor/printerhub_${slug}_printing/config',
+        jsonEncode({
+          'name': 'Printing',
+          'unique_id': 'printerhub_${slug}_printing',
+          'state_topic': '$base/state',
+          'value_template': "{{ 'ON' if value_json.state in ['printing', 'paused'] else 'OFF' }}",
+          'device_class': 'running',
+          'device': device,
+        }),
+        retain: true));
     _announced = true;
   }
 
