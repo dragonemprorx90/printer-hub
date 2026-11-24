@@ -693,6 +693,14 @@ class _JobPanel extends StatelessWidget {
                 if (active && ((s.speedFactor - 1).abs() > 0.01 || (s.flowFactor - 1).abs() > 0.01))
                   StatTile(label: 'Speed / flow', value: '${(s.speedFactor * 100).round()}% / ${(s.flowFactor * 100).round()}%'),
               ]),
+              if (active && (s.etaFactor - 1).abs() > 0.03 && (s.jobMeta['estimated_time'] as num? ?? 0) > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                      'Time left allows for this printer usually running ${((s.etaFactor - 1).abs() * 100).round()}% '
+                      '${s.etaFactor < 1 ? 'faster' : 'slower'} than the slicer says.',
+                      style: T.caption.copyWith(color: C.muted)),
+                ),
               if (active && [s.jobMeta['filament_type'], s.jobMeta['layer_height'], s.jobMeta['slicer']].any((x) => x != null))
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
