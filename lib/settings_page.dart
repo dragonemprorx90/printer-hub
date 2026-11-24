@@ -291,6 +291,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('highContrast', 'High contrast', 'Brighter secondary text and borders'),
                   ('fahrenheit', 'Temperatures in °F', 'Display only; the printer still uses °C'),
                   ('twelveHour', '12-hour time', 'Shows 6:42 PM instead of 18:42'),
+                  ('filamentGramsUnit', 'Filament in grams', 'Shows 12.4 g instead of 4.2 m'),
                   ('reduceMotion', 'Reduce motion', 'No sliding and fading, whatever the system setting'),
                   ('bigButtons', 'Larger buttons', 'More room around everything you tap'),
                   ('awakePrinting', 'Keep the screen on during a print', 'While a printing printer is open'),

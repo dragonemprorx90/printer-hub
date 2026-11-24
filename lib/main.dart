@@ -93,9 +93,10 @@ class _PrinterHubAppState extends State<PrinterHubApp> with WidgetsBindingObserv
     final palette = settings.flag('highContrast', false) ? _palette.contrast() : _palette;
     Units.fahrenheit = settings.flag('fahrenheit', false);
     Units.twelveHour = settings.flag('twelveHour', false);
+    Units.grams = settings.flag('filamentGramsUnit', false);
     final accent = accents[settings.accent] ?? accents['Mint']!;
     final look = '${palette.bg.toARGB32()}-${palette.muted.toARGB32()}-${settings.accent}-${Units.fahrenheit}-${Units.twelveHour}'
-        '-${settings.flag('bigButtons', false)}-${settings.flag('boldText', false)}';
+        '-${settings.flag('bigButtons', false)}-${settings.flag('boldText', false)}-${Units.grams}';
     var theme = buildTheme(palette, accent);
     if (settings.flag('bigButtons', false)) {
       // Bigger touch targets everywhere.

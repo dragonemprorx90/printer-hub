@@ -55,7 +55,7 @@ void keepOnTop(bool on) {
 
 /// Display units, set from Settings at the app root.
 class Units {
-  static bool fahrenheit = false, twelveHour = false;
+  static bool fahrenheit = false, twelveHour = false, grams = false;
 
   /// "215°" or "419°" (Fahrenheit when set); [unit] adds the C/F letter.
   static String deg(num c, {bool unit = false}) {
@@ -810,6 +810,8 @@ String fmtTime(DateTime t) {
 
 String fmtFilament(num mm) {
   if (mm <= 0) return '—';
+  // Settings → Appearance → "Filament in grams" (1.75 mm, PLA density).
+  if (Units.grams) return '${(math.pi * 0.875 * 0.875 * mm / 1000 * 1.24).toStringAsFixed(mm > 300000 ? 0 : 1)} g';
   if (mm >= 1000) return '${(mm / 1000).toStringAsFixed(1)} m';
   return '${mm.toStringAsFixed(0)} mm';
 }
