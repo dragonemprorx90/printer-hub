@@ -349,7 +349,10 @@ PAGE = r"""
     if (document.getElementById("sort").checked)
       ps.sort(function (x, y) { function r(p) { return !p.online || p.state === "error" || p.state === "paused" ? 0 : p.state === "printing" ? 1 : 2; } return r(x) - r(y); });
     list.className = document.getElementById("compact").checked ? "compact" : "";
-    list.innerHTML = ps.map(card).join("");
+    var att = last.attention || [];
+    list.innerHTML = (att.length ? '<div class="p is-paused"><div class="name">Needs you (' + att.length + ')</div>' +
+      att.map(function (a) { return '<div class="warn detail">' + esc(a) + '</div>'; }).join("") + '</div>' : '') +
+      ps.map(card).join("");
   }
 
   orca.onMessage(function (m) {
@@ -525,7 +528,12 @@ class PrinterHubPanel(orca.script.ScriptPluginCapabilityBase):
                              "error": "Printer Hub isn't answering. Open the Printer Hub app (Settings → Orca Slicer on)."})
             return
         self._alerts(printers)
-        self.panel.post({"command": "printers", "printers": printers, "orca": orca_context(), "time": time.time()})
+        try:
+            attention = _get("/hub/attention")
+        except Exception:
+            attention = []  # an older Printer Hub app
+        self.panel.post({"command": "printers", "printers": printers, "orca": orca_context(), "time": time.time(),
+                         "attention": attention})
 
     def on_message(self, message):
         if self.panel is None:

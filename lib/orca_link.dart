@@ -371,7 +371,7 @@ class OrcaLink {
             return json(400, {'error': 'unknown action'});
         }
         json(200, {'ok': true});
-      } else if (path.startsWith('/hub/') && req.method == 'GET' && path != '/hub/printers') {
+      } else if (path.startsWith('/hub/') && req.method == 'GET' && path != '/hub/printers' && path != '/hub/attention') {
         final p = printers().where((p) => printerSlug(p.name) == req.uri.queryParameters['printer']).firstOrNull;
         if (p == null) return json(404, {'error': 'no such printer'});
         final c = clientFor(p);
@@ -461,6 +461,17 @@ class OrcaLink {
           default:
             json(404, {'error': 'not found'});
         }
+      } else if (path == '/hub/attention') {
+        json(200, attentionItems([
+          for (final p in printers())
+            (
+              p.name,
+              clientFor(p).status,
+              settings.jsonList('maint.${p.key}'),
+              clientFor(p).lastHistory == null ? null : clientFor(p).lastHistory!.$2.printTime / 3600,
+              settings.jsonList('parts.${p.key}'),
+            ),
+        ], humidityLimit: settings.number('humidityLimit', 45)));
       } else if (path == '/hub/printers') {
         await _ensureProxies();
         json(200, [
