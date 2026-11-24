@@ -64,6 +64,18 @@ class _PrinterPageState extends State<PrinterPage> {
     final body = IndexedStack(index: _tab, children: [
       for (final (i, t) in tabs.indexed) _TabPane(active: i == _tab, child: t),
     ]);
+    // Keyboard: Ctrl+Tab / Ctrl+Shift+Tab switch tabs, Esc goes back.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.tab, control: true): () => _go((_tab + 1) % 5),
+        const SingleActivator(LogicalKeyboardKey.tab, control: true, shift: true): () => _go((_tab + 4) % 5),
+        const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.maybePop(context),
+      },
+      child: Focus(autofocus: true, child: _layout(body)),
+    );
+  }
+
+  Widget _layout(Widget body) {
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= 1000;
       return Scaffold(
