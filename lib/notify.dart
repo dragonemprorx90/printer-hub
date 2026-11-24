@@ -110,7 +110,8 @@ Set<String> milestones({required String state, int? layer, double? eta, required
 void watchPrinter(Printer p, MoonrakerClient c) {
   if (!_watched.add(p.key)) return;
   String? last, milestoneFile;
-  var failureAlerted = '';
+  var failureAlerted = '', driftAlerted = '';
+  DateTime? driftSince;
   var sent = <String>{};
   final humidityAlerted = <String, DateTime>{};
   var remindersChecked = false;
@@ -138,9 +139,9 @@ void watchPrinter(Printer p, MoonrakerClient c) {
     for (final m in milestones(state: state, layer: s.currentLayer, eta: s.eta, sent: sent)) {
       sent.add(m);
       if (m == 'first' && settings.flag('notifyFirstLayer')) {
-        notify('${p.name}: first layer done', 'Have a look before it goes on: $file');
+        _say(p.key, '${p.name}: first layer done', 'Have a look before it goes on: $file');
       } else if (m == 'almost' && settings.flag('notifyAlmost')) {
-        notify('${p.name}: almost done', 'About 10 minutes left on $file');
+        _say(p.key, '${p.name}: almost done', 'About 10 minutes left on $file');
       }
     }
     if (last != null && state != last) {
@@ -150,25 +151,37 @@ void watchPrinter(Printer p, MoonrakerClient c) {
         SystemSound.play(SystemSoundType.alert);
       }
       if (state == 'complete' && settings.flag('notifyDone')) {
-        notify('${p.name}: print finished', file);
+        _say(p.key, '${p.name}: print finished', file);
       } else if (state == 'error' && settings.flag('notifyError')) {
-        notify('${p.name}: print failed', s.message ?? file);
+        _say(p.key, urgent: true, '${p.name}: print failed', s.message ?? file);
       } else if (state == 'cancelled' && settings.flag('notifyError')) {
-        notify('${p.name}: print cancelled', file);
+        _say(p.key, '${p.name}: print cancelled', file);
       } else if (state == 'paused' &&
           last == 'printing' &&
           settings.flag('notifyPause')) {
-        notify('${p.name}: print paused',
+        _say(p.key, '${p.name}: print paused',
             s.message ?? 'Check the printer (filament run-out?)');
       }
     }
     last = state;
 
+    // Hotend far from its target for a minute mid-print: a heater, fan or
+    // thermistor problem worth a look.
+    final off = settings.flag('notifyDrift') && state == 'printing' && s.hotendTarget > 0 && (s.hotend - s.hotendTarget).abs() > 15;
+    if (!off) {
+      driftSince = null;
+    } else if ((driftSince ??= DateTime.now()) case final t
+        when DateTime.now().difference(t).inSeconds >= 60 && driftAlerted != file) {
+      driftAlerted = file;
+      _say(p.key, urgent: true, '${p.name}: nozzle temperature off',
+          'It is ${s.hotend.round()}°C but should be ${s.hotendTarget.round()}°C. Check the printer.');
+    }
+
     final fw = s.failureWatch;
     if (fw?['failing'] == true && failureAlerted != file) {
       failureAlerted = file;
       if (settings.flag('notifyFailure')) {
-        notify('${p.name}: possible print failure', 'Looks like spaghetti. Check the camera: $file');
+        _say(p.key, urgent: true, '${p.name}: possible print failure', 'Looks like spaghetti. Check the camera: $file');
       }
     }
 
@@ -179,7 +192,7 @@ void watchPrinter(Printer p, MoonrakerClient c) {
         if (h == null || h < limit) continue;
         if (prev != null && DateTime.now().difference(prev).inHours < 6) continue;
         humidityAlerted[b.name] = DateTime.now();
-        notify('${p.name} ${b.name}: humidity ${h.toStringAsFixed(0)}%',
+        _say(p.key, '${p.name} ${b.name}: humidity ${h.toStringAsFixed(0)}%',
             'Above your ${limit.toStringAsFixed(0)}% limit. Dry the filament.');
       }
     }
@@ -195,6 +208,18 @@ void watchPrinter(Printer p, MoonrakerClient c) {
     _setBar(_barText.values.join('   '));
   });
 }
+
+/// Local alerts, unless this printer is muted or it's quiet hours
+/// (Settings → Notifications). [urgent] ones still come in quiet hours.
+void _say(String key, String title, String body, {bool urgent = false}) {
+  if (alertsMuted(key)) return;
+  final from = settings.text('quietFrom'), to = settings.text('quietTo');
+  if (!urgent && from.isNotEmpty && to.isNotEmpty && inWindow(DateTime.now(), from: from, to: to)) return;
+  notify(title, body);
+}
+
+/// Muted with "Mute alerts" on the printer page, until a time.
+bool alertsMuted(String key) => snoozed(settings.number('mute.$key', 0).toInt());
 
 /// Once a day per printer: maintenance that's due and spare parts running low.
 Future<void> _dailyReminders(Printer p, MoonrakerClient c) async {

@@ -325,6 +325,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('notifyAlmost', 'Almost done (about 10 minutes left)'),
                   ('notifyHumidity', 'CFS humidity too high'),
                   ('notifyMaintenance', 'Maintenance due and spare parts low (once a day)'),
+                  ('notifyDrift', 'Nozzle temperature far off its target'),
                   ('feedback', 'Vibrate and sound while the app is open'),
                 ])
                   SwitchListTile(
@@ -351,6 +352,30 @@ class _SettingsPageState extends State<SettingsPage> {
                     _refresh();
                   },
                 ),
+                Row(children: [
+                  const Expanded(child: Text('Quiet hours (failures still come)')),
+                  for (final k in const ['quietFrom', 'quietTo'])
+                    TextButton(
+                      onPressed: () async {
+                        final t = await showTimePicker(
+                            context: context, initialTime: TimeOfDay(hour: k == 'quietFrom' ? 22 : 7, minute: 0));
+                        if (t == null) return;
+                        settings.setText(k, '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+                        _refresh();
+                      },
+                      child: Text(settings.text(k).isEmpty ? (k == 'quietFrom' ? 'From…' : 'To…') : settings.text(k)),
+                    ),
+                  if (settings.text('quietFrom').isNotEmpty)
+                    IconButton(
+                      tooltip: 'No quiet hours',
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        settings.setText('quietFrom', '');
+                        settings.setText('quietTo', '');
+                        _refresh();
+                      },
+                    ),
+                ]),
                 Text(
                   'Alerts arrive while Printer Hub is open or in the background. '
                   'The system may ask you to allow notifications the first time. '

@@ -12,6 +12,7 @@ import 'control_page.dart';
 import 'files_page.dart';
 import 'history_page.dart';
 import 'moonraker.dart';
+import 'notify.dart';
 import 'screen_page.dart';
 import 'settings.dart';
 import 'tools_page.dart';
@@ -74,6 +75,34 @@ class _PrinterPageState extends State<PrinterPage> {
                 style: TextStyle(fontSize: 12, color: C.muted)),
           ]),
           actions: [
+            IconButton(
+              tooltip: alertsMuted(widget.printer.key) ? 'Alerts muted (tap to unmute)' : 'Mute this printer\'s alerts',
+              icon: Icon(alertsMuted(widget.printer.key)
+                  ? Icons.notifications_off_rounded
+                  : Icons.notifications_none_rounded),
+              onPressed: () async {
+                final k = 'mute.${widget.printer.key}';
+                if (alertsMuted(widget.printer.key)) {
+                  settings.setNumber(k, 0);
+                  setState(() {});
+                  return toast(context, 'Alerts on');
+                }
+                final pick = await showModalBottomSheet<String>(
+                  context: context,
+                  builder: (ctx) => SafeArea(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const ListTile(title: Text('Mute alerts on this device'),
+                          subtitle: Text('Home bridge alerts: Tools → Rules → snooze.')),
+                      ListTile(title: const Text('For 1 hour'), onTap: () => Navigator.pop(ctx, 'hour')),
+                      ListTile(title: const Text('Until 08:00 tomorrow'), onTap: () => Navigator.pop(ctx, 'tomorrow')),
+                    ]),
+                  ),
+                );
+                if (pick == null || !mounted) return;
+                settings.setNumber(k, snoozeUntil(pick).millisecondsSinceEpoch.toDouble());
+                setState(() {});
+              },
+            ),
             IconButton(
               tooltip: 'Console',
               icon: const Icon(Icons.terminal),
