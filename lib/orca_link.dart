@@ -484,6 +484,7 @@ class OrcaLink {
               'host': p.host,
               'port': p.port,
               ...orcaModel(clientFor(p)),
+              if (_pinNote(p) case final pin? when pin.isNotEmpty) 'note': pin,
               ..._status(clientFor(p)),
             },
         ]);
@@ -494,6 +495,15 @@ class OrcaLink {
       json(500, {'error': '$e'});
     } finally {
       await res.close();
+    }
+  }
+
+  /// The note pinned to a printer (null where settings aren't loaded, as in tests).
+  static String? _pinNote(Printer p) {
+    try {
+      return settings.text('pinNote.${p.key}');
+    } catch (_) {
+      return null;
     }
   }
 

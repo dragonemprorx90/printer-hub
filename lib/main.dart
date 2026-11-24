@@ -746,6 +746,11 @@ class _PrinterCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: C.muted, fontSize: 13),
                   ),
+                  if (settings.text('pinNote.${printer.key}') case final pin when pin.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('📌 $pin', maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.ink(C.warn))),
+                    ),
                   if (s.online) ...[
                     const SizedBox(height: 10),
                     Wrap(spacing: 16, runSpacing: 6, children: [

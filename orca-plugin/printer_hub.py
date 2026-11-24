@@ -292,6 +292,7 @@ PAGE = r"""
       (inOrca ? ' <span class="badge">in Orca</span>' : '') + '</span><span>' +
       (p.away ? '<span class="muted">away' + (p.delayMs ? " " + p.delayMs + " ms" : "") + '</span> ' : '') +
       '<span class="pill">' + (p.online ? esc(p.state) : "offline") + '</span></span></div>';
+    if (p.note) h += '<div class="warn detail">📌 ' + esc(p.note) + '</div>';
     h += '<div class="muted">Nozzle ' + t(p.hotend, p.hotendTarget) + ' · Bed ' + t(p.bed, p.bedTarget) +
       (p.chamber != null ? ' · Chamber ' + t(p.chamber, p.chamberTarget) : '') + '</div>';
     if (p.heater) h += '<div class="' + (p.heater.fault ? "err" : "muted") + ' detail">Heater: ' + (p.heater.fault ? "fault " + esc(p.heater.faultReason || "") : esc(p.heater.mode || "off")) + '</div>';
