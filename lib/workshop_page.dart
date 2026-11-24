@@ -496,9 +496,18 @@ class _WorkshopPageState extends State<WorkshopPage> {
             },
           ),
         ]),
-        child: _log.isEmpty
-            ? Hint('Log what you fix or clean, with the date.')
-            : Column(children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // One tap for the usual jobs.
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final t in const ['Cleaned the nozzle', 'Cleaned the plate', 'Changed the PTFE tube', 'Tensioned the belts',
+                'Lubricated rails / rods', 'Cleaned the fans', 'Tightened screws'])
+              ActionChip(label: Text(t), onPressed: () => _addLog(t)),
+          ]),
+          const SizedBox(height: 8),
+          if (_log.isEmpty)
+            Hint('Log what you fix or clean, with the date.')
+          else
+            Column(children: [
                 for (final (i, e) in _log.reversed.indexed.take(30))
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -517,6 +526,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
                     ),
                   ),
               ]),
+        ]),
       ),
       Panel(
         title: 'Spare parts',
