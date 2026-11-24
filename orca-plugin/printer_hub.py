@@ -252,7 +252,7 @@ PAGE = r"""
     if (!d.jobs.length) return '<div class="sec muted">The queue is empty. Add files in the Printer Hub app (Files → long-press → Queue).</div>';
     var at = p.eta && (p.state === "printing" || p.state === "paused") ? p.eta : 0;
     return '<div class="sec"><div class="muted">Queue ' + esc(d.state) + '</div>' + d.jobs.map(function (j, i) {
-      at += j.estimate || 0;
+      at += (j.estimate || 0) * (d.factor || 1);
       return '<div class="line">' + (i + 1) + '. <span>' + esc(j.file.split("/").pop()) + '</span> <span class="muted">' +
         (j.estimate ? dur(j.estimate) + ', done ' + clock(at) : '') + '</span>' +
         '<button onclick="ph.act(' + q(p.slug) + ',\'dequeue\',{id:' + q(j.id) + '})">Remove</button></div>';

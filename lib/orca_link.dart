@@ -433,6 +433,7 @@ class OrcaLink {
             final (jobs, state) = await c.queue();
             json(200, {
               'state': state,
+              'factor': c.status.etaFactor, // real time ÷ slicer estimate on this printer
               'jobs': [
                 for (final j in jobs)
                   {
