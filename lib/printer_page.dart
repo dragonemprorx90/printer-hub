@@ -960,6 +960,13 @@ class _CfsPanel extends StatelessWidget {
         title: 'Filament system',
         icon: Icons.palette_outlined,
         child: Column(children: [
+          if ([for (final b in boxes) for (final sl in b.slots) if (!sl.empty && sl.remain != null) sl.remain!]
+              case final left when left.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Loaded: ${left.length} spools, ${left.fold(0.0, (a, b) => a + b).round()} left in all',
+                  style: T.caption.copyWith(color: C.muted)),
+            ),
           for (final b in boxes)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),

@@ -220,6 +220,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('highContrast', 'High contrast', 'Brighter secondary text and borders'),
                   ('fahrenheit', 'Temperatures in °F', 'Display only; the printer still uses °C'),
                   ('twelveHour', '12-hour time', 'Shows 6:42 PM instead of 18:42'),
+                  ('reduceMotion', 'Reduce motion', 'No sliding and fading, whatever the system setting'),
                   ('splitView', 'Side by side on wide screens', 'iPad landscape or a wide Mac window: printers on the left, the printer on the right'),
                 ])
                   SwitchListTile(

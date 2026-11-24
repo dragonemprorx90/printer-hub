@@ -316,6 +316,16 @@ String shoppingList(Iterable<Spool> spools, {double limit = 200}) {
   ].join('\n');
 }
 
+/// Days your filament lasts at the last 30 days' pace, or null without use.
+double? daysOfFilament(double gramsOnHand, Iterable<PrintJob> jobs, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final used = jobs
+      .where((j) => n.difference(j.start).inDays < 30)
+      .fold(0.0, (a, j) => a + gramsFromMm(j.filament));
+  if (used <= 0) return null;
+  return gramsOnHand / (used / 30);
+}
+
 /// Price per gram, or null without a price.
 double? pricePerGram(Spool s) => s.pricePerKg == null ? null : s.pricePerKg! / 1000;
 

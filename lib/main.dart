@@ -104,10 +104,14 @@ class _PrinterHubAppState extends State<PrinterHubApp> with WidgetsBindingObserv
       // In-app text size (Settings → Appearance) on top of the system's.
       builder: (context, child) {
         final scale = settings.number('textScale', 1);
-        if (scale == 1) return child!;
+        final still = settings.flag('reduceMotion', false);
+        if (scale == 1 && !still) return child!;
         final mq = MediaQuery.of(context);
         return MediaQuery(
-          data: mq.copyWith(textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale)),
+          data: mq.copyWith(
+            textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale),
+            disableAnimations: still || mq.disableAnimations,
+          ),
           child: child!,
         );
       },

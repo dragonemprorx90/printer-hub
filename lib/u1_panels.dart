@@ -972,6 +972,26 @@ class _RulesPanelState extends State<RulesPanel> {
         done: pick == 'off' ? 'Alerts back on' : 'Alerts snoozed until ${fmtTime(DateTime.fromMillisecondsSinceEpoch(until))}');
   }
 
+  /// Changes only a rule's days / hours.
+  Future<void> _window(List<Map<String, dynamic>> all, int i) async {
+    final win = await showModalBottomSheet<(String, List<int>, String, String)>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Only…')),
+          for (final w in _windows) ListTile(title: Text(w.$1), onTap: () => Navigator.pop(ctx, w)),
+        ]),
+      ),
+    );
+    if (win == null || !mounted) return;
+    final r = {...all[i]}..removeWhere((k, _) => k == 'days' || k == 'from' || k == 'to');
+    if (win.$2.isNotEmpty) r['days'] = win.$2;
+    if (win.$3.isNotEmpty) r.addAll({'from': win.$3, 'to': win.$4});
+    final list = [...all]..[i] = r;
+    await run(context, () => widget.client.setRules(list), done: 'Rule changed');
+    setState(() => _rules = widget.client.rules());
+  }
+
   Future<void> _remove(List<Map<String, dynamic>> all, int i) async {
     final list = [...all]..removeAt(i);
     await run(context, () => widget.client.setRules(list));
@@ -1026,6 +1046,8 @@ class _RulesPanelState extends State<RulesPanel> {
                   contentPadding: EdgeInsets.zero,
                   leading: Switch(value: r['off'] != true, onChanged: (on) => _toggle(rules, i, on)),
                   title: Text(ruleText(r, _triggers)),
+                  subtitle: Text('Long-press to change when it may run', style: T.caption.copyWith(color: C.muted)),
+                  onLongPress: () => _window(rules, i),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                     IconButton(
                       tooltip: 'Test (nothing is sent)',

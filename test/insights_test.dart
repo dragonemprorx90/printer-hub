@@ -117,6 +117,12 @@ void main() {
     expect(lastPrintEnd(jobs), DateTime(2026, 11, 5, 13));
   });
 
+  test('days of filament', () {
+    final use = [job('completed', 10, mm: 10000)]; // ~29.8 g in 30 days
+    expect(daysOfFilament(298, use, now: DateTime(2026, 11, 20))!, closeTo(300, 2));
+    expect(daysOfFilament(100, const [], now: DateTime(2026, 11, 20)), isNull);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

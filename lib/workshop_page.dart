@@ -122,6 +122,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
           StatTile(label: 'Success', value: pct(successRate(jobs))),
           StatTile(label: 'Print days', value: '${r.printDays}'),
           StatTile(label: 'Avg print', value: fmtDuration(hours * 3600 / jobs.length)),
+          StatTile(label: 'Energy', value: '${(hours * settings.number('printerWatts', 350) / 1000).toStringAsFixed(0)} kWh'),
         ]),
       ),
       Panel(
@@ -479,6 +480,11 @@ class _WorkshopPageState extends State<WorkshopPage> {
             Hint('No Spoolman on this printer, so these spools are kept on this device.'),
           if (spools.isEmpty) Text('No spools yet.', style: TextStyle(color: C.muted)),
           for (final (m, g, n) in inventory(spools)) _row('$m · $n spools', '${(g / 1000).toStringAsFixed(2)} kg'),
+          if (daysOfFilament(spools.fold(0.0, (a, s) => a + (s.remaining ?? 0)), _jobs!) case final d?)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Hint('At the last 30 days\' pace this lasts about ${d.round()} days.'),
+            ),
           const Divider(height: 24),
           for (final s in spools)
             ListTile(

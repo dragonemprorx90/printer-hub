@@ -34,7 +34,7 @@ class AppSettings extends ChangeNotifier {
   }
 
   static const lookKeys = [
-    'theme', 'accent', 'highContrast', 'fahrenheit', 'twelveHour', 'textScale', 'splitView', 'openTab',
+    'theme', 'accent', 'highContrast', 'fahrenheit', 'twelveHour', 'textScale', 'splitView', 'openTab', 'reduceMotion',
     'wallSort', 'wallBusyOnly', 'wallCols', 'hideOffline',
   ];
 
