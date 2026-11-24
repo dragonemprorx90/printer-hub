@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -431,7 +432,15 @@ class _JobTile extends StatelessWidget {
             ]),
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        actions: [
+          if (files.length > 2)
+            TextButton.icon(
+              onPressed: () => Navigator.push(ctx, MaterialPageRoute(builder: (_) => _Slideshow(client: client, files: files, title: job.filename.split('/').last))),
+              icon: const Icon(Icons.slideshow_rounded),
+              label: const Text('Play'),
+            ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
       ),
     );
   }
@@ -528,4 +537,54 @@ class _JobTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A print's pictures one after another, like a rough timelapse.
+class _Slideshow extends StatefulWidget {
+  final MoonrakerClient client;
+  final List<String> files;
+  final String title;
+  const _Slideshow({required this.client, required this.files, required this.title});
+  @override
+  State<_Slideshow> createState() => _SlideshowState();
+}
+
+class _SlideshowState extends State<_Slideshow> {
+  final _pics = <int, Uint8List>{};
+  int _i = 0;
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final (i, f) in widget.files.indexed) {
+      widget.client.snapshotBytes(f).then((b) {
+        if (mounted) setState(() => _pics[i] = b);
+      }).catchError((_) {});
+    }
+    _t = Timer.periodic(const Duration(milliseconds: 700), (_) {
+      if (mounted && _pics.length == widget.files.length) setState(() => _i = (_i + 1) % widget.files.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: Text('${widget.title} · ${_i + 1}/${widget.files.length}'),
+        ),
+        body: Center(
+          child: _pics.length < widget.files.length
+              ? Text('Loading ${_pics.length} of ${widget.files.length} pictures…', style: const TextStyle(color: Colors.white70))
+              : Image.memory(_pics[_i]!, gaplessPlayback: true, fit: BoxFit.contain),
+        ),
+      );
 }
