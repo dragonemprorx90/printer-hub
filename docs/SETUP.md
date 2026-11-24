@@ -130,6 +130,8 @@ More options for `.env` (all optional):
 | `HEAT_TIMEOUT_MIN` | `15` | Alerts when the nozzle or bed still hasn't reached its target after this long (`0` = off) |
 | `OVERRUN_PCT` | `30` | Alerts once when a print runs this much longer than the slicer said (`0` = off) |
 | `LAYER_STUCK_MIN` | `30` | Alerts when the same layer has been printing this long (`0` = off) |
+| `EXTRA_TOPICS` | off | More ntfy topic URLs (comma-separated, e.g. `https://ntfy.sh/family-printer`): each gets every alert, text only |
+| `ALERT_WEBHOOK` | off | A URL that gets every alert as JSON (`printer`, `title`, `message`, `priority`; `content` too, so a Discord webhook shows it) |
 | `BED_COOL_C` | `35` | After a print, "bed has cooled" once the bed drops below this (`0` = off) |
 | `STATUS_PORT` | off | A port like `7127`: a read-only status page on your home network at `http://<nas>:7127/`, plus `/status.json`, `/metrics` (Prometheus) and `/log` |
 

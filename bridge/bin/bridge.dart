@@ -141,7 +141,12 @@ Future<void> main(List<String> argv) async {
           weeklyAt: env['WEEKLY_SUMMARY'] ?? '',
           heatTimeout: int.tryParse(env['HEAT_TIMEOUT_MIN'] ?? '') ?? 15,
           overrunPct: int.tryParse(env['OVERRUN_PCT'] ?? '') ?? 30,
-          layerStuck: int.tryParse(env['LAYER_STUCK_MIN'] ?? '') ?? 30);
+          layerStuck: int.tryParse(env['LAYER_STUCK_MIN'] ?? '') ?? 30,
+          extraTopics: [
+            for (final t in (env['EXTRA_TOPICS'] ?? '').split(','))
+              if (Uri.tryParse(t.trim()) case final u? when u.scheme.startsWith('http') && u.pathSegments.isNotEmpty) u,
+          ],
+          alertWebhook: webhookUri('@webhook ${env['ALERT_WEBHOOK'] ?? ''}'));
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -299,6 +304,8 @@ class Alerts {
   final int heatTimeout; // minutes before "still heating" alerts, 0 = off
   final int overrunPct; // alert when a print runs this % over the slicer's estimate, 0 = off
   final int layerStuck; // minutes on one layer before an alert, 0 = off
+  final List<Uri> extraTopics; // more ntfy topics that get every alert (family)
+  final Uri? alertWebhook; // every alert also POSTed here as JSON
   double? _estimate; // slicer's estimate for the current print
   int? _layer;
   DateTime? _layerSince;
@@ -330,7 +337,9 @@ class Alerts {
       this.weeklyAt = '',
       this.heatTimeout = 15,
       this.overrunPct = 30,
-      this.layerStuck = 30})
+      this.layerStuck = 30,
+      this.extraTopics = const [],
+      this.alertWebhook})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -351,6 +360,7 @@ class Alerts {
       return;
     }
     counters['alerts'] = counters['alerts']! + 1;
+    unawaited(_fanOut(title, message, priority));
     final server = topic.replace(path: '', query: null);
     final name = topic.pathSegments.last;
     if (jpeg != null || (picture && camera != null)) {
@@ -395,6 +405,33 @@ class Alerts {
       if (r.statusCode >= 300) log('Alert not delivered (HTTP ${r.statusCode})');
     } catch (e) {
       log('Alert not delivered: $e');
+    }
+  }
+
+  /// Copies of an alert: extra ntfy topics (text only) and the alert webhook.
+  Future<void> _fanOut(String title, String message, int priority) async {
+    for (final t in extraTopics) {
+      try {
+        await _client
+            .post(t.replace(path: '', query: null),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'topic': t.pathSegments.last, 'title': title, 'message': message, 'priority': priority, 'click': openLink(_title)}))
+            .timeout(const Duration(seconds: 15));
+      } catch (e) {
+        log('Extra topic not reached: $e');
+      }
+    }
+    final hook = alertWebhook;
+    if (hook == null) return;
+    try {
+      await _client
+          .post(hook,
+              headers: {'Content-Type': 'application/json'},
+              // "content" makes it show up in a Discord channel as is.
+              body: jsonEncode({'printer': _title, 'title': title, 'message': message, 'priority': priority, 'content': '**$title**\n$message'}))
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      log('Alert webhook not reached: $e');
     }
   }
 
