@@ -681,6 +681,20 @@ class _JobPanel extends StatelessWidget {
                     },
                   ),
                   _AwakeChip(),
+                  ActionChip(
+                    avatar: const Icon(Icons.alarm_add_rounded, size: 16),
+                    label: const Text('Remind me'),
+                    onPressed: () async {
+                      final m = await askNumber(context, 'Remind me to check it in', presets: const [10, 30, 60, 120], unit: ' min');
+                      if (m == null || m <= 0 || !context.mounted) return;
+                      // While the app is open or in the background.
+                      Timer(Duration(minutes: m), () {
+                        final st = client.status;
+                        notify('$name: time to check', '${(st.progress * 100).round()}% done · ${st.state}', printerKey: '${client.host}:${client.port}');
+                      });
+                      toast(context, 'Reminder in $m min');
+                    },
+                  ),
                 ]),
               ],
             ]),

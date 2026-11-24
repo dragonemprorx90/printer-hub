@@ -223,6 +223,35 @@ class _WorkshopPageState extends State<WorkshopPage> {
         ]),
       ),
       Panel(
+        title: 'Monthly budget',
+        icon: Icons.savings_outlined,
+        trailing: TextButton(
+          onPressed: () async {
+            final b = await askNumber(context, 'Spend at most per month', presets: const [10, 25, 50, 100], unit: ' $cur');
+            if (b == null) return;
+            settings.setNumber('budget', b.toDouble());
+            setState(() {});
+          },
+          child: Text(settings.number('budget', 0) > 0 ? 'Change' : 'Set'),
+        ),
+        child: Builder(builder: (_) {
+          final budget = settings.number('budget', 0);
+          final now = costs.where((c) => c.$1 == monthKey(DateTime.now())).firstOrNull;
+          final spent = now == null ? 0.0 : now.$2 + now.$3;
+          if (budget <= 0) return Hint('Set a monthly budget to see how this month is going (${widget.printer.name} only).');
+          final f = spent / budget;
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _row('This month', '$cur${spent.toStringAsFixed(2)} of $cur${budget.toStringAsFixed(0)}',
+                color: f >= 1 ? C.ink(C.danger) : f >= 0.8 ? C.ink(C.warn) : null),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(value: f.clamp(0, 1).toDouble(), color: f >= 1 ? C.danger : f >= 0.8 ? C.warn : C.accent),
+            ),
+          ]);
+        }),
+      ),
+      Panel(
         title: 'Filament cost by material',
         icon: Icons.pie_chart_outline_rounded,
         child: Column(children: [
