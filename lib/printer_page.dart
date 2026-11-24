@@ -14,6 +14,7 @@ import 'files_page.dart';
 import 'history_page.dart';
 import 'moonraker.dart';
 import 'notify.dart';
+import 'plotter_page.dart';
 import 'screen_page.dart';
 import 'settings.dart';
 import 'tools_page.dart';
@@ -39,6 +40,27 @@ class _PrinterPageState extends State<PrinterPage> {
       : (int.tryParse(settings.text('openTab')) ?? 0).clamp(0, 4));
   late final MoonrakerClient _client = clientFor(widget.printer);
 
+  // A pen plotter gets its own page (no temps, filament or slicing). Known
+  // once connected; remembered so it opens straight there next time.
+  late bool _plotter = _client.status.plotter || settings.flag('plotter.${widget.printer.key}', false);
+  StreamSubscription<PrinterStatus>? _kind;
+
+  @override
+  void initState() {
+    super.initState();
+    _kind = _client.stream.listen((s) {
+      if (!s.online || s.plotter == _plotter) return;
+      settings.setFlag('plotter.${widget.printer.key}', s.plotter);
+      setState(() => _plotter = s.plotter);
+    });
+  }
+
+  @override
+  void dispose() {
+    _kind?.cancel();
+    super.dispose();
+  }
+
   static const _dest = [
     (Icons.dashboard_outlined, Icons.dashboard_rounded, 'Overview'),
     (Icons.open_with_outlined, Icons.open_with_rounded, 'Control'),
@@ -54,6 +76,7 @@ class _PrinterPageState extends State<PrinterPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_plotter) return PlotterPage(printer: widget.printer, client: _client);
     final tabs = [
       OverviewTab(
           printer: widget.printer, client: _client, onBrowseFiles: () => _go(2)),

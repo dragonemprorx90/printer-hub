@@ -48,6 +48,8 @@ dependencies:
     path: packages/hub_link
   mobile_scanner: ^7.5.0
   webview_flutter: ^4.13.0
+  pdfx: ^2.11.0
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:

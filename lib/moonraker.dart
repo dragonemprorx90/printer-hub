@@ -270,6 +270,25 @@ class PrinterStatus {
   final raw = <String, Map<String, dynamic>>{};
   bool online = false;
 
+  /// A pen plotter (Neptune): no temps, filament or slicing; see plotter_page.dart.
+  bool plotter = false;
+  static const plotLed = 'led LED_Light';
+
+  /// Klipper itself: ready, startup, shutdown or error.
+  String get klippy => '${_f('webhooks', 'state') ?? 'ready'}';
+  String? get klippyMessage => _f('webhooks', 'state_message') as String?;
+  bool get homed => homedAxes.contains('x') && homedAxes.contains('y') && homedAxes.contains('z');
+
+  /// Where the head really is (toolhead, not the G-code position with offsets).
+  List<double> get toolPosition =>
+      ((_f('toolhead', 'position') as List?) ?? const []).map((e) => (e as num).toDouble()).toList();
+
+  /// The pad's saved plot settings (plot_zdown, plot_ox, plot_oy, plot_lift).
+  Map<String, dynamic> get plotVars =>
+      Map<String, dynamic>.from((_f('save_variables', 'variables') as Map?) ?? const {});
+  bool get plotLight =>
+      ((_f(plotLed, 'color_data') as List?) ?? const []).any((c) => c is List && c.any((v) => (v as num) > 0));
+
   /// The home bridge's failure detector on this print (`printer_hub/
   /// failure_watch`): level (smoothed score), failing. Null without one.
   Map<String, dynamic>? failure;
@@ -616,6 +635,10 @@ class MoonrakerClient {
     ...PrinterStatus.chamberSensors,
     PrinterStatus.dragonFilter,
     'dragonbreath',
+    // Pen plotter (Neptune): Klipper state, pen settings, the light.
+    'webhooks',
+    'save_variables',
+    PrinterStatus.plotLed,
   };
 
   /// Set when the printer was paired with a home bridge.
@@ -862,6 +885,8 @@ class MoonrakerClient {
       final list = await _call('printer.objects.list');
       final objs = List<String>.from(list['objects'] as List);
       hasScreen = objs.contains('machine_state_manager'); // Snapmaker U1
+      // A pen plotter: the plot macros and no extruder (heaters are commented out).
+      status.plotter = objs.contains('gcode_macro PLOT_START') && !objs.contains('extruder');
       macros = objs
           .where((o) => o.startsWith('gcode_macro '))
           .map((o) => o.substring('gcode_macro '.length))

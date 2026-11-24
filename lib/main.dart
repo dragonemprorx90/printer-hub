@@ -980,9 +980,17 @@ class _PrinterCard extends StatelessWidget {
                     Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                       Expanded(
                         child: Wrap(spacing: 14, runSpacing: 6, children: [
-                          _mini(Icons.local_fire_department_rounded, C.hot, s.hotend,
-                              s.hotendTarget),
-                          _mini(Icons.grid_view_rounded, C.bed, s.bed, s.bedTarget),
+                          // A pen plotter has no heaters: where the pen is instead.
+                          if (s.plotter)
+                            Text(
+                                s.homed && s.toolPosition.length > 2
+                                    ? 'X ${s.toolPosition[0].toStringAsFixed(0)}  Y ${s.toolPosition[1].toStringAsFixed(0)}  Z ${s.toolPosition[2].toStringAsFixed(1)}'
+                                    : 'Not homed',
+                                style: T.small.copyWith(color: C.muted))
+                          else ...[
+                            _mini(Icons.local_fire_department_rounded, C.hot, s.hotend, s.hotendTarget),
+                            _mini(Icons.grid_view_rounded, C.bed, s.bed, s.bedTarget),
+                          ],
                           if (s.hasChamber)
                             _mini(Icons.thermostat_rounded, C.chamber, s.chamber,
                                 s.chamberTarget),
