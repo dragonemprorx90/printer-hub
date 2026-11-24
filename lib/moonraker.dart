@@ -638,6 +638,22 @@ class MoonrakerClient {
     return (RelayHttpClient(link) as http.Client, link.close);
   }
 
+  /// Text from the home bridge itself (`/bridge/info`, `/bridge/log`),
+  /// always through the relay: at home the app talks to Moonraker directly.
+  Future<String> bridgeText(String path) async {
+    final pair = relay;
+    if (pair == null) throw MoonrakerError('No home bridge paired with this printer.');
+    final RelayLink? link = viaRelay ? null : await RelayLink.connect(pair);
+    try {
+      final client = link == null ? _http : RelayHttpClient(link);
+      final r = await client.get(Uri.parse('http://$host:$port$path')).timeout(const Duration(seconds: 20));
+      if (r.statusCode != 200) throw MoonrakerError('This bridge is older and can\'t show that. Update it first.');
+      return r.body;
+    } finally {
+      link?.close();
+    }
+  }
+
   /// A separate Moonraker websocket (for Orca): direct at home, or its own
   /// relay session when away. Returns (messages, send, close).
   Future<(Stream<String>, void Function(String), void Function())> openSocket() async {

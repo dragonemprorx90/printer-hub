@@ -19,6 +19,13 @@ void main() {
     expect(webhookUri('@webhook'), isNull);
   });
 
+  test('bridge info and log are answered by the bridge itself', () {
+    log('hello');
+    expect(bridgeOwn('/bridge/log')!.$3, contains('hello'));
+    expect(bridgeOwn('/bridge/info')!.$3, contains('version'));
+    expect(bridgeOwn('/server/info'), isNull);
+  });
+
   test('chamber ready, summary and metrics', () {
     expect(chamberReady(59.2, 60), isTrue);
     expect(chamberReady(50, 60), isFalse);

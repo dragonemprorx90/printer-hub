@@ -11,6 +11,7 @@ import 'console_page.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 import 'u1_panels.dart';
+import 'update.dart';
 import 'ui.dart';
 import 'workshop_page.dart';
 
@@ -632,6 +633,30 @@ class _ToolsTabState extends State<ToolsTab> {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              ActionChip(
+                avatar: const Icon(Icons.article_outlined, size: 16),
+                label: const Text('Bridge log'),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _BridgeLog(client: c))),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.system_update_alt_rounded, size: 16),
+                label: const Text('Check bridge version'),
+                onPressed: () async {
+                  try {
+                    final v = '${(jsonDecode(await c.bridgeText('/bridge/info')) as Map)['version']}';
+                    if (!mounted) return;
+                    final behind = v != 'dev' && isNewer('v$kAppVersion', v);
+                    toast(context, behind
+                        ? 'Bridge $v is older than the app ($kAppVersion). On the NAS: docker compose pull && docker compose up -d'
+                        : 'Bridge $v is up to date');
+                  } catch (e) {
+                    if (mounted) toast(context, '$e', error: true);
+                  }
+                },
+              ),
+            ]),
             if (alerts != null) ...[
               const SizedBox(height: 14),
               const Text(
@@ -766,4 +791,40 @@ class _ToolsTabState extends State<ToolsTab> {
       ],
     ),
   );
+}
+
+/// The home bridge's last 200 log lines.
+class _BridgeLog extends StatefulWidget {
+  final MoonrakerClient client;
+  const _BridgeLog({required this.client});
+  @override
+  State<_BridgeLog> createState() => _BridgeLogState();
+}
+
+class _BridgeLogState extends State<_BridgeLog> {
+  late Future<String> _text = widget.client.bridgeText('/bridge/log');
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Bridge log'), actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => setState(() => _text = widget.client.bridgeText('/bridge/log')),
+          ),
+        ]),
+        body: FutureBuilder<String>(
+          future: _text,
+          builder: (context, snap) {
+            if (snap.hasError) return StateView.error('${snap.error}', onRetry: () => setState(() => _text = widget.client.bridgeText('/bridge/log')));
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            final lines = snap.data!.split('\n').reversed.toList();
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: lines.length,
+              itemBuilder: (_, i) => SelectableText(lines[i], style: mono.copyWith(fontSize: 12)),
+            );
+          },
+        ),
+      );
 }

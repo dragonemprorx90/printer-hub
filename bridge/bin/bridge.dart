@@ -32,8 +32,22 @@ import 'package:hub_link/hub_link.dart';
 import 'package:qr/qr.dart';
 import 'package:web_socket_channel/io.dart';
 
-void log(String m) =>
-    stdout.writeln('${DateTime.now().toIso8601String().substring(0, 19)}  $m');
+/// The last 200 log lines, for the app's "Bridge log" (and /log on the status page).
+final recentLog = <String>[];
+
+void log(String m) {
+  final line = '${DateTime.now().toIso8601String().substring(0, 19)}  $m';
+  stdout.writeln(line);
+  recentLog.add(line);
+  if (recentLog.length > 200) recentLog.removeRange(0, recentLog.length - 200);
+}
+
+/// Answers for the bridge's own paths (`/bridge/info`, `/bridge/log`), or null.
+(int, String, String)? bridgeOwn(String path) => switch (path) {
+      '/bridge/info' => (200, 'application/json', jsonEncode({'version': kBridgeVersion})),
+      '/bridge/log' => (200, 'text/plain; charset=utf-8', recentLog.join('\n')),
+      _ => null,
+    };
 
 Future<void> main(List<String> argv) async {
   final args = <String, String>{};
@@ -1010,6 +1024,9 @@ Future<void> serveStatus(int port, String printer, int moonraker, Alerts? alerts
     } else if (req.uri.path == '/status.json') {
       res.headers.contentType = ContentType.json;
       res.write(jsonEncode(st));
+    } else if (req.uri.path == '/log') {
+      res.headers.contentType = ContentType('text', 'plain', charset: 'utf-8');
+      res.write(recentLog.join('\n'));
     } else if (req.uri.path == '/metrics') {
       res.headers.contentType = ContentType('text', 'plain', charset: 'utf-8');
       res.write(metricsText({
@@ -1300,6 +1317,10 @@ class Bridge {
   Future<void> _http(String c, Map<String, dynamic> m, List<int> body) async {
     final id = m['id'];
     final path = '${m['p']}';
+    if (bridgeOwn(path) case (final s, final type, final text)) {
+      await _send(c, {'t': 'res', 'id': id, 's': s, 'h': {'content-type': type}, 'b': b64(utf8.encode(text)), 'more': false});
+      return;
+    }
     try {
       final (uri, extra) = await target(path);
       final req = http.Request('${m['m']}', uri)..bodyBytes = body;
