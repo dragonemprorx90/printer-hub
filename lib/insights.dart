@@ -95,11 +95,11 @@ List<(String, int)> mostPrinted(Iterable<PrintJob> jobs, {int top = 10}) {
 }
 
 /// Filament cost per material at one price per kg, most first.
-List<(String, double)> costByMaterial(Iterable<PrintJob> jobs, double pricePerKg) {
+List<(String, double)> costByMaterial(Iterable<PrintJob> jobs, double Function(String? material) pricePerKg) {
   final m = <String, double>{};
   for (final j in jobs) {
     final k = j.material ?? 'Unknown';
-    m[k] = (m[k] ?? 0) + gramsFromMm(j.filament) / 1000 * pricePerKg;
+    m[k] = (m[k] ?? 0) + gramsFromMm(j.filament) / 1000 * pricePerKg(j.material);
   }
   return [for (final e in m.entries) (e.key, e.value)]..sort((a, b) => b.$2.compareTo(a.$2));
 }

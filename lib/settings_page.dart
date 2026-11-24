@@ -452,6 +452,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 _numberField('filamentDensity', 'Filament density', 1.24, suffix: 'g/cm³'),
                 _numberField('printerWatts', 'Average printer power', 350, suffix: 'W'),
                 _numberField('kwhPrice', 'Electricity price per kWh', 0.30),
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('Price per material'),
+                  subtitle: Text('Empty = the price above', style: T.caption.copyWith(color: C.muted)),
+                  children: [
+                    for (final m in const ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PA', 'PC'])
+                      _numberField('price.$m', '$m per kg', settings.number('filamentPrice', 20)),
+                  ],
+                ),
               ]),
             ),
             gap,

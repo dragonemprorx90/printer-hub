@@ -113,7 +113,8 @@ void main() {
     expect(t.$1, 6);
     expect(t.$2, 13);
     expect(monthTotals(jobs, offset: 1, now: DateTime(2026, 11, 20)).$1, 0);
-    expect(costByMaterial(jobs, 20).first.$1, 'PLA');
+    expect(costByMaterial(jobs, (_) => 20).first.$1, 'PLA');
+    expect(costByMaterial(jobs, (m) => m == 'PA-CF' ? 1000 : 1).first.$1, 'PA-CF');
     expect(lastPrintEnd(jobs), DateTime(2026, 11, 5, 13));
   });
 

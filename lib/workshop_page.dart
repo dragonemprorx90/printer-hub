@@ -226,7 +226,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
         title: 'Filament cost by material',
         icon: Icons.pie_chart_outline_rounded,
         child: Column(children: [
-          for (final (m, c) in costByMaterial(jobs, settings.number('filamentPrice', 20)).take(8))
+          for (final (m, c) in costByMaterial(jobs, settings.pricePerKg).take(8))
             _row(m, '$cur${c.toStringAsFixed(2)}'),
         ]),
       ),

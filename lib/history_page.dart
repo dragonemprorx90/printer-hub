@@ -43,7 +43,7 @@ double jobCost(PrintJob j) {
   final grams = filamentGrams(j.filament,
       diameter: settings.number('filamentDiameter', 1.75),
       density: settings.number('filamentDensity', 1.24));
-  final material = grams / 1000 * settings.number('filamentPrice', 20);
+  final material = grams / 1000 * settings.pricePerKg(j.material);
   final energy = j.duration / 3600 *
       settings.number('printerWatts', 350) / 1000 *
       settings.number('kwhPrice', 0.30);

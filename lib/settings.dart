@@ -74,6 +74,15 @@ class AppSettings extends ChangeNotifier {
       _p.setStringList('presets.$heater', [for (final v in values) '$v']));
 
   double number(String key, double fallback) => _p.getDouble(key) ?? fallback;
+
+  /// Filament price per kg for a material (Settings → Cost estimate), or the general one.
+  double pricePerKg(String? material) {
+    final m = (material ?? '').toUpperCase();
+    for (final k in const ['PETG', 'PLA', 'ABS', 'ASA', 'TPU', 'PA', 'PC']) {
+      if (m.contains(k) && _p.getDouble('price.$k') != null) return _p.getDouble('price.$k')!;
+    }
+    return number('filamentPrice', 20);
+  }
   void setNumber(String key, double v) => _write(() => _p.setDouble(key, v));
 
   bool flag(String key, [bool fallback = true]) => _p.getBool(key) ?? fallback;
