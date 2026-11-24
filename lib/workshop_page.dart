@@ -14,7 +14,8 @@ import 'ui.dart';
 class WorkshopPage extends StatefulWidget {
   final MoonrakerClient client;
   final Printer printer;
-  const WorkshopPage({super.key, required this.client, required this.printer});
+  final int initialTab; // 0 Stats, 1 Maintenance, 2 Filament, 3 Notes, 4 Quote, 5 Calculators
+  const WorkshopPage({super.key, required this.client, required this.printer, this.initialTab = 0});
   @override
   State<WorkshopPage> createState() => _WorkshopPageState();
 }
@@ -48,6 +49,7 @@ class _WorkshopPageState extends State<WorkshopPage> {
   @override
   Widget build(BuildContext context) => DefaultTabController(
         length: 6,
+        initialIndex: widget.initialTab,
         child: Scaffold(
           appBar: AppBar(
             title: Text('Workshop · ${widget.printer.name}'),

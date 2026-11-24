@@ -1302,6 +1302,12 @@ class _Actions extends StatelessWidget {
             icon: const Icon(Icons.power_settings_new_rounded),
             label: const Text('Motors off'),
           ),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => WorkshopPage(client: client, printer: printer))),
+            icon: const Icon(Icons.handyman_outlined),
+            label: const Text('Workshop'),
+          ),
           FilledButton.icon(
             style: FilledButton.styleFrom(
                 backgroundColor: C.dangerFill, foregroundColor: Colors.white),

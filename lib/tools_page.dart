@@ -342,6 +342,9 @@ class _ToolsTabState extends State<ToolsTab> {
     );
   }
 
+  void _workshop(int tab) => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => WorkshopPage(client: c, printer: widget.printer, initialTab: tab)));
+
   Widget _calibrationPanel() {
     final items = [
       for (final (title, why, candidates) in _calibrations)
@@ -355,6 +358,7 @@ class _ToolsTabState extends State<ToolsTab> {
     return Panel(
       title: 'Calibration',
       icon: Icons.tune_rounded,
+      trailing: TextButton(onPressed: () => _workshop(5), child: const Text('Calculators')),
       child: items.isEmpty
           ? Text(
               'No calibration commands found on this printer.',
@@ -453,7 +457,9 @@ class _ToolsTabState extends State<ToolsTab> {
     return Panel(
       title: 'Maintenance',
       icon: Icons.build_circle_outlined,
-      trailing: IconButton(
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        TextButton(onPressed: () => _workshop(1), child: const Text('Log')),
+        IconButton(
         tooltip: 'Add reminder',
         icon: const Icon(Icons.add_rounded),
         onPressed: hours == null
@@ -479,7 +485,8 @@ class _ToolsTabState extends State<ToolsTab> {
                 ]);
                 setState(() {});
               },
-      ),
+        ),
+      ]),
       child: hours == null
           ? const LinearProgressIndicator()
           : Column(
