@@ -366,10 +366,14 @@ class PrinterStatus {
   /// Seconds left. Extrapolating elapsed time alone is far off early on
   /// (heat-up, slow first layer), so blend it with the slicer's estimate:
   /// trust the slicer at the start and the measured pace near the end.
+  /// Real time ÷ slicer estimate on this printer's recent prints (1 until
+  /// History has loaded): the slicer part of [eta] is scaled by it.
+  double etaFactor = 1;
+
   double? get eta {
     final p = fileProgress, d = printDuration;
     final est = (jobMeta['estimated_time'] as num?)?.toDouble();
-    final slicer = est != null && est > 0 ? est * (1 - p) : null;
+    final slicer = est != null && est > 0 ? est * etaFactor * (1 - p) : null;
     final pace = p > 0.005 && d > 0 ? d / p - d : null;
     if (slicer == null || pace == null) return pace ?? (d > 0 ? slicer : null);
     return slicer * (1 - p) + pace * p;
@@ -1662,6 +1666,12 @@ class MoonrakerClient {
   /// Jobs and totals fetched together; also refreshes [lastHistory].
   Future<(List<PrintJob>, HistoryTotals)> historyAndTotals() async {
     final (jobs, totals) = await (allHistory(), historyTotals()).wait;
+    // Learn how this printer's real times compare with the slicer's, for time left.
+    final ok = [for (final j in jobs.take(30)) if (j.status == 'completed' && (j.estimate ?? 0) > 300 && j.duration > 0) j];
+    if (ok.length >= 3) {
+      status.etaFactor =
+          (ok.fold(0.0, (a, j) => a + j.duration) / ok.fold(0.0, (a, j) => a + j.estimate!)).clamp(0.7, 1.5).toDouble();
+    }
     return lastHistory = (jobs, totals);
   }
 

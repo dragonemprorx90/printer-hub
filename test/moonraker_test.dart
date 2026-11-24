@@ -320,4 +320,16 @@ void main() {
     s.jobMeta = const {};
     expect(s.eta, isNotNull);
   });
+
+  test('eta uses what this printer learnt about the slicer', () {
+    final s = PrinterStatus()
+      ..jobMeta = {'estimated_time': 10000, 'gcode_start_byte': 0, 'gcode_end_byte': 1000000}
+      ..applyDelta({
+        'print_stats': {'print_duration': 1.0},
+        'virtual_sdcard': {'progress': 0, 'file_position': 0},
+      });
+    final plain = s.eta!;
+    s.etaFactor = 0.8; // its prints usually take 80% of the estimate
+    expect(s.eta!, closeTo(plain * 0.8, 1));
+  });
 }
