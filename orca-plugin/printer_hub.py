@@ -95,7 +95,7 @@ PAGE = r"""
   </span>
 </div>
 <div id="list" aria-label="Printers"></div>
-<p id="status">Connecting to the Printer Hub app…</p>
+<p id="status" role="status" aria-live="polite">Connecting to the Printer Hub app…</p>
 <script>
 (function () {
   var HUB = "http://127.0.0.1:7126";
