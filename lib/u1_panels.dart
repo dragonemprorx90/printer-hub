@@ -773,6 +773,8 @@ const _triggers = {
   'printing': 'Print starts',
   'runout': 'Filament runs out',
   'chamber_ready': 'Chamber reaches its temperature',
+  'bed_cool': 'Bed has cooled after a print',
+  'humidity': 'CFS humidity goes over the limit',
 };
 
 /// Optional time windows for a rule: (label, days, from, to).
@@ -792,6 +794,7 @@ const ruleTemplates = [
   {'on': 'interval', 'at': '10', 'do': '@keep', 'label': 'Save a picture to History'},
   {'on': 'runout', 'do': '@picture', 'label': 'Send me a picture'},
   {'on': 'error', 'do': 'TURN_OFF_HEATERS', 'label': 'All heaters off'},
+  {'on': 'bed_cool', 'do': '@notify Take the print off', 'label': 'Alert: Take the print off'},
   {'on': 'progress', 'at': '50', 'do': '@notify Halfway there', 'label': 'Alert: Halfway there'},
 ];
 

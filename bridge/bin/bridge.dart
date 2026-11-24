@@ -135,7 +135,8 @@ Future<void> main(List<String> argv) async {
           failureThreshold: double.tryParse(env['FAILURE_THRESHOLD'] ?? '') ?? 0.8,
           pauseRepeat: int.tryParse(env['PAUSE_REPEAT_MIN'] ?? '') ?? 15,
           offlineAfter: int.tryParse(env['OFFLINE_ALERT_MIN'] ?? '') ?? 10,
-          summaryAt: env['DAILY_SUMMARY'] ?? '');
+          summaryAt: env['DAILY_SUMMARY'] ?? '',
+          bedCool: double.tryParse(env['BED_COOL_C'] ?? '') ?? 35);
   if (args['test-alert'] == 'true') {
     if (alerts == null) {
       stderr.writeln('Alerts are off for this pairing (re-pair with --reset to turn them on).');
@@ -286,6 +287,9 @@ class Alerts {
   int _snoozeUntil = 0; // ms; the app sets printer_hub/snooze
   final _sensors = <String, bool>{}; // filament sensor -> filament detected
   final _chamber = <String, dynamic>{};
+  double? _bedTemp;
+  bool _waitBedCool = false; // after a finished print, until the bed is cool
+  final double bedCool; // °C; "take the print off" below this, 0 = off
   final counters = <String, int>{'alerts': 0, 'rules': 0, 'prints_started': 0};
   String? get state => _state;
   double get progress => _progress;
@@ -303,7 +307,8 @@ class Alerts {
       double failureThreshold = 0.8,
       this.pauseRepeat = 15,
       this.offlineAfter = 10,
-      this.summaryAt = ''})
+      this.summaryAt = '',
+      this.bedCool = 35})
       : _failure = FailureWatch(threshold: failureThreshold);
 
   String get _title => name ?? host;
@@ -419,6 +424,7 @@ class Alerts {
               for (final l in lanes) l: ['map', 'load', 'color', 'material', 'spool_id', 'filament_name'],
               for (final f in sensors) f: ['filament_detected', 'enabled'],
               for (final c in chambers) c: ['temperature', 'target'],
+              'heater_bed': ['temperature'],
             },
           },
         }));
@@ -484,6 +490,14 @@ class Alerts {
       }
       if (k.startsWith('heater_generic ') && v is Map) _chamber.addAll(Map<String, dynamic>.from(v));
     }
+    final bt = (status['heater_bed'] as Map?)?['temperature'];
+    if (bt is num) _bedTemp = bt.toDouble();
+    if (_waitBedCool && bedCool > 0 && _bedTemp != null && _bedTemp! < bedCool) {
+      _waitBedCool = false;
+      await send('$_title: bed has cooled', 'Down to ${_bedTemp!.round()}°C. Prints usually come off easily now.',
+          tags: ['snowflake'], priority: 3);
+      unawaited(_runRules((r) => r['on'] == 'bed_cool'));
+    }
     final ct = (_chamber['temperature'] as num?)?.toDouble(), cg = (_chamber['target'] as num?)?.toDouble();
     if (chamberReady(ct, cg)) {
       if (_sent.add('chamber_ready $cg')) {
@@ -508,6 +522,7 @@ class Alerts {
       unawaited(_runRules((r) => r['on'] == state));
       switch (state) {
         case 'complete':
+          _waitBedCool = true;
           await send('$_title: print finished', file,
               tags: ['white_check_mark'], priority: 4, jpeg: await _keep('end'));
           unawaited(_checkSpools());
@@ -524,6 +539,7 @@ class Alerts {
               tags: ['pause_button'], priority: 4, picture: true);
         case 'printing' when last == 'standby' || last == 'complete' || last == 'cancelled' || last == 'error':
           _sent = {};
+          _waitBedCool = false;
           _started = DateTime.now();
           counters['prints_started'] = counters['prints_started']! + 1;
           _failure.reset();
@@ -577,6 +593,7 @@ class Alerts {
       if (h == null || h < humidityLimit) continue;
       if (prev != null && DateTime.now().difference(prev).inHours < 6) continue;
       _humidityAlerted['T$i'] = DateTime.now();
+      unawaited(_runRules((r) => r['on'] == 'humidity'));
       await send('$_title: CFS $i humidity ${h.toStringAsFixed(0)}%',
           'Above ${humidityLimit.toStringAsFixed(0)}%. Dry the filament before it absorbs more moisture.',
           tags: ['droplet']);
