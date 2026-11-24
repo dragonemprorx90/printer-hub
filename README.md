@@ -32,13 +32,27 @@ Watch and control your Klipper / Moonraker 3D printers from your phone or Mac, a
 - Change the print settings you care about (layer height, walls, infill, supports, brim, speed, flow, temperatures, a filament per U1 toolhead), slice, check the time, filament and layers, and print. OrcaSlicer runs on your home bridge, not in someone's cloud.
 - Find models online: search Printables, Creality Cloud and Thingiverse, or browse MakerWorld, inside the app. Files already sliced for your printer print straight away; the rest are sliced at home, opened in OrcaSlicer on the Mac, or sent from the iPhone to your Mac's OrcaSlicer.
 
+**Workshop and stats**
+- Odometer, records and streaks, a calendar of print days, success rate by material and month, monthly cost, and why prints failed.
+- Maintenance log, ready-made task lists, nozzle wear, spare parts and daily reminders.
+- Filament inventory (with or without Spoolman), shopping list, colour names, price per gram, drying guide and log, material notes.
+- A pre-print checklist, notes on prints, and History search and filters.
+
+**Everyday extras**
+- Queue: reorder, finish time per job, "bed is clear, start next". Files: tags, tidy up (space, copies, old files), finish-at scheduling, times printed before.
+- Camera: brightness, contrast, grid, crosshair, frame rate, stamped snapshots, remembered zoom.
+- Overview: pause at a height, print again, pace against the slicer, copy status, keep screen on, heaters off.
+- Alerts: quiet hours, mute a printer, nozzle temperature drift. Bridge: run-out, chamber ready, offline, still paused, bed cooled, daily summary, snooze, webhooks, rule days and hours, a status page with Prometheus metrics, and its log in the app.
+- iPhone: quick actions, `printerhub://` links, open G-code from Files, Siri Shortcuts. Mac: a menu-bar menu of printers, Dock badge, open at login, keyboard shortcuts.
+- Text size, high contrast, °F, 12-hour time, side-by-side on wide screens, VoiceOver labels.
+
 **From anywhere: free and end-to-end encrypted**
 - A small home bridge on your NAS, Raspberry Pi or PC, plus a free Cloudflare relay. No open router ports.
 - The app switches between home and away by itself.
 
 **OrcaSlicer (Mac)**
 - Send prints straight from Orca.
-- A live printer panel inside Orca 2.5+ with camera, controls, filaments, history and rules.
+- A live printer panel inside Orca 2.5+ with camera, controls, filaments, history, rules, queue and stats.
 
 ## Quick start
 

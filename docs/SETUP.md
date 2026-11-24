@@ -118,6 +118,22 @@ Run one bridge per printer: copy the folder, then change `PRINTER_HOST` in the c
 
 On first start the bridge log shows an **ntfy topic**. Install ntfy ([iOS](https://apps.apple.com/app/ntfy/id1625396347), [Android](https://ntfy.sh)) and subscribe to that topic. To set quiet hours, humidity and spool limits, or turn alerts off, see the options in `.env`.
 
+More options for `.env` (all optional):
+
+| Option | Default | What it does |
+|---|---|---|
+| `PAUSE_REPEAT_MIN` | `15` | Repeats "still paused" every N minutes until you resume (`0` = once) |
+| `OFFLINE_ALERT_MIN` | `10` | Alerts when the printer has been unreachable this long, and again when it's back (`0` = off) |
+| `DAILY_SUMMARY` | off | A time like `21:00`: sends today's prints, hours and failures |
+| `BED_COOL_C` | `35` | After a print, "bed has cooled" once the bed drops below this (`0` = off) |
+| `STATUS_PORT` | off | A port like `7127`: a read-only status page on your home network at `http://<nas>:7127/`, plus `/status.json`, `/metrics` (Prometheus) and `/log` |
+
+The bridge also alerts on filament run-out (Klipper filament sensors) and when a heated chamber reaches its temperature. **Snooze** a printer's bridge alerts from the app (Tools → Rules → the bell). Failures and faults still come through.
+
+**Rules** (Tools → Rules) can now also start on *print starts*, *filament runs out*, *chamber reaches its temperature*, *bed has cooled* and *CFS humidity over the limit*. They can run only on some days or hours, send you an alert with your own text, or call a **webhook** (for example Home Assistant: `http://homeassistant.local:8123/api/webhook/<id>`, which gets the printer, event, state, file and progress as JSON). The flask button tests a rule without sending anything, and the sparkle button adds ready-made rules.
+
+**Bridge log**: Tools → Away from home → Bridge log shows its last 200 lines; Check bridge version tells you when it's older than the app.
+
 ### Updating the bridge
 
 ```bash
@@ -135,6 +151,15 @@ Printer Hub on the Mac runs a small local service on `127.0.0.1:7126` (Settings 
 Press **Print** or **Send**. Printer Hub uploads the file (at home or through the bridge) and opens print setup.
 
 **Printer panel** (Orca 2.5+). Download `printer_hub.py` from the release, or save it from Settings → Orca Slicer. Install it from Orca's **Plugins** dialog. A panel opens beside the 3D view with every printer: camera, progress, temperatures, controls, filaments, spools, history and rules.
+
+**What's in the panel** (plugin 3.4): Queue (with finish times), Stats (prints, hours, success by material, maintenance due), spool inventory with a shopping list, Snooze 1 h, and Save picture under the camera.
+
+### iPhone and Mac extras
+
+- **iPhone**: long-press the app icon for your printers and the camera wall. Links like `printerhub://printer/K2` or `printerhub://wall` open them. In the Files app, share a `.gcode` or `.3mf` to Printer Hub to upload it. In Shortcuts, add **Printer status** (Siri reads what each printer is doing) or **Open camera wall**.
+- **Mac**: the menu-bar icon lists every printer with its state (⌘1–9 open one), has **Open at login**, and the Dock badge counts printers that need you (paused, failed, offline). In the window, ⌘1–9 open a printer, ⌘L the camera wall, ⌘, Settings. The window remembers its size and place.
+- **Tools → Workshop**: odometer, records and streaks, a calendar of print days, success by material and month, cost per month, why prints failed, maintenance log, ready-made task lists, nozzle wear, spare parts, filament inventory (also without Spoolman), shopping list, drying guide and log, material notes, a pre-print checklist and print notes. Copy history as JSON or a stats summary.
+- **Settings → Appearance**: text size, high contrast, °F, 12-hour time, side-by-side on wide screens, which tab printers open on, and Reset to defaults. **Settings → Notifications**: quiet hours (failures still come), maintenance reminders and the nozzle-temperature alert. Mute one printer from the bell on its screen.
 
 ## 5. Slicing from the app
 
