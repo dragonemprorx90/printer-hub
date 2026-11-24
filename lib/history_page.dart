@@ -404,6 +404,21 @@ class _JobTile extends StatelessWidget {
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               StatefulBuilder(builder: (ctx, set) {
+                // How it came out, 1–5 (Workshop averages them).
+                final k = 'rating.${client.host}:${client.port}.${jobKey(job)}';
+                final r = settings.number(k, 0).round();
+                return Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  const Text('How did it turn out?  '),
+                  for (var i = 1; i <= 5; i++)
+                    IconButton(
+                      tooltip: '$i of 5',
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(i <= r ? Icons.star_rounded : Icons.star_outline_rounded, color: i <= r ? C.warn : C.muted),
+                      onPressed: () => set(() => settings.setNumber(k, i == r ? 0 : i.toDouble())),
+                    ),
+                ]);
+              }),
+              StatefulBuilder(builder: (ctx, set) {
                 final k = 'jobNote.${client.host}:${client.port}.${jobKey(job)}';
                 final note = settings.text(k);
                 return ListTile(
