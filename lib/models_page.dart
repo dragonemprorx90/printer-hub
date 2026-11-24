@@ -466,6 +466,7 @@ class _ModelsPageState extends State<ModelsPage> {
   final _query = TextEditingController();
   final _hits = <ModelHit>[];
   int _page = 0;
+  bool _byLikes = false; // sort what's loaded by likes
   bool _loading = false, _more = true;
   String? _error;
 
@@ -548,7 +549,17 @@ class _ModelsPageState extends State<ModelsPage> {
               onTap: () => Navigator.pop(ctx, m),
             ),
           const SizedBox(height: 16),
-          Text('Downloaded', style: T.title),
+          Row(children: [
+            Expanded(child: Text('Downloaded', style: T.title)),
+            if (downloads.isNotEmpty)
+              TextButton(
+                onPressed: () {
+                  settings.setJsonList('models.downloads', const []);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Clear'),
+              ),
+          ]),
           if (downloads.isEmpty) Text('Nothing yet.', style: TextStyle(color: C.muted)),
           for (final d in downloads.reversed.take(30))
             ListTile(
@@ -597,6 +608,8 @@ class _ModelsPageState extends State<ModelsPage> {
     if (_error != null && _hits.isEmpty) return StateView.error(_error!, onRetry: _search);
     if (_hits.isEmpty && _loading) return const Center(child: CircularProgressIndicator());
     if (_hits.isEmpty) return const StateView.empty(Icons.search_off_rounded, 'No models found');
+    final list = _byLikes ? ([..._hits]..sort((a, b) => b.likes.compareTo(a.likes))) : _hits;
+    final saved = {for (final m in settings.jsonList('models.bookmarks')) if (m['src'] == _src.name) '${m['id']}'};
     return RefreshIndicator(
       onRefresh: _search,
       child: NotificationListener<ScrollNotification>(
@@ -614,7 +627,7 @@ class _ModelsPageState extends State<ModelsPage> {
           childAspectRatio: 0.78,
         ),
         itemCount: _hits.length,
-        itemBuilder: (_, i) => _HitCard(hit: _hits[i], onTap: () => _open(_hits[i])),
+        itemBuilder: (_, i) => _HitCard(hit: list[i], saved: saved.contains(list[i].id), onTap: () => _open(list[i])),
       ),
       ),
     );
@@ -623,6 +636,11 @@ class _ModelsPageState extends State<ModelsPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Find models'), actions: [
+          IconButton(
+            tooltip: _byLikes ? 'Sorted by likes' : 'Sort by likes',
+            icon: Icon(_byLikes ? Icons.favorite_rounded : Icons.favorite_outline_rounded),
+            onPressed: () => setState(() => _byLikes = !_byLikes),
+          ),
           IconButton(tooltip: 'Saved and downloaded', icon: const Icon(Icons.bookmarks_outlined), onPressed: _saved),
           if (_src is CrealitySource && CrealitySource.signedIn)
             IconButton(
@@ -694,7 +712,8 @@ class _ModelsPageState extends State<ModelsPage> {
 class _HitCard extends StatelessWidget {
   final ModelHit hit;
   final VoidCallback onTap;
-  const _HitCard({required this.hit, required this.onTap});
+  final bool saved;
+  const _HitCard({required this.hit, required this.onTap, this.saved = false});
   @override
   Widget build(BuildContext context) {
     final placeholder = Icon(Icons.view_in_ar_rounded, color: C.muted);
@@ -716,7 +735,8 @@ class _HitCard extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(hit.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text('${saved ? '★ ' : ''}${hit.title}',
+                maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text('${hit.author}${hit.likes > 0 ? ' · ♥ ${hit.likes}' : ''}',
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: T.caption.copyWith(color: C.muted)),

@@ -143,7 +143,13 @@ void watchPrinter(Printer p, MoonrakerClient c) {
       sent = {
         if ((s.currentLayer ?? 0) >= 2) 'first',
         if (s.eta != null && s.eta! <= 600) 'almost',
+        for (final q in const [25, 50, 75]) if (s.progress * 100 >= q) 'q$q',
       };
+    }
+    if (state == 'printing' && settings.flag('notifyQuarters', false)) {
+      for (final q in const [25, 50, 75]) {
+        if (s.progress * 100 >= q && sent.add('q$q')) _say(p.key, '${p.name}: $q% done', file);
+      }
     }
     for (final m in milestones(state: state, layer: s.currentLayer, eta: s.eta, sent: sent)) {
       sent.add(m);
@@ -163,6 +169,9 @@ void watchPrinter(Printer p, MoonrakerClient c) {
           settings.flag('feedback')) {
         HapticFeedback.heavyImpact();
         SystemSound.play(SystemSoundType.alert);
+      }
+      if (state == 'printing' && last != 'paused' && settings.flag('notifyStart', false)) {
+        _say(p.key, '${p.name}: print started', file);
       }
       if (state == 'complete' && settings.flag('notifyDone')) {
         _say(p.key, '${p.name}: print finished', '$file · ${_short(s.printDuration)}');

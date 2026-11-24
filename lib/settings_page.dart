@@ -329,12 +329,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   ('notifyHumidity', 'CFS humidity too high'),
                   ('notifyMaintenance', 'Maintenance due and spare parts low (once a day)'),
                   ('notifyDrift', 'Nozzle temperature far off its target'),
+                  ('notifyStart', 'Print started'),
+                  ('notifyQuarters', 'At 25%, 50% and 75%'),
                   ('feedback', 'Vibrate and sound while the app is open'),
                 ])
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(label),
-                    value: settings.flag(key),
+                    value: settings.flag(key, !const {'notifyStart', 'notifyQuarters'}.contains(key)), // these two start off
                     onChanged: (v) {
                       settings.setFlag(key, v);
                       _refresh();
