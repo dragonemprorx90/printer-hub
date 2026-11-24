@@ -1546,6 +1546,9 @@ class MoonrakerClient {
 
   Uri timelapseUrl(String path) => _uri(['server', 'files', 'timelapse', ...path.split('/')]);
 
+  Future<void> deleteTimelapse(String path) async =>
+      _check(await _http.delete(timelapseUrl(path), headers: authHeaders));
+
   Future<Uint8List> timelapseBytes(String path) async {
     final r = await _http.get(timelapseUrl(path), headers: authHeaders);
     if (r.statusCode != 200) throw MoonrakerError('Download failed (HTTP ${r.statusCode})');

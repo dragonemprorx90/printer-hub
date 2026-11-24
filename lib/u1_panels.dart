@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -259,8 +260,18 @@ class TimelapsePanel extends StatefulWidget {
 }
 
 class _TimelapsePanelState extends State<TimelapsePanel> {
-  late final _list =
+  late var _list =
       widget.client.timelapses().catchError((_) => <(String, int, DateTime)>[]);
+
+  Future<void> _delete(String path) async {
+    if (!await confirm(context, 'Delete this timelapse?',
+            message: '${path.split('/').last} is removed from the printer.', action: 'Delete', danger: true) ||
+        !mounted) {
+      return;
+    }
+    await run(context, () => widget.client.deleteTimelapse(path), done: 'Deleted');
+    setState(() => _list = widget.client.timelapses().catchError((_) => <(String, int, DateTime)>[]));
+  }
   final _busy = <String>{};
 
   Future<void> _save(String path) async {
@@ -286,6 +297,11 @@ class _TimelapsePanelState extends State<TimelapsePanel> {
             title: 'Timelapses',
             icon: Icons.movie_outlined,
             child: Column(children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('${vids.length} videos · ${fmtBytes(vids.fold(0, (a, v) => a + v.$2))}',
+                    style: T.small.copyWith(color: C.muted)),
+              ),
               for (final (path, size, at) in vids.take(20))
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -312,6 +328,11 @@ class _TimelapsePanelState extends State<TimelapsePanel> {
                             icon: const Icon(Icons.download_rounded),
                             onPressed: () => _save(path),
                           ),
+                    IconButton(
+                      tooltip: 'Delete',
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () => _delete(path),
+                    ),
                   ]),
                 ),
             ]),
@@ -735,11 +756,22 @@ class _HealthPanelState extends State<HealthPanel> {
           return Panel(
             title: 'Printer health',
             icon: Icons.monitor_heart_outlined,
-            trailing: IconButton(
-              tooltip: 'Refresh',
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: () => setState(() => _data = widget.client.health()),
-            ),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: 'Copy for a bug report',
+                icon: const Icon(Icons.copy_rounded),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(
+                      text: [for (final (k, v) in rows) '$k: $v', ...problems.map((p) => 'Problem: $p')].join('\n')));
+                  toast(context, 'Printer health copied');
+                },
+              ),
+              IconButton(
+                tooltip: 'Refresh',
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: () => setState(() => _data = widget.client.health()),
+              ),
+            ]),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               for (final p in problems)
                 Padding(
