@@ -928,16 +928,28 @@ class _FileSheetState extends State<_FileSheet> {
       ].where((p) => clientFor(p) != c).toList();
 
   /// Copies this file to another printer and offers to start it there.
+  bool _idle(Printer p) {
+    final s = clientFor(p).status;
+    return s.online && !{'printing', 'paused', 'error'}.contains(s.state);
+  }
+
   Future<void> _send() async {
     final to = await showModalBottomSheet<Printer>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const ListTile(title: Text('Send to')),
-          for (final p in _others)
+          // Idle printers first; a smaller bed than this one gets a warning.
+          for (final (i, p) in ([..._others]..sort((a, b) => (_idle(b) ? 1 : 0).compareTo(_idle(a) ? 1 : 0))).indexed)
             ListTile(
-              title: Text(p.name),
-              subtitle: Text(clientFor(p).status.online ? clientFor(p).status.state : 'offline'),
+              title: Text('${p.name}${i == 0 && _idle(p) ? '  ·  suggested' : ''}'),
+              subtitle: Text([
+                clientFor(p).status.online ? clientFor(p).status.state : 'offline',
+                if (clientFor(p).status.buildVolume case final v?) '${v[0].round()}×${v[1].round()}×${v[2].round()} mm',
+                if ((c.status.buildVolume, clientFor(p).status.buildVolume) case (final mine?, final theirs?)
+                    when !fits(mine, theirs))
+                  'smaller bed than this printer: check the model fits',
+              ].join(' · ')),
               onTap: () => Navigator.pop(ctx, p),
             ),
         ]),
