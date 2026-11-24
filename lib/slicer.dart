@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'gcode.dart';
 import 'mesh.dart';
 import 'moonraker.dart';
+import 'relay.dart';
 import 'settings.dart';
 import 'ui.dart';
 
@@ -290,6 +291,21 @@ class _SliceEditorState extends State<SliceEditor> {
     }
   }
 
+  /// [f] on the slicer; once more on a fresh link if the relay link dropped
+  /// while the page was open (the relay closes idle links now and then).
+  Future<V> _call<V>(Future<V> Function(SlicerApi) f) async {
+    try {
+      return await f(_api!);
+    } on RelayError {
+      if (widget.api != null || _closed) rethrow;
+      _release();
+      final (h, release) = await widget.client.bridgeClient();
+      _release = release;
+      _api = SlicerApi(h);
+      return f(_api!);
+    }
+  }
+
   /// Selects printer [p] with the choices remembered for it.
   void _pick(SlicePrinter p) {
     _p = p;
@@ -318,7 +334,7 @@ class _SliceEditorState extends State<SliceEditor> {
     try {
       final stl = widget.name.toLowerCase().endsWith('.stl')
           ? widget.model
-          : await _api!.mesh(widget.model, name: widget.name, printer: _p.id);
+          : await _call((a) => a.mesh(widget.model, name: widget.name, printer: _p.id));
       final m = await compute(_readStl, stl);
       if (!mounted) return;
       setState(() {
@@ -389,8 +405,8 @@ class _SliceEditorState extends State<SliceEditor> {
   Future<void> _autoOrient({bool quiet = false}) async {
     setState(() => _meshBusy = true);
     try {
-      final stl = await _api!.mesh(toStl(place(_mesh!.$1.v, _place, _scaled)),
-          name: 'model.stl', printer: _p.id, orient: true);
+      final stl = await _call((a) => a.mesh(toStl(place(_mesh!.$1.v, _place, _scaled)),
+          name: 'model.stl', printer: _p.id, orient: true));
       final m = await compute(_readStl, stl);
       if (!mounted) return;
       setState(() {
@@ -422,7 +438,7 @@ class _SliceEditorState extends State<SliceEditor> {
       // else as the placed mesh, sliced where it stands.
       final asIs = _mesh == null || !_editor || (_is3mf && !_moved);
       final stem = widget.name.contains('.') ? widget.name.substring(0, widget.name.lastIndexOf('.')) : widget.name;
-      final id = await _api!.start(asIs ? widget.model : toStl(place(_mesh!.$1.v, _place, _scaled)),
+      final id = await _call((a) => a.start(asIs ? widget.model : toStl(place(_mesh!.$1.v, _place, _scaled)),
           name: asIs ? widget.name : '$stem.stl',
           printer: _p.id,
           process: _process,
@@ -430,9 +446,9 @@ class _SliceEditorState extends State<SliceEditor> {
           tool: _tool,
           folder: widget.folder,
           placed: !asIs,
-          settings: _editor ? settingsJson(_values, tool: _tool, tools: _p.tools, allTools: _is3mf && asIs) : null);
+          settings: _editor ? settingsJson(_values, tool: _tool, tools: _p.tools, allTools: _is3mf && asIs) : null));
       while (!_closed) {
-        final j = await _api!.job(id);
+        final j = await _call((a) => a.job(id));
         switch (j['state']) {
           case 'done':
             if (mounted) {
