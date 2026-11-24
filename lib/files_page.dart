@@ -1332,6 +1332,12 @@ class _FileSheetState extends State<_FileSheet> {
                   if (avg != null) StatTile(label: 'Real time', value: fmtDuration(avg)),
                 ],
                 FilamentCheck(meta: m, client: c),
+                if (tempWarning('${m['filament_type'] ?? ''}'.split(';').first,
+                        (m['first_layer_extr_temp'] ?? m['nozzle_temperature']) as num?)
+                    case final w?)
+                  Hint(w),
+                if (cfsWarning('${m['filament_type'] ?? ''}'.split(';').first, hasCfs: c.status.cfs.isNotEmpty) case final w?)
+                  Hint(w),
                 for (final n in settings.jsonList('materialNotes'))
                   if ('${m['filament_type'] ?? ''}'.toUpperCase().contains('${n['m']}'.toUpperCase()) ||
                       '${n['m']}'.toUpperCase().contains('${m['filament_type'] ?? '~'}'.split(';').first.toUpperCase()))
