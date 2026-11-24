@@ -260,7 +260,24 @@ class PrinterCamera extends StatefulWidget {
   State<PrinterCamera> createState() => PrinterCameraState();
 }
 
-class PrinterCameraState extends State<PrinterCamera> {
+class PrinterCameraState extends State<PrinterCamera> with WidgetsBindingObserver {
+  bool _background = false;
+
+  /// No video while the app is in the background (saves data and battery);
+  /// it starts again when you come back.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      if (!_background) {
+        _background = true;
+        _teardown();
+      }
+    } else if (state == AppLifecycleState.resumed && _background) {
+      _background = false;
+      restart();
+    }
+  }
+
   _Mode _mode = _Mode.probing;
   String? _error;
   RTCVideoRenderer? _renderer;
@@ -273,6 +290,7 @@ class PrinterCameraState extends State<PrinterCamera> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _start();
     // "Light on while watching": switch it on if it's off, and back off when
     // the view closes (only if we were the ones who turned it on).
@@ -461,6 +479,7 @@ class PrinterCameraState extends State<PrinterCamera> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_litByUs) widget.client.setLed(false).catchError((_) {});
     _teardown();
     super.dispose();
