@@ -1033,6 +1033,12 @@ class _FileSheetState extends State<_FileSheet> {
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const ListTile(title: Text('Send to')),
+          if (_others.length > 1)
+            ListTile(
+              leading: const Icon(Icons.copy_all_rounded),
+              title: Text('Every other printer (${_others.length})'),
+              onTap: () => Navigator.pop(ctx, const Printer(name: '*', host: '*')),
+            ),
           // Idle printers first; a smaller bed than this one gets a warning.
           for (final (i, p) in ([..._others]..sort((a, b) => (_idle(b) ? 1 : 0).compareTo(_idle(a) ? 1 : 0))).indexed)
             ListTile(
@@ -1050,6 +1056,16 @@ class _FileSheetState extends State<_FileSheet> {
       ),
     );
     if (to == null || !mounted) return;
+    if (to.host == '*') {
+      // One download, then up to each printer; nothing starts printing.
+      await run(context, () async {
+        final bytes = await c.download(f.path);
+        for (final p in _others) {
+          await clientFor(p).upload(f.name, bytes);
+        }
+      }, done: 'Sent to ${_others.length} printers');
+      return;
+    }
     final other = clientFor(to);
     var sent = false;
     await run(context, () async {
