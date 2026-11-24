@@ -442,6 +442,15 @@ class _WorkshopPageState extends State<WorkshopPage> {
           const SizedBox(height: 8),
           for (final (name, every) in maintenanceTemplate(widget.printer.name)) _row(name, 'every ${every.round()} h'),
           const SizedBox(height: 8),
+          if (settings.strings('printers').length > 1 && settings.jsonList(_maintKey).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: OutlinedButton.icon(
+                onPressed: _copyReminders,
+                icon: const Icon(Icons.copy_all_rounded),
+                label: const Text('Copy my reminders to the other printers'),
+              ),
+            ),
           FilledButton.tonal(
             onPressed: () {
               final have = settings.jsonList(_maintKey);
@@ -593,6 +602,33 @@ class _WorkshopPageState extends State<WorkshopPage> {
               ]),
       ),
     ];
+  }
+
+  /// This printer's reminders onto every other printer, counting from each one's hours now.
+  Future<void> _copyReminders() async {
+    final mine = settings.jsonList(_maintKey);
+    final others = [
+      for (final x in settings.strings('printers')) Printer.fromJson(jsonDecode(x)),
+    ].where((p) => p.key != _k).toList();
+    var n = 0;
+    await run(context, () async {
+      for (final p in others) {
+        final double hours;
+        try {
+          hours = (await clientFor(p).historyTotals()).printTime / 3600;
+        } catch (_) {
+          continue; // offline: skip it
+        }
+        final have = settings.jsonList('maint.${p.key}');
+        final names = {for (final m in have) '${m['name']}'};
+        settings.setJsonList('maint.${p.key}', [
+          ...have,
+          for (final m in mine)
+            if (!names.contains('${m['name']}')) {'name': m['name'], 'hours': m['hours'], 'since': hours},
+        ]);
+        n++;
+      }
+    }, done: 'Copied to $n printers (offline ones are skipped)');
   }
 
   void _setPart(int i, int n) {
