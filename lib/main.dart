@@ -642,9 +642,14 @@ class _PrinterListPageState extends State<PrinterListPage> {
                   builder: (context, _) {
                     final hideOff = settings.flag('hideOffline', false);
                     final problemsFirst = settings.flag('listSort', false);
+                    final groups = {for (final p in _printers) settings.text('group.${p.key}')}..remove('');
+                    // A group that no printer has any more shows everything.
+                    final group = groups.contains(settings.text('listGroup')) ? settings.text('listGroup') : '';
                     final shown = [
                       for (final p in _printers)
-                        if (!hideOff || clientFor(p).status.online) p,
+                        if ((!hideOff || clientFor(p).status.online) &&
+                            (group.isEmpty || settings.text('group.${p.key}') == group))
+                          p,
                     ];
                     if (problemsFirst) {
                       final idx = {for (final (i, p) in shown.indexed) p: i};
@@ -659,6 +664,21 @@ class _PrinterListPageState extends State<PrinterListPage> {
                     }
                     final next = nextDone([for (final p in _printers) (p.name, clientFor(p).status)]);
                     return Column(children: [
+                      if (groups.isNotEmpty)
+                        SizedBox(
+                          height: 40,
+                          child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16), children: [
+                            for (final g in ['', ...(groups.toList()..sort())])
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(g.isEmpty ? 'All' : g),
+                                  selected: group == g,
+                                  onSelected: (_) => setState(() => settings.setText('listGroup', g)),
+                                ),
+                              ),
+                          ]),
+                        ),
                       if (_away.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -960,6 +980,10 @@ class _PrinterCard extends StatelessWidget {
                       await launchUrl(Uri.parse('http://${printer.host}'), mode: LaunchMode.externalApplication);
                     case 'duplicate':
                       onDuplicate();
+                    case 'group':
+                      final g = await askText(context, 'Group', initial: settings.text('group.${printer.key}'),
+                          hint: 'e.g. Garage (empty = no group)', action: 'Save');
+                      if (g != null) settings.setText('group.${printer.key}', g.trim());
                     case 'link':
                       // For Shortcuts, Home Assistant or a note: opens this printer in the app.
                       Clipboard.setData(ClipboardData(text: 'printerhub://printer/${Uri.encodeComponent(printer.name)}'));
@@ -971,6 +995,7 @@ class _PrinterCard extends StatelessWidget {
                   PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
                   PopupMenuItem(value: 'copy', child: Text('Copy address')),
                   PopupMenuItem(value: 'link', child: Text('Copy app link')),
+                  PopupMenuItem(value: 'group', child: Text('Group…')),
                   PopupMenuItem(value: 'web', child: Text('Open its web page')),
                   PopupMenuItem(value: 'delete', child: Text('Remove')),
                 ],
