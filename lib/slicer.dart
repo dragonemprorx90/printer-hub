@@ -664,13 +664,61 @@ class _SliceEditorState extends State<SliceEditor> {
     );
   }
 
+  /// Your own named sets of setting changes ("Strong PETG"), per printer.
+  Future<void> _savedSetups() async {
+    final key = 'slice.${_p.id}.saved';
+    final saved = settings.jsonList(key);
+    final pick = await showModalBottomSheet<Object>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: ListView(shrinkWrap: true, children: [
+          const ListTile(title: Text('Saved settings')),
+          for (final (i, m) in saved.indexed)
+            ListTile(
+              title: Text('${m['name']}'),
+              subtitle: Text('${(m['values'] as Map).length} changes'),
+              onTap: () => Navigator.pop(ctx, i),
+              trailing: IconButton(
+                tooltip: 'Delete',
+                icon: const Icon(Icons.delete_outline_rounded),
+                onPressed: () => Navigator.pop(ctx, -1 - i),
+              ),
+            ),
+          if (_values.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.bookmark_add_outlined),
+              title: const Text('Save the current changes…'),
+              onTap: () => Navigator.pop(ctx, 'save'),
+            ),
+          if (saved.isEmpty && _values.isEmpty) const ListTile(title: Text('Change some settings, then save them here.')),
+        ]),
+      ),
+    );
+    if (pick == null || !mounted) return;
+    if (pick == 'save') {
+      final name = await askText(context, 'Name these settings', hint: 'e.g. Strong PETG', action: 'Save');
+      if (name == null || name.trim().isEmpty) return;
+      settings.setJsonList(key, [...saved, {'name': name.trim(), 'values': _values}]);
+      if (mounted) toast(context, 'Saved "${name.trim()}"');
+    } else if (pick is int && pick >= 0) {
+      setState(() => _values = (saved[pick]['values'] as Map).cast<String, String>());
+      toast(context, 'Using "${saved[pick]['name']}"');
+    } else if (pick is int) {
+      settings.setJsonList(key, [...saved]..removeAt(-1 - pick));
+    }
+  }
+
   Widget _settingsPanels() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         for (final (title, icon, opts) in sliceGroups) ...[
           Panel(
             title: title == 'Temperature' && _p.tools > 1 && !(_is3mf && !_moved) ? 'Temperature · T${_tool + 1}' : title,
             icon: icon,
-            trailing: title == 'Quality' && _values.isNotEmpty && !_running
-                ? TextButton(onPressed: () => setState(() => _values = {}), child: const Text('Use preset'))
+            trailing: title == 'Quality' && !_running
+                ? Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(tooltip: 'Saved settings', icon: const Icon(Icons.bookmarks_outlined), onPressed: _savedSetups),
+                    if (_values.isNotEmpty)
+                      TextButton(onPressed: () => setState(() => _values = {}), child: const Text('Use preset')),
+                  ])
                 : null,
             child: _grid([for (final o in opts) _option(o)]),
           ),
