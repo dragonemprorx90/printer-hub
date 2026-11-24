@@ -1270,7 +1270,7 @@ class _PrinterDialogState extends State<PrinterDialog> {
                     icon: const Icon(Icons.content_paste_rounded),
                     onPressed: () async {
                       final t = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim() ?? '';
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       if (!t.startsWith('PHB')) return toast(context, 'The clipboard has no remote access code (it starts with PHB1:)', error: true);
                       setState(() => _relay.text = t);
                     },
