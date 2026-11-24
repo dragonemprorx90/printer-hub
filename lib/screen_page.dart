@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'moonraker.dart';
@@ -25,7 +26,7 @@ class _ScreenPageState extends State<ScreenPage> {
   Uint8List? _frame;
   (int, int) _size = (480, 320);
   String? _error;
-  bool _alive = true;
+  bool _alive = true, _paused = false, _viewOnly = false;
   DateTime _lastMove = DateTime(0);
   Offset _last = Offset.zero;
 
@@ -44,6 +45,10 @@ class _ScreenPageState extends State<ScreenPage> {
   Future<void> _loop() async {
     final gap = Duration(milliseconds: widget.client.viaRelay ? 400 : 150);
     while (_alive) {
+      if (_paused) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        continue;
+      }
       try {
         final f = await widget.client.screenFrame();
         if (!_alive) return;
@@ -62,6 +67,7 @@ class _ScreenPageState extends State<ScreenPage> {
   }
 
   void _touch(String a, Offset p, Size box) {
+    if (_viewOnly) return; // look without tapping anything by mistake
     _last = p;
     final x = (p.dx / box.width * _size.$1).round().clamp(0, _size.$1 - 1);
     final y = (p.dy / box.height * _size.$2).round().clamp(0, _size.$2 - 1);
@@ -72,7 +78,33 @@ class _ScreenPageState extends State<ScreenPage> {
   Widget build(BuildContext context) {
     final f = _frame;
     return Scaffold(
-      appBar: AppBar(title: const Text('Printer screen')),
+      appBar: AppBar(title: const Text('Printer screen'), actions: [
+        IconButton(
+          tooltip: _viewOnly ? 'Allow touches' : 'View only (no touches)',
+          icon: Icon(_viewOnly ? Icons.touch_app_outlined : Icons.do_not_touch_outlined),
+          onPressed: () => setState(() => _viewOnly = !_viewOnly),
+        ),
+        IconButton(
+          tooltip: _paused ? 'Resume' : 'Freeze the picture',
+          icon: Icon(_paused ? Icons.play_arrow_rounded : Icons.pause_rounded),
+          onPressed: () => setState(() => _paused = !_paused),
+        ),
+        IconButton(
+          tooltip: 'Save a screenshot',
+          icon: const Icon(Icons.photo_camera_outlined),
+          onPressed: _frame == null
+              ? null
+              : () async {
+                  try {
+                    final saved = await FilePicker.saveFile(
+                        fileName: 'printer-screen-${fmtDate(DateTime.now())}.png', bytes: _frame!);
+                    if (saved != null && context.mounted) toast(context, 'Screenshot saved');
+                  } catch (e) {
+                    if (context.mounted) toast(context, 'Could not save: $e', error: true);
+                  }
+                },
+        ),
+      ]),
       body: Center(
         child: f == null
             ? (_error == null

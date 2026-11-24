@@ -742,6 +742,16 @@ class _SliceEditorState extends State<SliceEditor> {
           stat('Filament', (j['weight'] as num? ?? 0) > 0 ? '${j['weight']} g' : '—'),
         ]),
         const SizedBox(height: 12),
+        Row(children: [
+          stat(
+              'Cost',
+              (j['weight'] as num? ?? 0) > 0 || (j['time'] as num? ?? 0) > 0
+                  ? '${settings.text('currency', r'$')}${((j['weight'] as num? ?? 0) / 1000 * settings.number('filamentPrice', 20) + (j['time'] as num? ?? 0) / 3600 * settings.number('printerWatts', 350) / 1000 * settings.number('kwhPrice', 0.30)).toStringAsFixed(2)}'
+                  : '—'),
+          stat('Done if started now',
+              (j['time'] as num? ?? 0) > 0 ? fmtTime(DateTime.now().add(Duration(seconds: (j['time'] as num).round()))) : '—'),
+        ]),
+        const SizedBox(height: 12),
         Text(files.join('\n'), style: T.small.copyWith(color: C.muted)),
         const SizedBox(height: 16),
         FilledButton.icon(
