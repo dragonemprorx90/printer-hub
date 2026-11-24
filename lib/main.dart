@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:hub_link/hub_link.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -944,6 +945,46 @@ class PrinterDialog extends StatefulWidget {
 }
 
 class _PrinterDialogState extends State<PrinterDialog> {
+  /// A throwaway client for the address typed so far (not saved, not watched).
+  MoonrakerClient _probe() => MoonrakerClient(
+      host: _host.text.trim(),
+      port: int.tryParse(_port.text.trim()) ?? 7125,
+      apiKey: _key.text.trim().isEmpty ? null : _key.text.trim());
+
+  /// Asks Moonraker who it is, so a typo shows before you save.
+  Future<void> _test() async {
+    if (_host.text.trim().isEmpty) return toast(context, 'Type the printer\'s address first', error: true);
+    try {
+      final r = await http
+          .get(Uri.parse('http://${_host.text.trim()}:${int.tryParse(_port.text.trim()) ?? 7125}/server/info'),
+              headers: {if (_key.text.trim().isNotEmpty) 'X-Api-Key': _key.text.trim()})
+          .timeout(const Duration(seconds: 5));
+      final info = jsonDecode(r.body)['result'] as Map?;
+      if (!mounted) return;
+      if (r.statusCode != 200 || info == null) return toast(context, 'It answered, but not like Moonraker (HTTP ${r.statusCode})', error: true);
+      toast(context, 'Found Moonraker ${info['moonraker_version'] ?? ''} · Klipper ${info['klippy_state'] ?? '?'}');
+    } catch (e) {
+      if (mounted) toast(context, 'No answer from ${_host.text.trim()}: $e', error: true);
+    }
+  }
+
+  /// Fills the camera field from the printer's own webcam list.
+  Future<void> _findCamera() async {
+    if (_host.text.trim().isEmpty) return toast(context, 'Type the printer\'s address first', error: true);
+    final cams = await _probe().webcams().catchError((_) => <String>[]);
+    if (!mounted) return;
+    if (cams.isEmpty) return toast(context, 'The printer lists no cameras. Leave the field empty to auto-detect.');
+    final pick = cams.length == 1
+        ? cams.first
+        : await showDialog<String>(
+            context: context,
+            builder: (ctx) => SimpleDialog(title: const Text('Which camera?'), children: [
+              for (final c in cams) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, c), child: Text(c)),
+            ]),
+          );
+    if (pick != null && mounted) setState(() => _cam.text = pick);
+  }
+
   late final _name = TextEditingController(text: widget.initial?.name ?? '');
   late final _host = TextEditingController(text: widget.initial?.host ?? '');
   late final _port = TextEditingController(text: '${widget.initial?.port ?? 7125}');
@@ -1032,6 +1073,16 @@ class _PrinterDialogState extends State<PrinterDialog> {
         ),
       ),
       actions: [
+        TextButton.icon(
+          onPressed: _test,
+          icon: const Icon(Icons.network_check_rounded, size: 18),
+          label: const Text('Test'),
+        ),
+        TextButton.icon(
+          onPressed: _findCamera,
+          icon: const Icon(Icons.videocam_outlined, size: 18),
+          label: const Text('Find camera'),
+        ),
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(onPressed: _save, child: const Text('Save')),
       ],

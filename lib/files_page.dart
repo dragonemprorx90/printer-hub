@@ -881,9 +881,20 @@ class _FileTile extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(file.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Row(children: [
+                  Flexible(
+                    child: Text(file.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  if (DateTime.now().difference(file.modified).inHours < 24)
+                    Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(color: C.accent.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(99)),
+                      child: Text('new', style: T.caption.copyWith(color: C.ink(C.accent), fontWeight: FontWeight.w700)),
+                    ),
+                ]),
                 const SizedBox(height: 2),
                 Text(
                   '${fmtBytes(file.size)} · ${fmtAgo(file.modified)}'
