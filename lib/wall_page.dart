@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'camera.dart';
+import 'insights.dart';
 import 'moonraker.dart';
 import 'printer_page.dart';
 import 'settings.dart';
@@ -92,7 +93,10 @@ class _WallPageState extends State<WallPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Wall · ${fmtTime(DateTime.now())}'),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Wall · ${fmtTime(DateTime.now())}'),
+          Text(fleetSummary([for (final p in widget.printers) clientFor(p).status]), style: T.caption.copyWith(color: C.muted)),
+        ]),
         actions: [
           IconButton(
             tooltip: _sorted ? 'Sorted: problems first' : 'Saved order',
