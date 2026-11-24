@@ -6,6 +6,7 @@ import 'package:printer_hub/main.dart';
 import 'package:printer_hub/moonraker.dart';
 import 'package:printer_hub/printer_page.dart';
 import 'package:printer_hub/settings_page.dart';
+import 'package:printer_hub/wall_page.dart';
 import 'package:printer_hub/settings.dart';
 import 'package:printer_hub/workshop_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -126,5 +127,28 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('COST ESTIMATE'), findsOneWidget);
     expect(t.takeException(), isNull);
+  });
+
+  // All printers and the camera wall with printers that can't be reached.
+  testWidgets('All printers and the wall render offline', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    await settings.load();
+    t.view.physicalSize = const Size(390 * 3, 844 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    const ps = [Printer(name: 'K2', host: '127.0.0.1', port: 3), Printer(name: 'U1', host: '127.0.0.1', port: 4)];
+    await t.pumpWidget(const MaterialApp(home: FleetPage(printers: ps)));
+    await t.pump(const Duration(seconds: 2));
+    expect(t.takeException(), isNull, reason: 'fleet');
+    await t.pumpWidget(const MaterialApp(home: WallPage(printers: ps)));
+    await t.pump(const Duration(seconds: 2));
+    await t.tap(find.byTooltip('Show one printer at a time, in turn'));
+    await t.pump(const Duration(seconds: 1));
+    expect(t.takeException(), isNull, reason: 'wall');
+    await t.pumpWidget(const SizedBox());
+    for (final p in ps) {
+      dropClient(p);
+    }
+    await t.pump(const Duration(minutes: 2));
   });
 }
