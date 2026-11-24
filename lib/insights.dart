@@ -150,6 +150,28 @@ int layerForHeight(double mm, {required double layer, double? first}) {
   return ((mm - f) / layer).ceil() + 1;
 }
 
+/// Seconds the print is running behind (+) or ahead (−) of the slicer's
+/// estimate, once there's enough to go on (5%).
+double? paceVsSlicer(double elapsed, double progress, double? estimate) {
+  if (estimate == null || estimate <= 0 || progress < 0.05 || elapsed <= 0) return null;
+  return elapsed / progress - estimate;
+}
+
+/// "12m slower" / "8m faster" / "on time" (within 2 minutes).
+String paceText(double secs) {
+  final m = (secs.abs() / 60).round();
+  if (m < 2) return 'on time';
+  final t = m >= 60 ? '${m ~/ 60}h ${m % 60}m' : '${m}m';
+  return secs > 0 ? '$t slower' : '$t faster';
+}
+
+/// A short status to paste anywhere.
+String statusShare(String printer, String file, double progress, double? eta, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  final done = eta == null ? '' : ', done about ${fmtHm(n.add(Duration(seconds: eta.round())))}';
+  return '$printer: ${file.split('/').last} is ${(progress * 100).round()}% done$done.';
+}
+
 // ---------------------------------------------------------------- maintenance
 
 /// Abrasive filaments wear a brass nozzle faster: they count extra hours.
@@ -394,4 +416,18 @@ String? suggestPrinter(List<(String, bool, double, double)> printers, {double ne
       if (p.$2 && p.$3 >= needX && p.$4 >= needY) p,
   ]..sort((a, b) => (a.$3 * a.$4).compareTo(b.$3 * b.$4));
   return fit.isEmpty ? null : fit.first.$1;
+}
+
+/// "2 printing · 1 idle · 1 offline".
+String fleetSummary(List<PrinterStatus> all) {
+  final printing = all.where((s) => s.online && s.state == 'printing').length;
+  final paused = all.where((s) => s.online && s.state == 'paused').length;
+  final off = all.where((s) => !s.online).length;
+  final idle = all.length - printing - paused - off;
+  return [
+    if (printing > 0) '$printing printing',
+    if (paused > 0) '$paused paused',
+    if (idle > 0) '$idle idle',
+    if (off > 0) '$off offline',
+  ].join(' · ');
 }

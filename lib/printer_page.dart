@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'camera.dart';
 import 'charts.dart';
@@ -282,6 +284,7 @@ class _OverviewTabState extends State<OverviewTab> {
       builder: (context, snap) {
         final s = snap.data!;
         final job = _JobPanel(
+            name: widget.printer.name,
             s: s, client: c, onBrowseFiles: widget.onBrowseFiles);
         final temps = _Temps(s: s, client: c);
         final cfs = Column(children: [
@@ -437,8 +440,9 @@ class _JobPanel extends StatelessWidget {
   final PrinterStatus s;
   final MoonrakerClient client;
   final VoidCallback onBrowseFiles;
+  final String name;
   const _JobPanel(
-      {required this.s, required this.client, required this.onBrowseFiles});
+      {required this.s, required this.client, required this.onBrowseFiles, required this.name});
 
   void _objects(BuildContext context) => showModalBottomSheet(
         context: context,
@@ -560,8 +564,29 @@ class _JobPanel extends StatelessWidget {
                       : fmtTime(DateTime.now().add(Duration(seconds: eta.round()))),
                 ),
                 StatTile(label: 'Layer', value: layers),
-                StatTile(label: 'Filament', value: fmtFilament(s.filamentUsed)),
+                StatTile(label: 'Filament', value: '${fmtFilament(s.filamentUsed)} · ${gramsFromMm(s.filamentUsed).round()} g'),
+                if (paceVsSlicer(s.printDuration, s.fileProgress, (s.jobMeta['estimated_time'] as num?)?.toDouble())
+                    case final p? when active)
+                  StatTile(label: 'Vs slicer', value: paceText(p)),
+                if (active && (s.currentLayer ?? 0) > 1)
+                  StatTile(label: 'Per layer', value: fmtDuration(s.printDuration / s.currentLayer!)),
+                if (active && ((s.speedFactor - 1).abs() > 0.01 || (s.flowFactor - 1).abs() > 0.01))
+                  StatTile(label: 'Speed / flow', value: '${(s.speedFactor * 100).round()}% / ${(s.flowFactor * 100).round()}%'),
               ]),
+              if (active) ...[
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text('Copy status'),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: statusShare(name, s.filename!, s.progress, eta)));
+                      toast(context, 'Status copied');
+                    },
+                  ),
+                  _AwakeChip(),
+                ]),
+              ],
             ]),
           ),
         ]),
@@ -1134,4 +1159,31 @@ class _Actions extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Keeps the screen on while this printer is open (off when you leave).
+class _AwakeChip extends StatefulWidget {
+  @override
+  State<_AwakeChip> createState() => _AwakeChipState();
+}
+
+class _AwakeChipState extends State<_AwakeChip> {
+  bool _on = false;
+
+  @override
+  void dispose() {
+    if (_on) WakelockPlus.disable();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FilterChip(
+        avatar: Icon(_on ? Icons.light_mode_rounded : Icons.light_mode_outlined, size: 16),
+        label: const Text('Keep screen on'),
+        selected: _on,
+        onSelected: (v) {
+          setState(() => _on = v);
+          v ? WakelockPlus.enable() : WakelockPlus.disable();
+        },
+      );
 }

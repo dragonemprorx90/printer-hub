@@ -91,6 +91,24 @@ void main() {
     expect(toolChanges({}), isNull);
   });
 
+  test('pace against the slicer', () {
+    expect(paceVsSlicer(1800, 0.5, 3000), 600);
+    expect(paceVsSlicer(100, 0.01, 3000), isNull);
+    expect(paceText(600), '10m slower');
+    expect(paceText(-4000), '1h 7m faster');
+    expect(paceText(30), 'on time');
+    expect(statusShare('K2', 'a/b.gcode', 0.42, 3600, now: DateTime(2026, 1, 1, 10)), 'K2: b.gcode is 42% done, done about 11:00.');
+  });
+
+  test('fleet summary', () {
+    PrinterStatus st(String state, {bool on = true}) => PrinterStatus()
+      ..online = on
+      ..raw['print_stats'] = {'state': state};
+    expect(fleetSummary([st('printing'), st('printing'), st('standby'), st('x', on: false)]),
+        '2 printing · 1 idle · 1 offline');
+    expect(fleetSummary([]), '');
+  });
+
   test('files', () {
     final f = [
       GcodeFile('a/x.gcode', 10, DateTime(2026, 1, 1)),

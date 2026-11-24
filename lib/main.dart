@@ -8,6 +8,7 @@ import 'package:hub_link/hub_link.dart';
 
 import 'discovery.dart';
 import 'gcode.dart';
+import 'insights.dart';
 import 'moonraker.dart';
 import 'notify.dart';
 import 'orca_link.dart';
@@ -339,6 +340,19 @@ class _PrinterListPageState extends State<PrinterListPage> {
     );
   }
 
+  Stream<void>? _fleetStream;
+  String _fleetKeys = '';
+
+  /// Fires when any printer's status changes (made again when the list changes).
+  Stream<void> get _fleet {
+    final keys = _printers.map((p) => p.key).join(',');
+    if (_fleetStream == null || keys != _fleetKeys) {
+      _fleetKeys = keys;
+      _fleetStream = StreamGroupLite.merge([for (final p in _printers) clientFor(p).stream]).asBroadcastStream();
+    }
+    return _fleetStream!;
+  }
+
   /// Side by side on wide screens (iPad landscape, a big Mac window), when on.
   Printer? _side;
 
@@ -399,20 +413,61 @@ class _PrinterListPageState extends State<PrinterListPage> {
           : Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 760),
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-                  itemCount: _printers.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) {
-                    final p = _printers[i];
-                    return Reveal(index: i, child: _PrinterCard(
-                      printer: p,
-                      onOpen: split
-                          ? () => setState(() => _side = p)
-                          : () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterPage(printer: p))),
-                      onEdit: () => _edit(existing: p),
-                      onDelete: () => _delete(p),
-                    ));
+                child: StreamBuilder<void>(
+                  // Rebuild the summary line as printers change state.
+                  stream: _fleet,
+                  builder: (context, _) {
+                    final hideOff = settings.flag('hideOffline', false);
+                    final shown = [
+                      for (final p in _printers)
+                        if (!hideOff || clientFor(p).status.online) p,
+                    ];
+                    return Column(children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
+                        child: Row(children: [
+                          Expanded(
+                            child: Text(fleetSummary([for (final p in _printers) clientFor(p).status]),
+                                style: T.small.copyWith(color: C.muted)),
+                          ),
+                          IconButton(
+                            tooltip: hideOff ? 'Show offline printers' : 'Hide offline printers',
+                            icon: Icon(hideOff ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+                            onPressed: () => setState(() => settings.setFlag('hideOffline', !hideOff)),
+                          ),
+                        ]),
+                      ),
+                      Expanded(
+                        child: ReorderableListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                          buildDefaultDragHandles: false,
+                          itemCount: shown.length,
+                          onReorderItem: (a, b) {
+                            final from = _printers.indexOf(shown[a]), to = _printers.indexOf(shown[b]);
+                            setState(() => _printers.insert(to, _printers.removeAt(from)));
+                            _save();
+                          },
+                          itemBuilder: (_, i) {
+                            final p = shown[i];
+                            return ReorderableDelayedDragStartListener(
+                              key: ValueKey(p.key),
+                              index: i,
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Reveal(index: i, child: _PrinterCard(
+                                  printer: p,
+                                  onOpen: split
+                                      ? () => setState(() => _side = p)
+                                      : () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterPage(printer: p))),
+                                  onEdit: () => _edit(existing: p),
+                                  onDelete: () => _delete(p),
+                                )),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ]);
                   },
                 ),
               ),
@@ -808,4 +863,25 @@ class _PrinterDialogState extends State<PrinterDialog> {
           decoration: InputDecoration(labelText: label, hintText: hint, suffixIcon: suffix),
         ),
       );
+}
+
+/// Merges broadcast streams into one that fires when any of them does.
+class StreamGroupLite {
+  static Stream<void> merge(List<Stream<Object?>> streams) {
+    late StreamController<void> c;
+    final subs = <StreamSubscription<Object?>>[];
+    c = StreamController<void>(
+      onListen: () {
+        for (final s in streams) {
+          subs.add(s.listen((_) => c.add(null)));
+        }
+      },
+      onCancel: () async {
+        for (final s in subs) {
+          await s.cancel();
+        }
+      },
+    );
+    return c.stream;
+  }
 }
