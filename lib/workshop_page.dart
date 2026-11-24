@@ -299,7 +299,21 @@ class _WorkshopPageState extends State<WorkshopPage> {
         icon: Icons.report_outlined,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (reasons.isEmpty) Hint('Tag failed prints below to see what goes wrong most.'),
-          for (final (reason, n) in reasons) _row(reason, '$n'),
+          for (final (reason, n) in reasons)
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text(reason),
+              trailing: Text('$n', style: T.value.copyWith(fontSize: 14)),
+              children: [
+                for (final j in jobs)
+                  if (_reasons[jobKey(j)] == reason)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('${fmtDate(j.start)} · ${j.filename.split('/').last}${j.material == null ? '' : ' · ${j.material}'}',
+                          style: T.small.copyWith(color: C.muted)),
+                    ),
+              ],
+            ),
           const SizedBox(height: 8),
           for (final j in jobs.where((j) => !jobOk(j) && j.status != 'in_progress').take(15))
             ListTile(
