@@ -285,8 +285,14 @@ Future<void> _dailyReminders(Printer p, MoonrakerClient c) async {
         if ((part['n'] as int) <= (part['low'] as int? ?? 1)) '${part['name']}',
     ];
     settings.setText(key, today);
-    if (due.isNotEmpty) notify('${p.name}: maintenance due', due.join(', '));
-    if (low.isNotEmpty) notify('${p.name}: spare parts low', low.join(', '));
+    if (due.isNotEmpty) notify('${p.name}: maintenance due', due.join(', '), printerKey: p.key);
+    if (low.isNotEmpty) notify('${p.name}: spare parts low', low.join(', '), printerKey: p.key);
+    // Spools under the shopping-list limit (Workshop → Filament).
+    if (await c.hasSpoolman().catchError((_) => false)) {
+      final limit = settings.number('shopLimit', 200);
+      final few = [for (final sp in await c.spools()) if ((sp.remaining ?? 1e9) < limit) '${sp.material} ${sp.name}'.trim()];
+      if (few.isNotEmpty) notify('${p.name}: ${few.length} spool${few.length == 1 ? '' : 's'} running low', few.join(', '), printerKey: p.key);
+    }
   } catch (_) {}
 }
 
