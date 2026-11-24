@@ -1716,6 +1716,19 @@ class MoonrakerClient {
   Future<void> dequeue(String id) async => _check(await _http.delete(
       _uri(['server', 'job_queue', 'job'], {'job_ids': id}),
       headers: authHeaders));
+  /// Puts the queue in a new order: Moonraker has no move, so it takes the
+  /// jobs out and adds them back. Only call while the queue is paused, so
+  /// adding them back can't start a print.
+  Future<void> setQueueOrder(List<QueuedJob> jobs) async {
+    if (jobs.isEmpty) return;
+    _check(await _http.delete(
+        _uri(['server', 'job_queue', 'job'], {'job_ids': jobs.map((j) => j.id).join(',')}),
+        headers: authHeaders));
+    _check(await _http.post(
+        _uri(['server', 'job_queue', 'job'], {'filenames': jobs.map((j) => j.filename).join(',')}),
+        headers: authHeaders));
+  }
+
   Future<void> startQueue() async => _check(await _http
       .post(_uri(['server', 'job_queue', 'start']), headers: authHeaders));
   Future<void> pauseQueue() async => _check(await _http

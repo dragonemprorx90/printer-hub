@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import 'gcode.dart';
 import 'models_page.dart';
+import 'insights.dart';
 import 'moonraker.dart';
 import 'settings.dart';
 import 'slice_where.dart';
@@ -16,7 +17,7 @@ import 'u1_panels.dart';
 import 'ui.dart';
 import 'workshop_page.dart';
 
-enum _Sort { newest, name, size }
+enum _Sort { newest, oldest, name, size, smallest }
 
 const _gcodeExt = ['gcode', 'g', 'gco', '3mf'];
 final _isDesktop = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
@@ -41,6 +42,7 @@ class _FilesTabState extends State<FilesTab> {
   List<QueuedJob> _queue = const [];
   final _sel = <String>{}; // long-press to select several files
   String _queueState = '';
+  final _est = <String, double?>{}; // estimated seconds per queued file
 
   MoonrakerClient get c => widget.client;
   String get _favScope => 'files.${widget.printer.key}';
@@ -77,7 +79,12 @@ class _FilesTabState extends State<FilesTab> {
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
         child: Panel(
           child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 8, children: [
-            Text('${_sel.length} selected', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text('${_sel.length} selected · ${fmtBytes(totalSize([for (final f in [...?_all, ...?_files]) if (_sel.contains(f.path)) f].fold(<String, GcodeFile>{}, (m, f) => m..[f.path] = f).values))}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            TextButton(
+              onPressed: () => setState(() => _sel.addAll(_visible.map((f) => f.path))),
+              child: const Text('Select all'),
+            ),
             OutlinedButton.icon(
               onPressed: () async {
                 final picked = _sel.toList();
@@ -127,9 +134,88 @@ class _FilesTabState extends State<FilesTab> {
           _queueState = state;
         });
       }
+      for (final j in q.where((j) => !_est.containsKey(j.filename))) {
+        _est[j.filename] = null;
+        c.metadata(j.filename).then((m) {
+          if (mounted) setState(() => _est[j.filename] = (m['estimated_time'] as num?)?.toDouble());
+        }).catchError((_) {});
+      }
     } catch (_) {
       // No job_queue component on this printer; the panel stays hidden.
     }
+  }
+
+  /// Storage used, likely duplicates and old files. Picking a group selects
+  /// those files; deleting still goes through the selection bar (asks first).
+  Future<void> _tidy() async {
+    await _ensureAll();
+    final all = _all;
+    if (all == null || !mounted) return;
+    final dups = duplicates(all);
+    final days = settings.number('tidyDays', 90).round();
+    final old = olderThan(all, days);
+    final pick = await showModalBottomSheet<List<GcodeFile>>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), shrinkWrap: true, children: [
+        Text('Tidy up', style: T.title),
+        const SizedBox(height: 12),
+        Wrap(spacing: 24, runSpacing: 12, children: [
+          StatTile(label: 'Files', value: '${all.length}'),
+          StatTile(label: 'Space used', value: fmtBytes(totalSize(all))),
+          StatTile(label: 'Copies', value: '${dups.fold(0, (a, g) => a + g.length - 1)}'),
+          StatTile(label: 'Older than $days days', value: '${old.length}'),
+        ]),
+        const SizedBox(height: 16),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.history_toggle_off_rounded),
+          title: Text('Select ${old.length} files older than $days days'),
+          subtitle: Text(fmtBytes(totalSize(old))),
+          enabled: old.isNotEmpty,
+          onTap: () => Navigator.pop(ctx, old),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.copy_all_rounded),
+          title: const Text('Select the extra copies'),
+          subtitle: const Text('Keeps the newest of each'),
+          enabled: dups.isNotEmpty,
+          onTap: () => Navigator.pop(ctx, [
+            for (final g in dups) ...([...g]..sort((a, b) => b.modified.compareTo(a.modified))).skip(1),
+          ]),
+        ),
+        for (final g in dups.take(20))
+          Padding(
+            padding: const EdgeInsets.only(left: 40, bottom: 4),
+            child: Text('${g.first.name}: ${g.map((f) => f.dir.isEmpty ? '/' : f.dir).join(', ')}',
+                style: T.caption.copyWith(color: C.muted), overflow: TextOverflow.ellipsis),
+          ),
+        const SizedBox(height: 8),
+        Row(children: [
+          const Text('Old means older than'),
+          const Spacer(),
+          for (final d in const [30, 90, 180])
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: ChoiceChip(
+                label: Text('$d d'),
+                selected: d == days,
+                onSelected: (_) {
+                  settings.setNumber('tidyDays', d.toDouble());
+                  Navigator.pop(ctx);
+                  _tidy();
+                },
+              ),
+            ),
+        ]),
+      ]),
+    );
+    if (pick == null || pick.isEmpty || !mounted) return;
+    setState(() => _sel
+      ..clear()
+      ..addAll(pick.map((f) => f.path)));
+    toast(context, '${pick.length} selected. Check them, then Delete.');
   }
 
   Future<void> _ensureAll() async {
@@ -166,6 +252,10 @@ class _FilesTabState extends State<FilesTab> {
         list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       case _Sort.size:
         list.sort((a, b) => b.size.compareTo(a.size));
+      case _Sort.oldest:
+        list.sort((a, b) => a.modified.compareTo(b.modified));
+      case _Sort.smallest:
+        list.sort((a, b) => a.size.compareTo(b.size));
     }
     return list;
   }
@@ -381,8 +471,14 @@ class _FilesTabState extends State<FilesTab> {
             PopupMenuItem(value: _Sort.newest, child: Text('Newest first')),
             PopupMenuItem(value: _Sort.name, child: Text('Name')),
             PopupMenuItem(value: _Sort.size, child: Text('Largest first')),
+            PopupMenuItem(value: _Sort.oldest, child: Text('Oldest first')),
+            PopupMenuItem(value: _Sort.smallest, child: Text('Smallest first')),
           ],
         ),
+        IconButton(
+            tooltip: 'Tidy up',
+            icon: const Icon(Icons.cleaning_services_outlined),
+            onPressed: _tidy),
         IconButton(
             tooltip: 'New folder',
             icon: const Icon(Icons.create_new_folder_outlined),
@@ -420,6 +516,11 @@ class _FilesTabState extends State<FilesTab> {
             ]),
           );
 
+    final st = c.status;
+    final busy = st.state == 'printing' || st.state == 'paused';
+    final finish = queueFinishTimes([for (final j in _queue) _est[j.filename]],
+        from: DateTime.now(), currentLeft: busy ? (st.eta ?? 0) : 0);
+    final total = _queue.fold(0.0, (a, j) => a + (_est[j.filename] ?? 0));
     final queue = _queue.isEmpty
         ? const SizedBox.shrink()
         : Padding(
@@ -436,17 +537,34 @@ class _FilesTabState extends State<FilesTab> {
                 icon: Icon(_queueState == 'ready'
                     ? Icons.pause_rounded
                     : Icons.play_arrow_rounded),
-                label: Text(_queueState == 'ready' ? 'Pause queue' : 'Start queue'),
+                label: Text(_queueState == 'ready'
+                    ? 'Pause queue'
+                    : (st.state == 'complete' || st.state == 'cancelled' ? 'Bed is clear, start next' : 'Start queue')),
               ),
               child: Column(children: [
                 for (final (i, j) in _queue.indexed)
                   Row(children: [
+                    if (_queueState != 'ready')
+                      IconButton(
+                        tooltip: 'Move up',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                        onPressed: i == 0
+                            ? null
+                            : () async {
+                                final l = [..._queue]..insert(i - 1, _queue[i])..removeAt(i + 1);
+                                await run(context, () => c.setQueueOrder(l));
+                                _loadQueue();
+                              },
+                      ),
                     SizedBox(
                         width: 24,
                         child: Text('${i + 1}.', style: TextStyle(color: C.muted))),
                     Expanded(
                         child: Text(j.filename.split('/').last,
                             overflow: TextOverflow.ellipsis)),
+                    if (finish.length > i && _est[j.filename] != null)
+                      Text('done ${fmtTime(finish[i])}', style: T.caption.copyWith(color: C.muted)),
                     IconButton(
                       tooltip: 'Remove',
                       icon: const Icon(Icons.close_rounded, size: 18),
@@ -456,6 +574,12 @@ class _FilesTabState extends State<FilesTab> {
                       },
                     ),
                   ]),
+                if (total > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('${fmtDuration(total)} in all, done about ${fmtTime(finish.last)}',
+                        style: T.small.copyWith(color: C.muted)),
+                  ),
                 Text(
                   _queueState == 'ready'
                       ? 'The next job starts when the printer finishes the current one.'
