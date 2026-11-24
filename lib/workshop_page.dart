@@ -1247,7 +1247,11 @@ class _QuoteTabState extends State<_QuoteTab> {
       markupPct: _n('markup', 30),
     );
     String m(double v) => '$cur${v.toStringAsFixed(2)}';
-    final text = '${_file ?? 'Print'}: ${_grams.round()} g, ${fmtDuration(_hours * 3600)}. Price ${m(q.$5)}.';
+    final copies = _n('copies', 1).clamp(1, 1000).round();
+    final step = _n('round', 0); // round the price up to this (0 = don't)
+    final each = step > 0 ? (q.$5 / step).ceil() * step : q.$5;
+    final text = '${_file ?? 'Print'}: ${_grams.round()} g, ${fmtDuration(_hours * 3600)}. '
+        '${copies > 1 ? '$copies × ${m(each)} = ${m(each * copies)}' : 'Price ${m(each)}'}.';
     return ListView(padding: const EdgeInsets.all(16), children: [
       Panel(
         title: 'The print',
@@ -1267,6 +1271,8 @@ class _QuoteTabState extends State<_QuoteTab> {
           _field('Machine wear per hour', _n('wear', 0.2), (v) => settings.setNumber('quote.wear', v), suffix: cur),
           _field('Your time (design, post-processing)', _n('labour', 0), (v) => settings.setNumber('quote.labour', v), suffix: cur),
           _field('Markup', _n('markup', 30), (v) => settings.setNumber('quote.markup', v), suffix: '%'),
+          _field('Copies', _n('copies', 1), (v) => settings.setNumber('quote.copies', v)),
+          _field('Round the price up to (0 = no)', _n('round', 0), (v) => settings.setNumber('quote.round', v), suffix: cur),
           Hint('Filament price, power and electricity price come from Settings → Cost estimate.'),
         ]),
       ),
@@ -1287,8 +1293,13 @@ class _QuoteTabState extends State<_QuoteTab> {
           const Divider(height: 20),
           Row(children: [
             Expanded(child: Text('With ${_n('markup', 30).round()}% markup', style: const TextStyle(fontWeight: FontWeight.w700))),
-            Text(m(q.$5), style: T.hero),
+            Text(m(each), style: T.hero),
           ]),
+          if (copies > 1)
+            Row(children: [
+              Expanded(child: Text('$copies copies')),
+              Text(m(each * copies), style: T.value),
+            ]),
         ]),
       ),
     ]);
