@@ -636,8 +636,16 @@ class _ToolsTabState extends State<ToolsTab> {
                 if (s.hasError) return Text('${s.error}');
                 if (!s.hasData) return const Center(child: CircularProgressIndicator());
                 if (s.data!.isEmpty) return const Text('No alerts in the last 12 hours.');
-                return ListView(children: [
+                var q = '';
+                return StatefulBuilder(builder: (ctx, set) => Column(children: [
+                  TextField(
+                    decoration: InputDecoration(
+                        isDense: true, hintText: 'Find in ${s.data!.length} alerts', prefixIcon: const Icon(Icons.search_rounded)),
+                    onChanged: (v) => set(() => q = v.toLowerCase()),
+                  ),
+                  Expanded(child: ListView(children: [
                   for (final a in s.data!)
+                    if (q.isEmpty || '${a.title} ${a.message}'.toLowerCase().contains(q))
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(a.title),
@@ -650,7 +658,8 @@ class _ToolsTabState extends State<ToolsTab> {
                                   errorBuilder: (_, _, _) => const Icon(Icons.image_not_supported_outlined)),
                             ),
                     ),
-                ]);
+                ])),
+                ]));
               },
             ),
           ),
