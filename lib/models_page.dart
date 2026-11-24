@@ -510,12 +510,64 @@ class _ModelsPageState extends State<ModelsPage> {
     }
   }
 
-  Future<void> _open(ModelHit hit) async {
+  Future<void> _open(ModelHit hit, [ModelSource? source]) async {
     final path = await Navigator.push<String>(
         context,
         MaterialPageRoute(
-            builder: (_) => _ModelDetailPage(source: _src, hit: hit, client: widget.client, folder: widget.folder)));
+            builder: (_) =>
+                _ModelDetailPage(source: source ?? _src, hit: hit, client: widget.client, folder: widget.folder)));
     if (path != null && mounted) Navigator.pop(context, path);
+  }
+
+  /// Saved models (from every site) and what you downloaded.
+  Future<void> _saved() async {
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final marks = settings.jsonList('models.bookmarks');
+        final downloads = settings.jsonList('models.downloads');
+        return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 24), children: [
+          Text('Saved models', style: T.title),
+          if (marks.isEmpty) const Hint('Tap the bookmark on a model to keep it here.'),
+          for (final m in marks.reversed)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(R.sm),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: '${m['image']}'.isEmpty
+                      ? const Icon(Icons.view_in_ar_rounded)
+                      : Image.network('${m['image']}', fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.view_in_ar_rounded)),
+                ),
+              ),
+              title: Text('${m['title']}', maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('${m['src']}${'${m['author']}'.isEmpty ? '' : ' · ${m['author']}'}'),
+              onTap: () => Navigator.pop(ctx, m),
+            ),
+          const SizedBox(height: 16),
+          Text('Downloaded', style: T.title),
+          if (downloads.isEmpty) Text('Nothing yet.', style: TextStyle(color: C.muted)),
+          for (final d in downloads.reversed.take(30))
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.download_done_rounded),
+              title: Text('${d['file']}', maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('${d['title']} · ${d['src']} · ${fmtAgo(DateTime.fromMillisecondsSinceEpoch(d['at'] as int))}'),
+              onTap: d['id'] == null ? null : () => Navigator.pop(ctx, d),
+            ),
+        ]);
+      },
+    );
+    if (picked == null || !mounted) return;
+    final src = sources.where((s) => s.name == picked['src']).firstOrNull;
+    if (src == null) return;
+    await _open(
+        ModelHit(id: '${picked['id']}', title: '${picked['title']}', image: '${picked['image'] ?? ''}', author: '${picked['author'] ?? ''}'),
+        src);
   }
 
   Widget _tokenSetup() => ListView(padding: const EdgeInsets.all(16), children: [
@@ -571,6 +623,7 @@ class _ModelsPageState extends State<ModelsPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Find models'), actions: [
+          IconButton(tooltip: 'Saved and downloaded', icon: const Icon(Icons.bookmarks_outlined), onPressed: _saved),
           if (_src is CrealitySource && CrealitySource.signedIn)
             IconButton(
               tooltip: 'Sign out of Creality Cloud',
@@ -692,6 +745,33 @@ class _ModelDetailPageState extends State<_ModelDetailPage> {
 
   MoonrakerClient get c => widget.client;
 
+  Map<String, dynamic> get _mark => {
+        'src': widget.source.name,
+        'id': widget.hit.id,
+        'title': widget.hit.title,
+        'image': widget.hit.image,
+        'author': widget.hit.author,
+      };
+  bool get _saved => settings
+      .jsonList('models.bookmarks')
+      .any((m) => m['src'] == widget.source.name && m['id'] == widget.hit.id);
+
+  void _toggleSaved() {
+    final l = settings.jsonList('models.bookmarks');
+    final had = _saved;
+    l.removeWhere((m) => m['src'] == widget.source.name && m['id'] == widget.hit.id);
+    if (!had) l.add(_mark);
+    settings.setJsonList('models.bookmarks', l);
+    setState(() {});
+    toast(context, had ? 'Removed from saved models' : 'Saved');
+  }
+
+  void _logDownload(ModelFile f) {
+    final l = settings.jsonList('models.downloads')
+      ..add({..._mark, 'file': f.name, 'at': DateTime.now().millisecondsSinceEpoch});
+    settings.setJsonList('models.downloads', l.length > 100 ? l.sublist(l.length - 100) : l);
+  }
+
   Future<void> _use(ModelFile f, {required bool ready}) async {
     if (f.size > 100 * 1024 * 1024 &&
         !await confirm(context, 'Download ${fmtBytes(f.size)}?',
@@ -711,6 +791,7 @@ class _ModelDetailPageState extends State<_ModelDetailPage> {
         if (signedIn && mounted) await _use(f, ready: ready);
         return;
       }
+      _logDownload(f);
       if (!mounted) return;
       // A 3MF made for this printer may already hold its G-code: print that.
       final plates = ready && f.ext == '3mf' ? platesIn3mf(bytes) : const <int, Uint8List>{};
@@ -752,6 +833,11 @@ class _ModelDetailPageState extends State<_ModelDetailPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: Text(widget.hit.title, overflow: TextOverflow.ellipsis), actions: [
+          IconButton(
+            tooltip: _saved ? 'Remove from saved' : 'Save this model',
+            icon: Icon(_saved ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded),
+            onPressed: _toggleSaved,
+          ),
           IconButton(
             tooltip: 'Open on ${widget.source.name}',
             icon: const Icon(Icons.open_in_new_rounded),

@@ -1113,6 +1113,12 @@ class _Actions extends StatelessWidget {
               icon: const Icon(Icons.stop_rounded),
               label: const Text('Cancel'),
             ),
+          if (!busy && (s.hotendTarget > 0 || s.bedTarget > 0 || (s.chamberHeatable && s.chamberTarget > 0)))
+            OutlinedButton.icon(
+              onPressed: () => run(context, () => client.gcode('TURN_OFF_HEATERS'), done: 'Heaters off'),
+              icon: const Icon(Icons.ac_unit_rounded),
+              label: const Text('Heaters off'),
+            ),
           OutlinedButton.icon(
             onPressed:
                 busy ? null : () => run(context, client.home, done: 'Homed'),

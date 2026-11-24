@@ -121,6 +121,14 @@ List<(String, int)> reasonBreakdown(Map<String, String> tags) {
   return [for (final e in m.entries) (e.key, e.value)]..sort((a, b) => b.$2.compareTo(a.$2));
 }
 
+/// How a file did before: (times printed, times it finished, average
+/// real print time of the finished ones).
+(int, int, double?) fileRecord(Iterable<PrintJob> jobs, String path) {
+  final mine = [for (final j in jobs) if (j.filename == path) j];
+  final ok = mine.where(jobOk).toList();
+  return (mine.length, ok.length, ok.isEmpty ? null : ok.fold(0.0, (a, j) => a + j.duration) / ok.length);
+}
+
 /// History key for a job, for notes and tags kept on the device.
 String jobKey(PrintJob j) => '${j.filename}@${j.start.millisecondsSinceEpoch ~/ 1000}';
 

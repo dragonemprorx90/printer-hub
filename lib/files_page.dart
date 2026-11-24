@@ -1067,6 +1067,10 @@ class _FileSheetState extends State<_FileSheet> {
                       label: 'Filament cost',
                       value: '${settings.text('currency', r'$')}${((m['filament_weight_total'] as num) / 1000 * settings.number('filamentPrice', 20)).toStringAsFixed(2)}'),
                 if (toolChanges(m) case final n? when n > 0) StatTile(label: 'Tool changes', value: '$n'),
+                if (fileRecord(c.lastHistory?.$1 ?? const [], f.path) case (final n, final ok, final avg) when n > 0) ...[
+                  StatTile(label: 'Printed before', value: '$n× ($ok finished)'),
+                  if (avg != null) StatTile(label: 'Real time', value: fmtDuration(avg)),
+                ],
                 FilamentCheck(meta: m, client: c),
                 for (final n in settings.jsonList('materialNotes'))
                   if ('${m['filament_type'] ?? ''}'.toUpperCase().contains('${n['m']}'.toUpperCase()) ||
