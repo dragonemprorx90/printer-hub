@@ -182,6 +182,14 @@ void main() {
     expect(metresFromGrams(1000), closeTo(335, 1));
   });
 
+  test('more calculators', () {
+    expect(maxSpeed(24, 0.2, 0.45), closeTo(266.7, 0.1));
+    expect(netGrams(1180, 250), 930);
+    expect(netGrams(100, 250), 0);
+    expect(layerCount(10, 0.2), 50);
+    expect(layerCount(10, 0.2, first: 0.3), 50);
+  });
+
   test('file record', () {
     final js = [job('completed', 1, h: 1), job('completed', 1, h: 3), job('error', 1)];
     expect(fileRecord(js, 'f1.gcode'), (3, 2, 7200.0));

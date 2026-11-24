@@ -1000,6 +1000,10 @@ class _CalcTabState extends State<_CalcTab> {
     'tStart': 230, 'tStep': -5, 'tEvery': 10, 'tH': 15,
     'des': 100, 'got': 100,
     'g': 1000, 'dens': 1.24,
+    'vol': 24, 'lh': 0.2, 'lw': 0.45,
+    'gross': 1180, 'empty': 250,
+    'h': 50, 'lh2': 0.2,
+    'nz': 0.4,
   };
 
   Widget _f(String k, String label, {String suffix = ''}) => Padding(
@@ -1097,6 +1101,40 @@ class _CalcTabState extends State<_CalcTab> {
         ]),
       ),
     ];
+    panels.addAll([
+      Panel(
+        title: 'Fastest speed for your hotend',
+        icon: Icons.speed_rounded,
+        child: Column(children: [
+          _f('Max volumetric flow', 'vol', suffix: 'mm³/s'),
+          _f('Layer height', 'lh', suffix: 'mm'),
+          _f('Line width', 'lw', suffix: 'mm'),
+          _answer('Up to', '${_num(maxSpeed(v['vol']!, v['lh']!, v['lw']!), 0)} mm/s'),
+        ]),
+      ),
+      Panel(
+        title: 'Weigh a spool',
+        icon: Icons.scale_outlined,
+        child: Column(children: [
+          _f('On the scale', 'gross', suffix: 'g'),
+          _f('Empty spool', 'empty', suffix: 'g'),
+          _answer('Filament left', '${_num(netGrams(v['gross']!, v['empty']!), 0)} g · '
+              '${_num(metresFromGrams(netGrams(v['gross']!, v['empty']!), density: v['dens']!), 0)} m'),
+        ]),
+      ),
+      Panel(
+        title: 'Layers and line width',
+        icon: Icons.layers_outlined,
+        child: Column(children: [
+          _f('Part height', 'h', suffix: 'mm'),
+          _f('Layer height', 'lh2', suffix: 'mm'),
+          _answer('Layers', '${layerCount(v['h']!, v['lh2']!)}'),
+          _f('Nozzle', 'nz', suffix: 'mm'),
+          _answer('Line width to start with', '${_num(v['nz']! * 1.125, 2)} mm'),
+          _answer('Layer height range', '${_num(v['nz']! * 0.25, 2)}–${_num(v['nz']! * 0.75, 2)} mm'),
+        ]),
+      ),
+    ]);
     return ListView(padding: const EdgeInsets.all(16), children: [
       for (final (i, p) in panels.indexed) ...[if (i > 0) const SizedBox(height: 12), p],
     ]);

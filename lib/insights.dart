@@ -245,6 +245,16 @@ double shrinkScale(double designed, double measured) => designed / measured * 10
 double metresFromGrams(double g, {double density = 1.24, double diameter = 1.75}) =>
     g / (density * math.pi * math.pow(diameter / 20, 2) * 100);
 
+/// Fastest print speed (mm/s) a hotend's flow limit allows.
+double maxSpeed(double flowMm3s, double layer, double width) => flowMm3s / (layer * width);
+
+/// Grams left on a spool you weighed, minus the empty spool.
+double netGrams(double gross, double emptySpool) => math.max(0, gross - emptySpool);
+
+/// Layers in a part.
+int layerCount(double height, double layer, {double? first}) =>
+    layer <= 0 ? 0 : 1 + ((height - (first ?? layer)) / layer).ceil().clamp(0, 1 << 20);
+
 // ---------------------------------------------------------------- queue
 
 /// When each queued job will finish, one after another, starting [from]
