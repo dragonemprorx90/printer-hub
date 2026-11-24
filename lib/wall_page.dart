@@ -206,9 +206,17 @@ class _WallTile extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(children: [
                   Icon(Icons.local_fire_department_rounded, size: 15, color: C.hot),
-                  Text(' ${s.hotend.toStringAsFixed(0)}°  '),
+                  Text(' ${Units.deg(s.hotend)}  '),
                   Icon(Icons.grid_view_rounded, size: 15, color: C.bed),
-                  Text(' ${s.bed.toStringAsFixed(0)}°'),
+                  Text(' ${Units.deg(s.bed)}'),
+                  if (s.led != null)
+                    IconButton(
+                      tooltip: s.led! ? 'Light off' : 'Light on',
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(s.led! ? Icons.lightbulb_rounded : Icons.lightbulb_outline_rounded,
+                          size: 18, color: s.led! ? C.warn : C.muted),
+                      onPressed: () => run(context, () => client.setLed(!s.led!)),
+                    ),
                   const Spacer(),
                   if (active)
                     Text(

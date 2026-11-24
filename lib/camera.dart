@@ -687,17 +687,41 @@ class _CameraFullscreenState extends State<CameraFullscreen> {
         ),
       ],
     ),
-    body: InteractiveViewer(
-      transformationController: _t,
-      maxScale: 6,
-      child: Center(
-        child: PrinterCamera(
-          client: widget.client,
-          cameraUrl: widget.cameraUrl,
-          fit: BoxFit.contain,
+    body: Stack(children: [
+      InteractiveViewer(
+        transformationController: _t,
+        maxScale: 6,
+        child: Center(
+          child: PrinterCamera(
+            client: widget.client,
+            cameraUrl: widget.cameraUrl,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
-    ),
+      // Progress over the picture, so fullscreen still tells you how it's going.
+      Positioned(
+        left: 12,
+        bottom: 12,
+        child: StreamBuilder<PrinterStatus>(
+          stream: widget.client.stream,
+          initialData: widget.client.status,
+          builder: (_, snap) {
+            final s = snap.data!;
+            if (s.state != 'printing' && s.state != 'paused') return const SizedBox.shrink();
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(R.md)),
+              child: Text(
+                '${(s.progress * 100).round()}%${s.eta == null ? '' : ' · ${fmtDuration(s.eta)} left'}'
+                '${s.currentLayer == null ? '' : ' · layer ${s.currentLayer}'}',
+                style: T.small.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+            );
+          },
+        ),
+      ),
+    ]),
   );
 }
 
