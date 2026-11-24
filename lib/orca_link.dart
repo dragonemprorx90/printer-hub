@@ -547,6 +547,8 @@ class OrcaLink {
       'objects': [for (final o in s.objects) o.name],
       'macros': c.macros,
       'canPauseAtLayer': c.canPauseAtLayer,
+      if (s.jobMeta['layer_height'] is num) 'layerHeight': s.jobMeta['layer_height'],
+      if (s.jobMeta['first_layer_height'] is num) 'firstLayerHeight': s.jobMeta['first_layer_height'],
       if (mesh.isNotEmpty)
         'meshRange': mesh.reduce((a, b) => a > b ? a : b) - mesh.reduce((a, b) => a < b ? a : b),
       if (dragon != null)

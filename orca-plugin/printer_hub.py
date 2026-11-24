@@ -116,6 +116,8 @@ PAGE = r"""
       send({ command: "action", printer: slug, action: action, params: params || {} });
     },
     val: function (id) { var e = document.getElementById(id); return e ? e.value : ""; },
+    // The layer printing at a height (same maths as the app's Pause at height).
+    layerAt: function (mm, layer, first) { mm = parseFloat(mm); return mm <= first ? 1 : Math.ceil((mm - first) / layer) + 1; },
     toggle: function (slug, what) {
       var o = open[slug] = open[slug] || {};
       o[what] = !o[what];
@@ -160,7 +162,9 @@ PAGE = r"""
     if (p.canPauseAtLayer)
       out += '<div class="line"><span class="lbl">Pause at</span><input type="number" id="pl-' + s + '" value="' + ((p.layer || 0) + 1) + '">' +
         '<button onclick="ph.act(' + slug + ',\'pause_at_layer\',{value:ph.val(\'pl-' + s + '\')})">Set</button>' +
-        '<button onclick="ph.act(' + slug + ',\'pause_at_layer\',{value:0})">Off</button></div>';
+        '<button onclick="ph.act(' + slug + ',\'pause_at_layer\',{value:0})">Off</button></div>' +
+        (p.layerHeight ? '<div class="line"><span class="lbl">Pause at</span><input type="number" step="0.1" id="ph-' + s + '" value="10"> mm' +
+          '<button onclick="ph.act(' + slug + ',\'pause_at_layer\',{value:ph.layerAt(ph.val(\'ph-' + s + '\'),' + p.layerHeight + ',' + (p.firstLayerHeight || p.layerHeight) + ')})">Set</button></div>' : '');
     if ((p.macros || []).length)
       out += '<div class="line"><span class="lbl">Macro</span><select id="mc-' + s + '">' + p.macros.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join("") +
         '</select><button onclick="ph.act(' + slug + ',\'macro\',{name:ph.val(\'mc-' + s + '\')},\'Run \'+ph.val(\'mc-' + s + '\')+\'?\')">Run</button></div>';
